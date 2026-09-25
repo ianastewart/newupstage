@@ -19,7 +19,6 @@ class Command(BaseCommand):
 
     def list_template_files(self, template_dir):
         template_files = []
-        # TODO: Look into using pathlib.Path.rglob() instead. 🤔
         for dirpath, _, filenames in os.walk(str(template_dir)):
             for filename in filenames:
                 if filename.endswith(".html") or filename.endswith(".txt"):
