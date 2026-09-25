@@ -1,12 +1,12 @@
 from django.contrib import admin
 from django.urls import include, path
 from django.conf import settings
-from backstage.views import ProductionView
+from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("home.urls")),
-    *ProductionView.get_urls(),
+    path("backstage/", include("backstage.urls")),
 ]
 
 if settings.DEBUG:
@@ -14,3 +14,5 @@ if settings.DEBUG:
     urlpatterns += [
         path("__reload__/", include("django_browser_reload.urls")),
     ]
+    # Serve uploaded images in development
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

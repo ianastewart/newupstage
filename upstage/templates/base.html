@@ -2,6 +2,17 @@
 <html lang="en">
 <head>
     {% load static %}
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+      // Apply the saved theme before first paint to avoid a flash of the default theme.
+      (() => {
+        const themes = ['upstage', 'upstage-dark', 'light', 'dark'];
+        let saved = null;
+        try { saved = localStorage.getItem('theme'); } catch (e) {}
+        const preferred = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'upstage-dark' : 'upstage';
+        document.documentElement.dataset.theme = themes.includes(saved) ? saved : preferred;
+      })();
+    </script>
     <link rel="stylesheet" href="{% static 'css/src/output.css' %}">
     <title>{% block title %}Upstage Theatre{% endblock %}</title>
 </head>

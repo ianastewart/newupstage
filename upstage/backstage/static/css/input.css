@@ -1,8 +1,84 @@
 @import "tailwindcss" source(none);
 @config "./tailwind.config.js";
 @plugin "daisyui" {
-    themes: light --default, dark --prefersdark;
+    themes: light, dark;
   }
+
+/* Upstage brand theme: theatre red, stage gold, warm programme-paper base. */
+@plugin "daisyui/theme" {
+  name: "upstage";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: oklch(98.5% 0.008 85);
+  --color-base-200: oklch(95% 0.015 85);
+  --color-base-300: oklch(90% 0.02 85);
+  --color-base-content: oklch(24% 0.02 20);
+  --color-primary: oklch(45% 0.17 22);
+  --color-primary-content: oklch(98% 0.01 22);
+  --color-secondary: oklch(76% 0.13 80);
+  --color-secondary-content: oklch(24% 0.04 80);
+  --color-accent: oklch(42% 0.09 300);
+  --color-accent-content: oklch(97% 0.01 300);
+  --color-neutral: oklch(26% 0.02 20);
+  --color-neutral-content: oklch(95% 0.01 85);
+  --color-info: oklch(62% 0.13 235);
+  --color-info-content: oklch(98% 0.01 235);
+  --color-success: oklch(58% 0.13 150);
+  --color-success-content: oklch(98% 0.01 150);
+  --color-warning: oklch(78% 0.15 70);
+  --color-warning-content: oklch(25% 0.04 70);
+  --color-error: oklch(56% 0.2 28);
+  --color-error-content: oklch(98% 0.01 28);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* Upstage after dark: auditorium lighting, same brand colours. */
+@plugin "daisyui/theme" {
+  name: "upstage-dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: oklch(22% 0.015 20);
+  --color-base-200: oklch(19% 0.015 20);
+  --color-base-300: oklch(16% 0.015 20);
+  --color-base-content: oklch(92% 0.015 85);
+  --color-primary: oklch(58% 0.18 22);
+  --color-primary-content: oklch(98% 0.01 22);
+  --color-secondary: oklch(80% 0.13 80);
+  --color-secondary-content: oklch(22% 0.04 80);
+  --color-accent: oklch(65% 0.11 300);
+  --color-accent-content: oklch(15% 0.02 300);
+  --color-neutral: oklch(30% 0.02 20);
+  --color-neutral-content: oklch(92% 0.015 85);
+  --color-info: oklch(68% 0.12 235);
+  --color-info-content: oklch(15% 0.02 235);
+  --color-success: oklch(66% 0.13 150);
+  --color-success-content: oklch(15% 0.02 150);
+  --color-warning: oklch(80% 0.14 70);
+  --color-warning-content: oklch(20% 0.04 70);
+  --color-error: oklch(64% 0.19 28);
+  --color-error-content: oklch(15% 0.02 28);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
 
 /* Uniform daisyUI styling for every form control, including Django's {{ form }} output. */
 @layer components {

@@ -21,6 +21,7 @@ env/
 \*.pyc
 db.sqlite3
 /media/
+upstage/media/
 /staticfiles/
 upstage/backstage/static/css/src/output.css
 

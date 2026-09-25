@@ -3,29 +3,29 @@
     <a class="btn btn-ghost text-xl" href="/">🏠</a>
     </div>
     <div class="flex-none">
-    <input id="toggle-switch" type="checkbox" checked="checked" class="toggle" />
+      <a class="btn btn-ghost" href="{% url 'image-list' %}">Images</a>
+      <div class="dropdown dropdown-end">
+        <div tabindex="0" role="button" class="btn btn-ghost">
+          Theme
+          <svg class="size-3 fill-current opacity-60" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" aria-hidden="true"><path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path></svg>
+        </div>
+        <ul tabindex="0" class="dropdown-content menu z-10 w-48 rounded-box bg-base-200 p-2 shadow-lg">
+          <li><input type="radio" name="theme" value="upstage" aria-label="Upstage" class="theme-controller btn btn-sm btn-ghost btn-block justify-start" /></li>
+          <li><input type="radio" name="theme" value="upstage-dark" aria-label="Upstage dark" class="theme-controller btn btn-sm btn-ghost btn-block justify-start" /></li>
+          <li><input type="radio" name="theme" value="light" aria-label="Light" class="theme-controller btn btn-sm btn-ghost btn-block justify-start" /></li>
+          <li><input type="radio" name="theme" value="dark" aria-label="Dark" class="theme-controller btn btn-sm btn-ghost btn-block justify-start" /></li>
+        </ul>
+      </div>
     </div>
   </div>
 
-  {% block scripts %}
   <script>
-    const themeSwitch = document.getElementById('toggle-switch')
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const defaultTheme = prefersDark ? 'dark' : 'light';
-    const currentTheme = savedTheme || defaultTheme
-
-    document.documentElement.setAttribute('data-theme', currentTheme);
-    themeSwitch.checked = currentTheme === 'dark';
-
-    
-    themeSwitch.addEventListener('change', ()=>{
-        const isChecked = themeSwitch.checked;
-        const newTheme = isChecked ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
-    })
-
+    // Tick the saved theme and remember new choices (initial theme is applied in base.html <head>).
+    document.querySelectorAll('input.theme-controller[name="theme"]').forEach((radio) => {
+      radio.checked = radio.value === document.documentElement.dataset.theme;
+      radio.addEventListener('change', () => {
+        document.documentElement.dataset.theme = radio.value;
+        try { localStorage.setItem('theme', radio.value); } catch (e) {}
+      });
+    });
   </script>
-  
-  {% endblock %}
