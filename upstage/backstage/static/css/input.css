@@ -1,0 +1,19 @@
+@import "tailwindcss" source(none);
+@config "./tailwind.config.js";
+@plugin "daisyui" {
+    themes: light --default, dark --prefersdark;
+  }
+
+/* Uniform daisyUI styling for every form control, including Django's {{ form }} output. */
+@layer components {
+  form input:not([type=checkbox], [type=radio], [type=hidden], [type=submit], [type=button], [type=reset], [type=file], [type=range]) {
+    @apply input w-full;
+  }
+  form input[type=file] { @apply file-input w-full; }
+  form input[type=range] { @apply range; }
+  form select { @apply select w-full; }
+  form textarea { @apply textarea w-full; }
+  form input[type=checkbox] { @apply checkbox; }
+  form input[type=radio] { @apply radio; }
+  form [aria-invalid=true] { @apply border-error; }
+}

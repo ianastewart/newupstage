@@ -1,0 +1,11 @@
+[project]
+name = "newupstage"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "django>=6.1.1",
+    "django-browser-reload>=1.21.0",
+    "django-enum>=2.5.0",
+    "neapolitan>=26.1",
+    "pillow>=12.3.0",
+]

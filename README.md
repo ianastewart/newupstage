@@ -58,7 +58,7 @@ Watch the step-by-step tutorial video/project demo:
 4. **Apply Migrations & Create Superuser**
 
    ```bash
-   cd daisyseed
+   cd upstage
    python manage.py migrate
    ```
 

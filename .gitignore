@@ -22,7 +22,7 @@ env/
 db.sqlite3
 /media/
 /staticfiles/
-/static/css/src/output.css 
+upstage/backstage/static/css/src/output.css
 
 # Node.js & package manager
 
