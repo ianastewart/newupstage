@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl p-6">
+  <h1 class="mb-6 text-3xl font-bold">{% if object %}Edit {{ object_verbose_name }}{% else %}Create {{ object_verbose_name }}{% endif %}</h1>
+
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body">
+      <form method="POST" {% if form.is_multipart %}enctype="multipart/form-data" {% endif %}
+        action="{% if object %}{{ update_view_url }}{% else %}{{ create_view_url }}{% endif %}">
+        {% csrf_token %}
+        {{ form }}
+        <div class="mt-6 flex justify-end gap-2">
+          {% url view.url_base|add:"-list" as list_url %}
+          {% if list_url %}<a href="{{ list_url }}" class="btn btn-ghost">Cancel</a>{% endif %}
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

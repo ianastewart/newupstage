@@ -1,0 +1,17 @@
+{% if field.use_fieldset %}
+<fieldset class="fieldset"{% if field.aria_describedby %} aria-describedby="{{ field.aria_describedby }}"{% endif %}>
+  {% if field.label %}<legend class="fieldset-legend">{{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}</legend>{% endif %}
+{% else %}
+<div class="fieldset">
+{% endif %}
+  {% if field.widget_type == "checkbox" %}
+    <label class="label cursor-pointer gap-2 text-base-content" for="{{ field.id_for_label }}">{{ field }} {{ field.label }}</label>
+  {% else %}
+    {% if field.label and not field.use_fieldset %}
+      <label class="fieldset-legend" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}</label>
+    {% endif %}
+    {{ field }}
+  {% endif %}
+  {% if field.help_text %}<p class="label whitespace-normal"{% if field.auto_id %} id="{{ field.auto_id }}_helptext"{% endif %}>{{ field.help_text|safe }}</p>{% endif %}
+  {% if field.errors %}<div class="text-error text-sm"{% if field.auto_id %} id="{{ field.auto_id }}_error"{% endif %}>{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
+{% if field.use_fieldset %}</fieldset>{% else %}</div>{% endif %}
