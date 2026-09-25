@@ -17,12 +17,12 @@
     <title>{% block title %}Upstage Theatre{% endblock %}</title>
 </head>
 
-<body>
+<body class="flex min-h-dvh flex-col">
     <div id="nav">
    {% include "includes/nav.html" %}
     </div>
 
-    <div id="content">
+    <div id="content" class="container mx-auto flex grow flex-col *:w-full">
         {% block content %}{% endblock %}
     </div>
 

@@ -39,6 +39,7 @@ class Person(models.Model):
     image = models.ForeignKey(
         Image, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+    roles = models.ManyToManyField("Role", blank=True, related_name="people")
 
     class Meta:
         verbose_name_plural = "people"
@@ -149,6 +150,9 @@ class Cast(models.Model):
 
 class Role(models.Model):
     name = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        ordering = ["name"]
 
     def __str__(self):
         return self.name

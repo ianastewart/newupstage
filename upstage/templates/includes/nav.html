@@ -3,7 +3,10 @@
     <a class="btn btn-ghost text-xl" href="/">🏠</a>
     </div>
     <div class="flex-none">
+      <a class="btn btn-ghost" href="{% url 'production-list' %}">Productions</a>
+      <a class="btn btn-ghost" href="{% url 'person-list' %}">People</a>
       <a class="btn btn-ghost" href="{% url 'image-list' %}">Images</a>
+      <a class="btn btn-ghost" href="{% url 'role-list' %}">Roles</a>
       <div class="dropdown dropdown-end">
         <div tabindex="0" role="button" class="btn btn-ghost">
           Theme
