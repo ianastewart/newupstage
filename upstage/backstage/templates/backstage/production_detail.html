@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}{{ production }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  {% include "backstage/includes/production_header.html" with active="details" %}
+
+  <div class="card bg-base-200 shadow-sm">
+    <div class="card-body">
+      {% if production.strap_line %}<p class="text-lg italic">{{ production.strap_line }}</p>{% endif %}
+      <div class="flex flex-wrap gap-2">
+        <span class="badge {% if production.state == 'planned' %}badge-ghost{% elif production.state == 'audition' %}badge-info{% elif production.state == 'cast' %}badge-accent{% elif production.state == 'published' %}badge-success{% else %}badge-neutral{% endif %}">{{ production.get_state_display }}</span>
+        <span class="badge badge-secondary">{{ production.get_type_display }}</span>
+      </div>
+      {% if production.description %}<div class="mt-2">{{ production.description|linebreaks }}</div>{% endif %}
+      <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+        <dt class="font-semibold">Writer</dt><dd>{{ production.writer|default:"—" }}</dd>
+        <dt class="font-semibold">Event</dt><dd>{{ production.event|default:"—" }}</dd>
+        <dt class="font-semibold">Images</dt><dd>{{ production.images.count }}</dd>
+        <dt class="font-semibold">Cast</dt><dd>{{ production.cast.count }}</dd>
+        <dt class="font-semibold">Team</dt><dd>{{ production.team.count }}</dd>
+      </dl>
+      <div class="card-actions mt-4 justify-end">
+        <a href="{% url 'production-delete' production.pk %}" class="btn btn-ghost text-error">Delete</a>
+        <a href="{% url 'production-update' production.pk %}" class="btn btn-primary">Edit</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

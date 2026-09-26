@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}{{ object }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl p-6">
+  <div class="mb-4">
+    <a href="{% url 'image-list' %}" class="btn btn-ghost btn-sm">← Image library</a>
+  </div>
+
+  <div class="card bg-base-200 shadow-sm">
+    <figure class="bg-base-300">
+      <img src="{{ object.image.url }}" alt="{{ object.description }}" class="max-h-[70vh] w-full object-contain" />
+    </figure>
+    <div class="card-body">
+      <h1 class="card-title text-2xl">{{ object.description|default:object.image.name }}</h1>
+      <div class="flex flex-wrap items-center gap-2 text-sm">
+        <span class="badge badge-secondary">{{ object.get_image_type_display }}</span>
+        <span class="opacity-60">{{ object.image.name }}</span>
+        {% if object.image.width %}<span class="opacity-60">· {{ object.image.width }} × {{ object.image.height }} px</span>{% endif %}
+      </div>
+      <div class="card-actions mt-4 justify-end">
+        <a href="{% url 'image-delete' object.pk %}" class="btn btn-ghost text-error">Delete</a>
+        <a href="{% url 'image-update' object.pk %}" class="btn btn-primary">Edit</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

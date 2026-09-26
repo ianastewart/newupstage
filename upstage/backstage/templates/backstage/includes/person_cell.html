@@ -1,0 +1,16 @@
+{% if person %}
+<a href="{% url 'person-detail' person.pk %}" class="flex items-center gap-3 hover:underline">
+  <div class="avatar{% if not person.image %} avatar-placeholder{% endif %}">
+    <div class="w-9 rounded-full{% if not person.image %} bg-neutral text-neutral-content{% endif %}">
+      {% if person.image %}
+        <img src="{{ person.image.image.url }}" alt="" />
+      {% else %}
+        <span class="text-xs">{{ person.first_name|first }}{{ person.last_name|first }}</span>
+      {% endif %}
+    </div>
+  </div>
+  {{ person }}
+</a>
+{% else %}
+<span class="opacity-50">Not cast yet</span>
+{% endif %}

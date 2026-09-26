@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}{{ production }} cast · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  {% include "backstage/includes/production_header.html" with active="cast" %}
+
+  <div class="grid gap-6 lg:grid-cols-3">
+    <div class="lg:col-span-2">
+      {% if members %}
+        <div class="overflow-x-auto rounded-box bg-base-200 shadow-sm">
+          <table class="table">
+            <thead>
+              <tr><th>Character</th><th>Actor</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for member in members %}
+                <tr{% if member == editing %} class="bg-base-300"{% endif %}>
+                  <td>
+                    <div class="font-semibold">{{ member.character_name }}</div>
+                    {% if member.characteristics %}<div class="text-sm opacity-70">{{ member.characteristics|linebreaksbr }}</div>{% endif %}
+                  </td>
+                  <td>{% include "backstage/includes/person_cell.html" with person=member.actor %}</td>
+                  <td class="whitespace-nowrap text-right">
+                    <a href="?edit={{ member.pk }}" class="btn btn-ghost btn-xs">Edit</a>
+                    <form method="POST" class="inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="remove" />
+                      <input type="hidden" name="member" value="{{ member.pk }}" />
+                      <button type="submit" class="btn btn-ghost btn-xs text-error">Remove</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="rounded-box bg-base-200 p-12 text-center">
+          <p>No characters yet. Add the first one using the form.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="card h-fit bg-base-200 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">{% if editing %}Edit {{ editing.character_name }}{% else %}Add character{% endif %}</h2>
+        <form method="POST">
+          {% csrf_token %}
+          {% if editing %}<input type="hidden" name="member" value="{{ editing.pk }}" />{% endif %}
+          {{ form }}
+          <p class="mt-2 text-xs opacity-70">Actor not listed? <a href="{% url 'person-create' %}" class="link">Add a person</a>.</p>
+          <div class="mt-4 flex justify-end gap-2">
+            {% if editing %}<a href="{% url 'production-cast' production.pk %}" class="btn btn-ghost">Cancel</a>{% endif %}
+            <button type="submit" class="btn btn-primary">{% if editing %}Save{% else %}Add{% endif %}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Image library · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-3xl font-bold">Image library</h1>
+    <a href="{{ create_view_url }}" class="btn btn-primary">Upload image</a>
+  </div>
+
+  <div role="tablist" class="tabs tabs-box mb-6 w-fit flex-wrap">
+    <a role="tab" href="?" class="tab{% if not current_type %} tab-active{% endif %}">All</a>
+    {% for value, label in image_types %}
+      <a role="tab" href="?type={{ value }}" class="tab{% if current_type == value %} tab-active{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </div>
+
+  {% if object_list %}
+    <div class="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+      {% for image in object_list %}
+        <a href="{% url 'image-detail' image.pk %}" class="card bg-base-200 shadow-sm transition hover:shadow-md">
+          <figure class="bg-base-300">
+            {% if image.image %}
+              <img src="{{ image.image.url }}" alt="{{ image.description }}" loading="lazy" class="aspect-square w-full object-cover" />
+            {% else %}
+              <div class="aspect-square w-full"></div>
+            {% endif %}
+          </figure>
+          <div class="card-body gap-1 p-3">
+            <p class="truncate text-sm font-medium">{{ image.description|default:image.image.name }}</p>
+            <span class="badge badge-sm badge-secondary">{{ image.get_image_type_display }}</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+
+    {% if is_paginated %}
+      <div class="join mt-8 flex justify-center">
+        {% if page_obj.has_previous %}
+          <a class="join-item btn" href="?{% if current_type %}type={{ current_type }}&{% endif %}page={{ page_obj.previous_page_number }}">«</a>
+        {% endif %}
+        <span class="join-item btn btn-disabled">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+          <a class="join-item btn" href="?{% if current_type %}type={{ current_type }}&{% endif %}page={{ page_obj.next_page_number }}">»</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p class="mb-4">No images{% if current_type %} of this type{% endif %} yet.</p>
+      <a href="{{ create_view_url }}" class="btn btn-primary">Upload the first one</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

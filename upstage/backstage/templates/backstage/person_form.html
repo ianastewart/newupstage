@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}{% if object %}Edit {{ object }}{% else %}New person{% endif %} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl p-6">
+  <div class="mb-4">
+    <a href="{% if object %}{% url 'person-detail' object.pk %}{% else %}{% url 'person-list' %}{% endif %}" class="btn btn-ghost btn-sm">← {% if object %}{{ object }}{% else %}People{% endif %}</a>
+  </div>
+  <h1 class="mb-6 text-3xl font-bold">{% if object %}Edit {{ object }}{% else %}New person{% endif %}</h1>
+
+  <form method="POST" action="{% if object %}{{ update_view_url }}{% else %}{{ create_view_url }}{% endif %}">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div role="alert" class="alert alert-error alert-soft mb-4">{{ form.non_field_errors|join:" " }}</div>
+    {% endif %}
+
+    <div class="grid gap-6 md:grid-cols-3">
+      <div class="card bg-base-200 shadow-sm md:col-span-2">
+        <div class="card-body">
+          <h2 class="card-title">Details</h2>
+          <div class="grid gap-x-4 sm:grid-cols-2">
+            {{ form.first_name.as_field_group }}
+            {{ form.last_name.as_field_group }}
+            {{ form.email.as_field_group }}
+            {{ form.mobile.as_field_group }}
+            {{ form.gender.as_field_group }}
+            {{ form.dob.as_field_group }}
+          </div>
+          {{ form.biography.as_field_group }}
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-6">
+        <div class="card bg-base-200 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title">Photo</h2>
+            <div class="flex items-center gap-4">
+              <div class="avatar">
+                <div class="w-20 rounded-full bg-base-300">
+                  <img id="photo-preview" alt="" class="{% if not object.image %}hidden{% endif %}"
+                    src="{% if object.image %}{{ object.image.image.url }}{% endif %}" />
+                </div>
+              </div>
+              <div class="grow">{{ form.image }}</div>
+            </div>
+            {% for error in form.image.errors %}<p class="text-sm text-error">{{ error }}</p>{% endfor %}
+            <p class="text-xs opacity-70">Photo not listed? <a href="{% url 'image-create' %}" class="link">Upload it to the image library</a> first.</p>
+          </div>
+        </div>
+
+        <div class="card bg-base-200 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title">Roles</h2>
+            <div class="grid grid-cols-2 gap-x-2 gap-y-1">
+              {% for checkbox in form.roles %}
+                <label class="label cursor-pointer gap-2 text-sm text-base-content" for="{{ checkbox.id_for_label }}">
+                  {{ checkbox.tag }} {{ checkbox.choice_label }}
+                </label>
+              {% empty %}
+                <p class="col-span-2 text-sm opacity-70">No roles defined yet. <a href="{% url 'role-create' %}" class="link">Add a role</a>.</p>
+              {% endfor %}
+            </div>
+            {% for error in form.roles.errors %}<p class="text-sm text-error">{{ error }}</p>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-6 flex justify-end gap-2">
+      <a href="{% if object %}{% url 'person-detail' object.pk %}{% else %}{% url 'person-list' %}{% endif %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">{% if object %}Save{% else %}Create person{% endif %}</button>
+    </div>
+  </form>
+</div>
+
+{{ image_urls|json_script:"image-urls" }}
+<script>
+  // Update the round photo preview when a different image is chosen.
+  (() => {
+    const urls = JSON.parse(document.getElementById('image-urls').textContent);
+    const preview = document.getElementById('photo-preview');
+    document.getElementById('id_image').addEventListener('change', (event) => {
+      const url = urls[event.target.value];
+      preview.src = url || '';
+      preview.classList.toggle('hidden', !url);
+    });
+  })();
+</script>
+{% endblock %}

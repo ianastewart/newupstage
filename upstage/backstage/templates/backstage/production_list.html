@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Productions · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-3xl font-bold">Productions</h1>
+    <a href="{{ create_view_url }}" class="btn btn-primary">New production</a>
+  </div>
+
+  <div role="tablist" class="tabs tabs-box mb-6 w-fit flex-wrap">
+    <a role="tab" href="?" class="tab{% if not current_state %} tab-active{% endif %}">All</a>
+    {% for value, label in states %}
+      <a role="tab" href="?state={{ value }}" class="tab{% if current_state == value %} tab-active{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </div>
+
+  {% if object_list %}
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      {% for production in object_list %}
+        {% with cover=production.images.all.0 %}
+        <a href="{% url 'production-detail' production.pk %}" class="card bg-base-200 shadow-sm transition hover:shadow-md">
+          <figure class="bg-base-300">
+            {% if cover %}
+              <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" loading="lazy" class="aspect-[4/3] w-full object-cover" />
+            {% else %}
+              <div class="flex aspect-[4/3] w-full items-center justify-center bg-neutral text-4xl font-bold text-neutral-content">{{ production.title|first|upper }}</div>
+            {% endif %}
+          </figure>
+          <div class="card-body gap-1 p-3">
+            <p class="truncate font-semibold">{{ production.title }}</p>
+            {% if production.strap_line %}<p class="line-clamp-2 text-xs opacity-70">{{ production.strap_line }}</p>{% endif %}
+            <div class="mt-1 flex flex-wrap gap-1">
+              <span class="badge badge-sm {% if production.state == 'planned' %}badge-ghost{% elif production.state == 'audition' %}badge-info{% elif production.state == 'cast' %}badge-accent{% elif production.state == 'published' %}badge-success{% else %}badge-neutral{% endif %}">{{ production.get_state_display }}</span>
+              <span class="badge badge-sm badge-secondary">{{ production.get_type_display }}</span>
+            </div>
+          </div>
+        </a>
+        {% endwith %}
+      {% endfor %}
+    </div>
+
+    {% if is_paginated %}
+      <div class="join mt-8 flex justify-center">
+        {% if page_obj.has_previous %}
+          <a class="join-item btn" href="?{% if current_state %}state={{ current_state }}&{% endif %}page={{ page_obj.previous_page_number }}">«</a>
+        {% endif %}
+        <span class="join-item btn btn-disabled">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+          <a class="join-item btn" href="?{% if current_state %}state={{ current_state }}&{% endif %}page={{ page_obj.next_page_number }}">»</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p class="mb-4">No productions{% if current_state %} in this state{% endif %} yet.</p>
+      <a href="{{ create_view_url }}" class="btn btn-primary">Create the first one</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

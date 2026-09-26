@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}{% if object %}Edit image{% else %}Upload image{% endif %} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl p-6">
+  <h1 class="mb-6 text-3xl font-bold">{% if object %}Edit image{% else %}Upload image{% endif %}</h1>
+
+  <div class="card bg-base-200 shadow-sm">
+    <div class="card-body">
+      <form method="POST" enctype="multipart/form-data"
+        action="{% if object %}{{ update_view_url }}{% else %}{{ create_view_url }}{% endif %}">
+        {% csrf_token %}
+        <div class="grid gap-6 md:grid-cols-2">
+          <div>{{ form }}</div>
+          <div>
+            <p class="fieldset-legend">Preview</p>
+            <figure class="flex aspect-square items-center justify-center overflow-hidden rounded-box bg-base-300">
+              <img id="image-preview" alt="Preview of the selected image"
+                src="{% if object.image %}{{ object.image.url }}{% endif %}"
+                class="h-full w-full object-contain{% if not object.image %} hidden{% endif %}" />
+              <span id="image-placeholder" class="text-sm opacity-60{% if object.image %} hidden{% endif %}">Choose a file to preview it</span>
+            </figure>
+          </div>
+        </div>
+        <div class="mt-6 flex justify-end gap-2">
+          <a href="{% if object %}{% url 'image-detail' object.pk %}{% else %}{% url 'image-list' %}{% endif %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">{% if object %}Save{% else %}Upload{% endif %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Show the chosen file in the preview pane before uploading.
+  document.getElementById('id_image').addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    const preview = document.getElementById('image-preview');
+    if (!file) return;
+    preview.src = URL.createObjectURL(file);
+    preview.classList.remove('hidden');
+    document.getElementById('image-placeholder').classList.add('hidden');
+  });
+</script>
+{% endblock %}

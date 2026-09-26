@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}{{ person }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl p-6">
+  <div class="mb-4">
+    <a href="{% url 'person-list' %}" class="btn btn-ghost btn-sm">← People</a>
+  </div>
+
+  <div class="card bg-base-200 shadow-sm">
+    <div class="card-body">
+      <div class="flex flex-wrap items-center gap-4">
+        <div class="avatar{% if not person.image %} avatar-placeholder{% endif %}">
+          <div class="w-20 rounded-full{% if not person.image %} bg-neutral text-neutral-content{% endif %}">
+            {% if person.image %}
+              <img src="{{ person.image.image.url }}" alt="" />
+            {% else %}
+              <span class="text-2xl">{{ person.first_name|first }}{{ person.last_name|first }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <div>
+          <h1 class="text-3xl font-bold">{{ person }}</h1>
+          <div class="mt-2 flex flex-wrap gap-1">
+            {% for role in person.roles.all %}
+              <span class="badge badge-secondary">{{ role }}</span>
+            {% empty %}
+              <span class="text-sm opacity-60">No roles</span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+        <dt class="font-semibold">Email</dt><dd>{% if person.email %}<a href="mailto:{{ person.email }}" class="link">{{ person.email }}</a>{% else %}—{% endif %}</dd>
+        <dt class="font-semibold">Mobile</dt><dd>{{ person.mobile|default:"—" }}</dd>
+        <dt class="font-semibold">Gender</dt><dd>{{ person.get_gender_display|default:"—" }}</dd>
+        <dt class="font-semibold">Date of birth</dt><dd>{{ person.dob|date:"j F Y"|default:"—" }}</dd>
+      </dl>
+
+      {% if person.biography %}<div class="mt-4">{{ person.biography|linebreaks }}</div>{% endif %}
+
+      <div class="card-actions mt-4 justify-end">
+        <a href="{% url 'person-delete' person.pk %}" class="btn btn-ghost text-error">Delete</a>
+        <a href="{% url 'person-update' person.pk %}" class="btn btn-primary">Edit</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

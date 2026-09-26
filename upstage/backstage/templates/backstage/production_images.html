@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}{{ production }} images · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  {% include "backstage/includes/production_header.html" with active="images" %}
+
+  <div class="mb-6 flex flex-wrap items-center justify-end gap-4">
+    <div class="flex gap-2">
+      <a href="{% url 'image-create' %}" class="btn btn-ghost">Upload to library</a>
+      <button type="button" class="btn btn-primary" onclick="document.getElementById('add-images').showModal()"{% if not available_images %} disabled{% endif %}>Add from library</button>
+    </div>
+  </div>
+
+  {% if production_images %}
+    <div class="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+      {% for production_image in production_images %}
+        <div class="card bg-base-200 shadow-sm">
+          <a href="{% url 'image-detail' production_image.image.pk %}">
+            <figure class="bg-base-300 rounded-t-box">
+              <img src="{{ production_image.image.image.url }}" alt="{{ production_image.image.description }}" loading="lazy" class="aspect-square w-full object-cover" />
+            </figure>
+          </a>
+          <div class="card-body gap-1 p-3">
+            <p class="truncate text-sm font-medium">{{ production_image.image }}</p>
+            <div class="flex items-center justify-between">
+              <span class="badge badge-sm badge-secondary">{{ production_image.image.get_image_type_display }}</span>
+              <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="remove" />
+                <input type="hidden" name="production_image" value="{{ production_image.pk }}" />
+                <button type="submit" class="btn btn-ghost btn-xs text-error">Remove</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p>This production has no images yet.</p>
+      {% if not available_images %}<p class="mt-2 text-sm opacity-70">Upload some to the library first.</p>{% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<dialog id="add-images" class="modal">
+  <div class="modal-box max-w-4xl">
+    <h2 class="mb-4 text-xl font-bold">Add images to {{ production }}</h2>
+    <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add" />
+      <div class="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto p-1 sm:grid-cols-3 md:grid-cols-4">
+        {% for image in available_images %}
+          <label class="relative cursor-pointer overflow-hidden rounded-box bg-base-200 ring-primary has-checked:ring-4">
+            <img src="{{ image.image.url }}" alt="{{ image.description }}" loading="lazy" class="aspect-square w-full object-cover" />
+            <input type="checkbox" name="images" value="{{ image.pk }}" class="absolute left-2 top-2 bg-base-100" />
+            <span class="block truncate px-2 py-1 text-xs">{{ image }}</span>
+          </label>
+        {% endfor %}
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add selected</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endblock %}

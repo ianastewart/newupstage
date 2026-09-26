@@ -8,4 +8,5 @@ dependencies = [
     "django-enum>=2.5.0",
     "neapolitan>=26.1",
     "pillow>=12.3.0",
+    "psycopg[binary]>=3.3.6",
 ]
