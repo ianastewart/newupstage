@@ -1,4 +1,5 @@
-from django.db.models import Prefetch
+from django.db.models import F, Prefetch
+from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from neapolitan.views import CRUDView, Role
 
@@ -176,6 +177,24 @@ class ProductionView(CRUDView):
         state = self.request.GET.get("state")
         return state if state in models.Production.ProductionState.values else None
 
+    def get_type(self):
+        production_type = self.request.GET.get("type")
+        return production_type if production_type in models.Production.ProductionType.values else None
+
+    def get_search(self):
+        return self.request.GET.get("q", "").strip()
+
+    # By broadcast date; productions without one go last, most recently added first.
+    SORTS = {
+        "newest": ("Newest first", [F("broadcast_datetime").desc(nulls_last=True), "-id"]),
+        "oldest": ("Oldest first", [F("broadcast_datetime").asc(nulls_last=True), "-id"]),
+        "title": ("Alphabetical", [Lower("title"), "-id"]),
+    }
+
+    def get_sort(self):
+        sort = self.request.GET.get("sort")
+        return sort if sort in self.SORTS else "newest"
+
     def get_queryset(self):
         queryset = super().get_queryset().order_by("-id")
         if self.role == Role.LIST:
@@ -185,11 +204,21 @@ class ProductionView(CRUDView):
             )
             if state := self.get_state():
                 queryset = queryset.filter(state=state)
+            if production_type := self.get_type():
+                queryset = queryset.filter(type=production_type)
+            if search := self.get_search():
+                queryset = queryset.filter(title__icontains=search)
+            queryset = queryset.order_by(*self.SORTS[self.get_sort()][1])
         return queryset
 
     def get_context_data(self, **kwargs):
         kwargs["states"] = models.Production.ProductionState.choices
         kwargs["current_state"] = self.get_state()
+        kwargs["types"] = models.Production.ProductionType.choices
+        kwargs["current_type"] = self.get_type()
+        kwargs["search"] = self.get_search()
+        kwargs["sorts"] = [(value, label) for value, (label, _) in self.SORTS.items()]
+        kwargs["current_sort"] = self.get_sort()
         return super().get_context_data(**kwargs)
 
 

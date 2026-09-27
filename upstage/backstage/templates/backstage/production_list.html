@@ -9,10 +9,33 @@
     <a href="{{ create_view_url }}" class="btn btn-primary">New production</a>
   </div>
 
+  <form method="get" class="mb-4 flex flex-wrap items-center gap-3">
+    {% if current_state %}<input type="hidden" name="state" value="{{ current_state }}" />{% endif %}
+    <label class="input w-full sm:w-72">
+      <svg class="h-4 w-4 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      <input type="search" name="q" value="{{ search }}" placeholder="Search titles" aria-label="Search titles" />
+    </label>
+    <select name="type" class="select w-full sm:w-48" aria-label="Production type" onchange="this.form.submit()">
+      <option value="">All types</option>
+      {% for value, label in types %}
+        <option value="{{ value }}"{% if current_type == value %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="sort" class="select w-full sm:w-44" aria-label="Sort by" onchange="this.form.submit()">
+      {% for value, label in sorts %}
+        <option value="{{ value }}"{% if current_sort == value %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn">Search</button>
+    {% if search or current_type %}
+      <a href="{% querystring q=None type=None page=None %}" class="btn btn-ghost">Clear</a>
+    {% endif %}
+  </form>
+
   <div role="tablist" class="tabs tabs-box mb-6 w-fit flex-wrap">
-    <a role="tab" href="?" class="tab{% if not current_state %} tab-active{% endif %}">All</a>
+    <a role="tab" href="{% querystring state=None page=None %}" class="tab{% if not current_state %} tab-active{% endif %}">All</a>
     {% for value, label in states %}
-      <a role="tab" href="?state={{ value }}" class="tab{% if current_state == value %} tab-active{% endif %}">{{ label }}</a>
+      <a role="tab" href="{% querystring state=value page=None %}" class="tab{% if current_state == value %} tab-active{% endif %}">{{ label }}</a>
     {% endfor %}
   </div>
 
@@ -44,18 +67,23 @@
     {% if is_paginated %}
       <div class="join mt-8 flex justify-center">
         {% if page_obj.has_previous %}
-          <a class="join-item btn" href="?{% if current_state %}state={{ current_state }}&{% endif %}page={{ page_obj.previous_page_number }}">«</a>
+          <a class="join-item btn" href="{% querystring page=page_obj.previous_page_number %}">«</a>
         {% endif %}
         <span class="join-item btn btn-disabled">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
         {% if page_obj.has_next %}
-          <a class="join-item btn" href="?{% if current_state %}state={{ current_state }}&{% endif %}page={{ page_obj.next_page_number }}">»</a>
+          <a class="join-item btn" href="{% querystring page=page_obj.next_page_number %}">»</a>
         {% endif %}
       </div>
     {% endif %}
   {% else %}
     <div class="rounded-box bg-base-200 p-12 text-center">
-      <p class="mb-4">No productions{% if current_state %} in this state{% endif %} yet.</p>
-      <a href="{{ create_view_url }}" class="btn btn-primary">Create the first one</a>
+      {% if search or current_type or current_state %}
+        <p class="mb-4">No productions match these filters.</p>
+        <a href="?" class="btn">Show all productions</a>
+      {% else %}
+        <p class="mb-4">No productions yet.</p>
+        <a href="{{ create_view_url }}" class="btn btn-primary">Create the first one</a>
+      {% endif %}
     </div>
   {% endif %}
 </div>
