@@ -1,6 +1,7 @@
-from django.db.models import F, Prefetch
-from django.db.models.functions import Lower
+from django.db.models import F, Prefetch, Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from neapolitan.views import CRUDView, Role
 
 from backstage import forms, models
@@ -139,13 +140,75 @@ class PersonView(CRUDView):
     # Columns shown in the list. Create/update use PersonForm and detail has its own template.
     fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "image"]
 
+    # Pages that link to a person with ?from=..., and the "back" link the person page shows.
+    BACK_LINKS = {
+        "actors": ("actor-list", "", "Actors"),
+        "actors-details": ("actor-list", "?view=details", "Actors"),
+        "writers": ("writer-list", "", "Writers"),
+    }
+
     def get_context_data(self, **kwargs):
+        if self.role == Role.DETAIL:
+            url_name, query, label = self.BACK_LINKS.get(self.request.GET.get("from"), ("person-list", "", "People"))
+            kwargs["back_url"] = reverse(url_name) + query
+            kwargs["back_label"] = label
+            # Productions they were cast in, newest first, with the characters they played in each.
+            parts = self.object.cast_roles.select_related("production").order_by(
+                F("production__broadcast_datetime").desc(nulls_last=True), "production__title", "id"
+            )
+            characters = {}
+            for part in parts:
+                characters.setdefault(part.production, []).append(part.character_name)
+            kwargs["cast_in"] = list(characters.items())
         if self.role in (Role.CREATE, Role.UPDATE):
             # Lets the form preview the selected photo.
-            kwargs["image_urls"] = {
-                str(image.pk): image.image.url for image in models.Image.objects.exclude(image="")
-            }
+            photos = kwargs["form"].fields["image"].queryset if "form" in kwargs else models.Image.objects.all()
+            kwargs["image_urls"] = {str(image.pk): image.image.url for image in photos.exclude(image="")}
         return super().get_context_data(**kwargs)
+
+
+def writer_list(request):
+    """Everyone with the Writer role, with the productions they wrote."""
+    writers = (
+        models.Person.objects.filter(roles__name="Writer")
+        .select_related("image")
+        .prefetch_related(
+            Prefetch(
+                "productionteam_set",
+                queryset=models.ProductionTeam.objects.filter(role__name="Writer")
+                .select_related("production")
+                .order_by(F("production__broadcast_datetime").desc(nulls_last=True), "production__title"),
+                to_attr="writing_credits",
+            )
+        )
+        # Alphabetical by surname, then first name.
+        .order_by(Lower("last_name"), Lower("first_name"))
+        .distinct()
+    )
+    return render(request, "backstage/writer_list.html", {"writers": writers})
+
+
+def actor_list(request):
+    """Everyone with the Actor role, alphabetical by surname: photos and names, or with details."""
+    details = request.GET.get("view") == "details"
+    actors = (
+        models.Person.objects.filter(roles__name="Actor")
+        .select_related("image")
+        # People known by one name ("Divya") sort by that name.
+        .order_by(Coalesce(NullIf(Lower("last_name"), Value("")), Lower("first_name")), Lower("first_name"))
+        .distinct()
+    )
+    if details:
+        actors = actors.prefetch_related(
+            Prefetch(
+                "cast_roles",
+                queryset=models.Cast.objects.select_related("production").order_by(
+                    F("production__broadcast_datetime").desc(nulls_last=True), "production__title"
+                ),
+                to_attr="parts",
+            )
+        )
+    return render(request, "backstage/actor_list.html", {"actors": actors, "details": details})
 
 
 class TicketSiteView(CRUDView):

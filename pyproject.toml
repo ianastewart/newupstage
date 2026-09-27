@@ -6,6 +6,7 @@ dependencies = [
     "django>=6.1.1",
     "django-browser-reload>=1.21.0",
     "django-enum>=2.5.0",
+    "django-rmeditor>=0.1.15",
     "neapolitan>=26.1",
     "pillow>=12.3.0",
     "psycopg[binary]>=3.3.6",

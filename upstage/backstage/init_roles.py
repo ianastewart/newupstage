@@ -8,7 +8,7 @@ ROLES = [
     "Actor",
     "Stage Manager",
     "Backstage",
-    "Costumer",
+    "Costumes",
     "Prop maker",
     "Photographer",
     "Sound",

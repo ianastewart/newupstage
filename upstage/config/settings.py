@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'backstage',
     'neapolitan',
     'django_browser_reload',
+    'rmeditor',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

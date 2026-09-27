@@ -93,3 +93,14 @@
   form input[type=radio] { @apply radio; }
   form [aria-invalid=true] { @apply border-error; }
 }
+
+/* Links in the rich text editor look like links on the person page (daisyUI link link-primary).
+   Unlayered on purpose: rmeditor.css is unlayered too, so a layered rule would lose to it. */
+.rmeditor-wrap .rme-area a {
+  color: var(--color-primary);
+  text-decoration-line: underline;
+  cursor: pointer;
+}
+.rmeditor-wrap .rme-area a:hover {
+  color: color-mix(in oklab, var(--color-primary) 80%, #000);
+}

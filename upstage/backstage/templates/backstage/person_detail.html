@@ -5,22 +5,23 @@
 {% block content %}
 <div class="mx-auto max-w-4xl p-6">
   <div class="mb-4">
-    <a href="{% url 'person-list' %}" class="btn btn-ghost btn-sm">← People</a>
+    <a href="{{ back_url }}" class="btn btn-ghost btn-sm">← {{ back_label }}</a>
   </div>
 
   <div class="card bg-base-200 shadow-sm">
     <div class="card-body">
       <div class="flex flex-wrap items-center gap-4">
-        <div class="avatar{% if not person.image %} avatar-placeholder{% endif %}">
-          <div class="w-20 rounded-full{% if not person.image %} bg-neutral text-neutral-content{% endif %}">
-            {% if person.image %}
-              <img src="{{ person.image.image.url }}" alt="" />
-            {% else %}
+        {% if person.image %}
+          {# The whole photo, uncropped, at most 300px high. #}
+          <img src="{{ person.image.image.url }}" alt="{{ person }}" class="h-auto max-h-[300px] w-auto max-w-full rounded-box shadow-sm" />
+        {% else %}
+          <div class="avatar avatar-placeholder">
+            <div class="w-20 rounded-full bg-neutral text-neutral-content">
               <span class="text-2xl">{{ person.first_name|first }}{{ person.last_name|first }}</span>
-            {% endif %}
+            </div>
           </div>
-        </div>
-        <div>
+        {% endif %}
+        <div class="min-w-0">
           <h1 class="text-3xl font-bold">{{ person }}</h1>
           <div class="mt-2 flex flex-wrap gap-1">
             {% for role in person.roles.all %}
@@ -29,17 +30,29 @@
               <span class="text-sm opacity-60">No roles</span>
             {% endfor %}
           </div>
+          <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+            <dt class="font-semibold">Email</dt><dd class="break-all">{% if person.email %}<a href="mailto:{{ person.email }}" class="link">{{ person.email }}</a>{% else %}—{% endif %}</dd>
+            <dt class="font-semibold">Mobile</dt><dd>{{ person.mobile|default:"—" }}</dd>
+            <dt class="font-semibold">Gender</dt><dd>{{ person.get_gender_display|default:"—" }}</dd>
+            <dt class="font-semibold">Date of birth</dt><dd>{{ person.dob|date:"j F Y"|default:"—" }}</dd>
+          </dl>
         </div>
       </div>
 
-      <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-        <dt class="font-semibold">Email</dt><dd>{% if person.email %}<a href="mailto:{{ person.email }}" class="link">{{ person.email }}</a>{% else %}—{% endif %}</dd>
-        <dt class="font-semibold">Mobile</dt><dd>{{ person.mobile|default:"—" }}</dd>
-        <dt class="font-semibold">Gender</dt><dd>{{ person.get_gender_display|default:"—" }}</dd>
-        <dt class="font-semibold">Date of birth</dt><dd>{{ person.dob|date:"j F Y"|default:"—" }}</dd>
-      </dl>
+      {% if person.biography %}<div class="mt-4 space-y-3 [&_a]:link [&_a]:link-primary">{{ person.biography|safe }}</div>{% endif %}
 
-      {% if person.biography %}<div class="mt-4">{{ person.biography|linebreaks }}</div>{% endif %}
+      {% if cast_in %}
+        <div class="mt-4">
+          <h2 class="mb-2 font-semibold">Cast in</h2>
+          <div class="flex flex-wrap gap-2">
+            {% for production, characters in cast_in %}
+              <a href="{% url 'production-detail' production.pk %}" class="badge badge-secondary badge-outline h-auto py-1 hover:bg-secondary hover:text-secondary-content" title="{{ characters|join:', ' }} in {{ production.title }}">
+                {{ production.title }} <span class="opacity-70">· {{ characters|join:", " }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
 
       <div class="card-actions mt-4 justify-end">
         <a href="{% url 'person-delete' person.pk %}" class="btn btn-ghost text-error">Delete</a>

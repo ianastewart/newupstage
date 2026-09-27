@@ -179,6 +179,18 @@ wheels = [
 ]
 
 [[package]]
+name = "django-rmeditor"
+version = "0.1.15"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a9/71/cf71d54bed172a745778e0ddf32051bad4618824881ce2e7734edb049a54/django_rmeditor-0.1.15.tar.gz", hash = "sha256:f00646be0fe46b18f913023ed7e23252bd92f6a95083209b1c91735277f63021", size = 27052, upload-time = "2026-09-25T13:03:48.143Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/68/ba7e6898ff97bbf6616454fc24a0f5e220a1ecbdd5ad65518b920931bdca/django_rmeditor-0.1.15-py3-none-any.whl", hash = "sha256:5f31787ca7e12b0f0dce6c63ae1f768e2553af199d7384cc0c68c27fbe6e2b60", size = 24061, upload-time = "2026-09-25T13:03:46.763Z" },
+]
+
+[[package]]
 name = "idna"
 version = "3.20"
 source = { registry = "https://pypi.org/simple" }
@@ -208,6 +220,7 @@ dependencies = [
     { name = "django" },
     { name = "django-browser-reload" },
     { name = "django-enum" },
+    { name = "django-rmeditor" },
     { name = "neapolitan" },
     { name = "pillow" },
     { name = "psycopg", extra = ["binary"] },
@@ -224,6 +237,7 @@ requires-dist = [
     { name = "django", specifier = ">=6.1.1" },
     { name = "django-browser-reload", specifier = ">=1.21.0" },
     { name = "django-enum", specifier = ">=2.5.0" },
+    { name = "django-rmeditor", specifier = ">=0.1.15" },
     { name = "neapolitan", specifier = ">=26.1" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },

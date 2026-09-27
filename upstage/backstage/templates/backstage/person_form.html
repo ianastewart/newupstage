@@ -1,5 +1,8 @@
 {% extends "base.html" %}
-
+{% block head %}
+{% load rmeditor %}
+{% rmeditor_media  %}
+{% endblock %}
 {% block title %}{% if object %}Edit {{ object }}{% else %}New person{% endif %} · Upstage Theatre{% endblock %}
 
 {% block content %}
