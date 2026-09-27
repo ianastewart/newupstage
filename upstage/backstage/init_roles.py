@@ -11,7 +11,10 @@ ROLES = [
     "Costumer",
     "Prop maker",
     "Photographer",
+    "Sound",
     "Web admin",
+    "Production Manager",
+    "Marketing",
 ]
 
 def init_roles():

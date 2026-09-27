@@ -169,7 +169,7 @@ class EventDateTimeView(CRUDView):
 
 class ProductionView(CRUDView):
     model = models.Production
-    fields = ["title", "strap_line", "description", "writer", "state", "type", "event"]
+    fields = ["title", "strap_line", "description", "state", "type", "event", "listen_url", "broadcast_datetime"]
     paginate_by = 24
 
     def get_state(self):

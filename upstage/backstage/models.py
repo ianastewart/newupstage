@@ -109,13 +109,6 @@ class Production(models.Model):
     title = models.CharField(max_length=255)
     strap_line = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
-    writer = models.ForeignKey(
-        Person,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="writers",
-    )
     state = models.CharField(
         max_length=20, choices=ProductionState.choices, default=ProductionState.PLANNED
     )
@@ -125,9 +118,16 @@ class Production(models.Model):
     event = models.ForeignKey(
         Event, null=True, blank=True, on_delete=models.SET_NULL
     )
+    listen_url = models.URLField(null=True, blank=True)
+    broadcast_datetime = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.title
+
+    @property
+    def writers(self):
+        """People in the production team with the Writer role."""
+        return [member.person for member in self.team.all() if member.role.name == "Writer"]
 
 
 class Cast(models.Model):

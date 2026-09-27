@@ -10,3 +10,9 @@ dependencies = [
     "pillow>=12.3.0",
     "psycopg[binary]>=3.3.6",
 ]
+
+[dependency-groups]
+dev = [
+    "beautifulsoup4>=4.15.0",
+    "requests>=2.34.2",
+]
