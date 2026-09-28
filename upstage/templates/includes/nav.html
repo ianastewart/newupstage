@@ -1,6 +1,12 @@
-<div class="navbar bg-base-100 shadow-sm">
+<div class="navbar h-[80px] bg-base-100 shadow-sm">
     <div class="flex-1">
-    <a class="btn btn-ghost text-xl" href="/">🏠</a>
+    {% if navbar_logo %}
+      <a class="btn btn-ghost h-auto px-2 py-1" href="/" aria-label="Home">
+        <img src="{{ navbar_logo.image.url }}" alt="Upstage Surrey" class="h-14 w-auto" />
+      </a>
+    {% else %}
+      <a class="btn btn-ghost text-xl" href="/" aria-label="Home">🏠</a>
+    {% endif %}
     </div>
     <div class="flex-none">
       <a class="btn btn-ghost" href="{% url 'production-list' %}">Productions</a>

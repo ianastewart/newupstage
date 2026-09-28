@@ -83,9 +83,17 @@ def production_images(request, pk):
             production_image_id = request.POST.get("production_image", "")
             if production_image_id.isdigit():
                 production.images.filter(pk=production_image_id).delete()
+        elif request.POST.get("action") == "default":
+            production_image_id = request.POST.get("production_image", "")
+            if production_image_id.isdigit() and (
+                production_image := production.images.filter(pk=production_image_id).first()
+            ):
+                production_image.make_default()
+        # The first image added, or the next one after the default is removed, becomes the default.
+        models.ProductionImage.ensure_default(production)
         return redirect("production-images", pk=production.pk)
 
-    production_images = production.images.select_related("image").order_by("-id")
+    production_images = production.images.select_related("image").order_by("-is_default", "-id")
     available_images = models.Image.objects.exclude(
         pk__in=production_images.values("image_id")
     ).order_by("-id")
@@ -125,9 +133,39 @@ class ImageView(CRUDView):
     def get_context_data(self, **kwargs):
         kwargs["image_types"] = models.Image.ImageType.choices
         kwargs["current_type"] = self.get_image_type()
+        if self.role == Role.CREATE:
+            kwargs["production"] = self.get_upload_production()
+        if self.role == Role.DETAIL:
+            # Opened from a production's Images tab (?production=<pk>): go back there, not to the library.
+            production_id = self.request.GET.get("production", "")
+            production = (
+                models.Production.objects.filter(pk=production_id, images__image=self.object).first()
+                if production_id.isdigit() else None
+            )
+            if production:
+                kwargs["back_url"] = reverse("production-images", args=[production.pk])
+                kwargs["back_label"] = f"{production} images"
+            else:
+                kwargs["back_url"] = reverse("image-list")
+                kwargs["back_label"] = "Image library"
         return super().get_context_data(**kwargs)
 
+    def get_upload_production(self):
+        """When uploading from a production's Images tab (?production=<pk>), that production."""
+        production_id = self.request.POST.get("production") or self.request.GET.get("production", "")
+        return models.Production.objects.filter(pk=production_id).first() if production_id.isdigit() else None
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        if self.role == Role.CREATE and (production := self.get_upload_production()):
+            # The new image goes straight onto the production (as its default if it's the first).
+            models.ProductionImage.objects.create(production=production, image=self.object)
+            models.ProductionImage.ensure_default(production)
+        return response
+
     def get_success_url(self):
+        if self.role == Role.CREATE and (production := self.get_upload_production()):
+            return reverse("production-images", args=[production.pk])
         # After uploading or deleting, go back to the library.
         if self.role in (Role.CREATE, Role.DELETE):
             return Role.LIST.reverse(self)
@@ -277,7 +315,7 @@ class ProductionView(CRUDView):
     def get_queryset(self):
         queryset = super().get_queryset().order_by("-id")
         if self.role == Role.LIST:
-            # First attached image is used as the cover in the list.
+            # The default image is used as the cover in the list (Production.default_image).
             queryset = queryset.prefetch_related(
                 Prefetch("images", queryset=models.ProductionImage.objects.select_related("image").order_by("id"))
             )

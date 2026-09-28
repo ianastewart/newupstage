@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django_enum import EnumField
 
 
@@ -18,6 +18,7 @@ class Image(models.Model):
         PROMOTION = "promotion", "Promotion"
         GALLERY = "gallery", "Gallery"
         HEADSHOT = "headshot", "Headshot"
+        LOGO = "logo", "Logo"
         OTHER = "other", "Other"
 
     image = models.ImageField(upload_to="images/")
@@ -125,6 +126,12 @@ class Production(models.Model):
         return self.title
 
     @property
+    def default_image(self):
+        """The production's default ProductionImage, or None. Uses prefetched images if there are any."""
+        images = list(self.images.all())
+        return next((i for i in images if i.is_default), None) or min(images, key=lambda i: i.id, default=None)
+
+    @property
     def writers(self):
         """People in the production team with the Writer role."""
         return [member.person for member in self.team.all() if member.role.name == "Writer"]
@@ -174,6 +181,31 @@ class ProductionImage(models.Model):
         Production, on_delete=models.CASCADE, related_name="images"
     )
     image = models.ForeignKey(Image, on_delete=models.CASCADE)
+    # The production's main image (e.g. its cover in lists). A production with images has exactly one.
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["production"],
+                condition=models.Q(is_default=True),
+                name="one_default_image_per_production",
+            )
+        ]
 
     def __str__(self):
         return f"{self.production} - {self.image}"
+
+    def make_default(self):
+        """Make this the production's default image (and no other)."""
+        with transaction.atomic():
+            self.production.images.exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
+            self.is_default = True
+            self.save(update_fields=["is_default"])
+
+    @classmethod
+    def ensure_default(cls, production):
+        """If the production has images but no default, make the earliest one the default."""
+        images = production.images.order_by("id")
+        if not images.filter(is_default=True).exists() and (first := images.first()):
+            first.make_default()

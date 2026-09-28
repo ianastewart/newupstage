@@ -8,7 +8,7 @@
 
   <div class="mb-6 flex flex-wrap items-center justify-end gap-4">
     <div class="flex gap-2">
-      <a href="{% url 'image-create' %}" class="btn btn-ghost">Upload to library</a>
+      <a href="{% url 'image-create' %}?production={{ production.pk }}" class="btn btn-ghost">Upload</a>
       <button type="button" class="btn btn-primary" onclick="document.getElementById('add-images').showModal()"{% if not available_images %} disabled{% endif %}>Add from library</button>
     </div>
   </div>
@@ -16,22 +16,35 @@
   {% if production_images %}
     <div class="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
       {% for production_image in production_images %}
-        <div class="card bg-base-200 shadow-sm">
-          <a href="{% url 'image-detail' production_image.image.pk %}">
+        <div class="card bg-base-200 shadow-sm{% if production_image.is_default %} ring-4 ring-primary{% endif %}">
+          <a href="{% url 'image-detail' production_image.image.pk %}?production={{ production.pk }}" class="relative">
             <figure class="bg-base-300 rounded-t-box">
               <img src="{{ production_image.image.image.url }}" alt="{{ production_image.image.description }}" loading="lazy" class="aspect-square w-full object-cover" />
             </figure>
+            {% if production_image.is_default %}
+              <span class="badge badge-primary badge-sm absolute left-2 top-2">Default</span>
+            {% endif %}
           </a>
           <div class="card-body gap-1 p-3">
             <p class="truncate text-sm font-medium">{{ production_image.image }}</p>
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-1">
               <span class="badge badge-sm badge-secondary">{{ production_image.image.get_image_type_display }}</span>
-              <form method="POST">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="remove" />
-                <input type="hidden" name="production_image" value="{{ production_image.pk }}" />
-                <button type="submit" class="btn btn-ghost btn-xs text-error">Remove</button>
-              </form>
+              <div class="flex">
+                {% if not production_image.is_default %}
+                  <form method="POST">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="default" />
+                    <input type="hidden" name="production_image" value="{{ production_image.pk }}" />
+                    <button type="submit" class="btn btn-ghost btn-xs" title="Use as this production's main image">Make default</button>
+                  </form>
+                {% endif %}
+                <form method="POST">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="remove" />
+                  <input type="hidden" name="production_image" value="{{ production_image.pk }}" />
+                  <button type="submit" class="btn btn-ghost btn-xs text-error">Remove</button>
+                </form>
+              </div>
             </div>
           </div>
         </div>
@@ -40,7 +53,7 @@
   {% else %}
     <div class="rounded-box bg-base-200 p-12 text-center">
       <p>This production has no images yet.</p>
-      {% if not available_images %}<p class="mt-2 text-sm opacity-70">Upload some to the library first.</p>{% endif %}
+      <p class="mt-2 text-sm opacity-70">Upload one{% if available_images %} or add one from the library{% endif %}.</p>
     </div>
   {% endif %}
 </div>

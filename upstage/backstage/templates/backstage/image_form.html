@@ -4,13 +4,14 @@
 
 {% block content %}
 <div class="mx-auto max-w-4xl p-6">
-  <h1 class="mb-6 text-3xl font-bold">{% if object %}Edit image{% else %}Upload image{% endif %}</h1>
+  <h1 class="mb-6 text-3xl font-bold">{% if object %}Edit image{% elif production %}Upload image to {{ production }}{% else %}Upload image{% endif %}</h1>
 
   <div class="card bg-base-200 shadow-sm">
     <div class="card-body">
       <form method="POST" enctype="multipart/form-data"
         action="{% if object %}{{ update_view_url }}{% else %}{{ create_view_url }}{% endif %}">
         {% csrf_token %}
+        {% if production %}<input type="hidden" name="production" value="{{ production.pk }}" />{% endif %}
         <div class="grid gap-6 md:grid-cols-2">
           <div>{{ form }}</div>
           <div>
@@ -24,7 +25,7 @@
           </div>
         </div>
         <div class="mt-6 flex justify-end gap-2">
-          <a href="{% if object %}{% url 'image-detail' object.pk %}{% else %}{% url 'image-list' %}{% endif %}" class="btn btn-ghost">Cancel</a>
+          <a href="{% if object %}{% url 'image-detail' object.pk %}{% elif production %}{% url 'production-images' production.pk %}{% else %}{% url 'image-list' %}{% endif %}" class="btn btn-ghost">Cancel</a>
           <button type="submit" class="btn btn-primary">{% if object %}Save{% else %}Upload{% endif %}</button>
         </div>
       </form>

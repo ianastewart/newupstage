@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Writers · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  <div class="mb-6 flex flex-wrap items-baseline justify-between gap-4">
+    <h1 class="text-3xl font-bold">Writers</h1>
+    <p class="text-sm opacity-70">{{ writers|length }} writer{{ writers|length|pluralize }}</p>
+  </div>
+
+  {% if writers %}
+    <div class="grid gap-4 md:grid-cols-2">
+      {% for person in writers %}
+        <div class="card bg-base-200 shadow-sm">
+          <div class="card-body gap-3 p-5">
+            <a href="{% url 'person-detail' person.pk %}?from=writers" class="flex items-center gap-4">
+              {% if person.image %}
+                <img src="{{ person.image.image.url }}" alt="" loading="lazy" class="aspect-square w-24 shrink-0 rounded-box object-cover object-top" />
+              {% else %}
+                <div class="flex aspect-square w-24 shrink-0 items-center justify-center rounded-box bg-neutral text-2xl font-bold text-neutral-content">{{ person.first_name|first }}{{ person.last_name|first }}</div>
+              {% endif %}
+              <h2 class="card-title link-hover">{{ person }}</h2>
+            </a>
+
+            {% if person.biography %}
+              <div class="line-clamp-3 text-sm opacity-80 [&_a]:link [&_a]:link-primary">{{ person.biography|safe }}</div>
+            {% endif %}
+
+            {% if person.writing_credits %}
+              <div class="flex flex-wrap gap-1">
+                {% for credit in person.writing_credits %}
+                  <a href="{% url 'production-detail' credit.production.pk %}" class="badge badge-secondary badge-outline hover:bg-secondary hover:text-secondary-content">{{ credit.production.title }}</a>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="text-sm opacity-60">No productions credited yet.</p>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p>No one has the Writer role yet.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
