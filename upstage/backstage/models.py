@@ -62,12 +62,28 @@ class TicketSite(models.Model):
 class Venue(models.Model):
     name = models.CharField(max_length=255)
     address = models.TextField(max_length=255, blank=True)
+    logo = models.ForeignKey(
+        Image, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+        limit_choices_to={"image_type": Image.ImageType.LOGO},
+    )
+
+    def __str__(self):
+        return self.name
 
 
 class Event(models.Model):
     """ Wrapper for 1 or more stage productions """
 
+    class EventType(models.TextChoices):
+        AUDITION = "audition", "Audition"
+        REHEARSAL = "rehearsal", "Rehearsal"
+        PERFORMANCE = "performance", "Performance"
+        OTHER = "other", "Other"
+
     title = models.CharField(max_length=255)
+    event_type = models.CharField(
+        max_length=20, choices=EventType.choices, default=EventType.PERFORMANCE
+    )
     description = models.TextField(blank=True)
     venue = models.ForeignKey(Venue, null=True, blank=True, on_delete=models.SET_NULL)
     ticket_site = models.ForeignKey(
@@ -116,9 +132,8 @@ class Production(models.Model):
     type = models.CharField(
         max_length=20, choices=ProductionType.choices, default=ProductionType.RADIO
     )
-    event = models.ForeignKey(
-        Event, null=True, blank=True, on_delete=models.SET_NULL
-    )
+    # Auditions, rehearsals, performances...; an event (e.g. an evening of plays) can include several productions.
+    events = models.ManyToManyField(Event, blank=True, related_name="productions")
     listen_url = models.URLField(null=True, blank=True)
     broadcast_datetime = models.DateTimeField(null=True, blank=True)
 

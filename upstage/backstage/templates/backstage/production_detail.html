@@ -27,7 +27,7 @@
           <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
             <dt class="font-semibold">Writer</dt>
             <dd>{{ production.writers|join:", "|default:"—" }}</dd>
-            <dt class="font-semibold">Event</dt><dd>{{ production.event|default:"—" }}</dd>
+            <dt class="font-semibold">Events</dt><dd>{{ production.events.count }}</dd>
             <dt class="font-semibold">Broadcast</dt><dd>{{ production.broadcast_datetime|date:"j F Y, H:i"|default:"—" }}</dd>
             <dt class="font-semibold">Listen</dt><dd>{% if production.listen_url %}<a href="{{ production.listen_url }}" class="link" target="_blank" rel="noopener">Listen now</a>{% else %}—{% endif %}</dd>
             <dt class="font-semibold">Images</dt><dd>{{ production.images.count }}</dd>

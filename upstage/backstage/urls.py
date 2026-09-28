@@ -6,6 +6,7 @@ urlpatterns = [
     path("actors/", views.actor_list, name="actor-list"),
     path("writers/", views.writer_list, name="writer-list"),
     path("production/<int:pk>/images/", views.production_images, name="production-images"),
+    path("production/<int:pk>/events/", views.production_events, name="production-events"),
     path("production/<int:pk>/cast/", views.production_cast, name="production-cast"),
     path("production/<int:pk>/team/", views.production_team, name="production-team"),
     *views.UpstageView.get_urls(),

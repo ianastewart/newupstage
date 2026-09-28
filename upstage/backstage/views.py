@@ -1,7 +1,9 @@
-from django.db.models import F, Prefetch, Value
+from django.db.models import F, Min, Prefetch, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from neapolitan.views import CRUDView, Role
 
 from backstage import forms, models
@@ -65,6 +67,57 @@ def production_team(request, pk):
         template_name="backstage/production_team.html",
         url_name="production-team",
     )
+
+
+def production_events(request, pk):
+    """
+    A production's events (auditions, rehearsals, performances...) with their dates: create an event
+    for the production, attach an existing one, unlink one, and add or remove an event's dates.
+    """
+    production = get_object_or_404(models.Production, pk=pk)
+    event_form = forms.EventForm()
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        event_id = request.POST.get("event", "")
+        # Only events linked to this production can be changed from its tab (except when attaching one).
+        linked_event = production.events.filter(pk=event_id).first() if event_id.isdigit() else None
+        if action == "create":
+            event_form = forms.EventForm(request.POST)
+            if event_form.is_valid():
+                production.events.add(event_form.save())
+                return redirect("production-events", pk=production.pk)
+        else:
+            if action == "attach" and event_id.isdigit():
+                if event := models.Event.objects.filter(pk=event_id).first():
+                    production.events.add(event)
+            elif action == "unlink" and linked_event:
+                production.events.remove(linked_event)
+            elif action == "add_datetime" and linked_event:
+                when = parse_datetime(request.POST.get("datetime", ""))
+                if when:
+                    if timezone.is_naive(when):
+                        when = timezone.make_aware(when)
+                    linked_event.datetimes.get_or_create(datetime=when)
+            elif action == "remove_datetime":
+                datetime_id = request.POST.get("datetime_id", "")
+                if datetime_id.isdigit():
+                    models.EventDateTime.objects.filter(pk=datetime_id, event__productions=production).delete()
+            return redirect("production-events", pk=production.pk)
+
+    events = (
+        production.events.select_related("venue", "ticket_site")
+        .prefetch_related("datetimes")
+        .annotate(first_datetime=Min("datetimes__datetime"))
+        .order_by(F("first_datetime").asc(nulls_last=True), "title")
+    )
+    return render(request, "backstage/production_events.html", {
+        "production": production,
+        "events": events,
+        "event_form": event_form,
+        "other_events": models.Event.objects.exclude(productions=production).order_by("title"),
+        "show_create": event_form.is_bound,  # reopen the New event dialog when the form has errors
+    })
 
 
 def production_images(request, pk):
@@ -272,12 +325,12 @@ class TicketSiteView(CRUDView):
 
 class VenueView(CRUDView):
     model = models.Venue
-    fields = ["name", "address"]
+    fields = ["name", "address", "logo"]
 
 
 class EventView(CRUDView):
     model = models.Event
-    fields = ["title", "description", "venue", "ticket_site"]
+    fields = ["title", "event_type", "description", "venue", "ticket_site"]
 
 
 class EventDateTimeView(CRUDView):
@@ -287,7 +340,7 @@ class EventDateTimeView(CRUDView):
 
 class ProductionView(CRUDView):
     model = models.Production
-    fields = ["title", "strap_line", "description", "state", "type", "event", "listen_url", "broadcast_datetime"]
+    fields = ["title", "strap_line", "description", "state", "type", "listen_url", "broadcast_datetime"]
     paginate_by = 24
 
     def get_state(self):

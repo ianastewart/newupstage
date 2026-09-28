@@ -36,3 +36,24 @@ class ProductionTeamForm(forms.ModelForm):
     class Meta:
         model = models.ProductionTeam
         fields = ["person", "role"]
+
+
+class EventForm(forms.ModelForm):
+    """A new event from a production's Events tab, optionally with its first date and time."""
+
+    first_datetime = forms.DateTimeField(
+        required=False, label="First date & time",
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        help_text="More dates can be added on the Events tab.",
+    )
+
+    class Meta:
+        model = models.Event
+        fields = ["title", "event_type", "venue", "ticket_site", "description"]
+        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+
+    def save(self, commit=True):
+        event = super().save(commit)
+        if commit and self.cleaned_data.get("first_datetime"):
+            event.datetimes.create(datetime=self.cleaned_data["first_datetime"])
+        return event
