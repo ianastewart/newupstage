@@ -1,5 +1,6 @@
 @import "tailwindcss" source(none);
 @config "./tailwind.config.js";
+@plugin "@tailwindcss/typography";
 @plugin "daisyui" {
     themes: light, dark;
   }
@@ -92,6 +93,21 @@
   form input[type=checkbox] { @apply checkbox; }
   form input[type=radio] { @apply radio; }
   form [aria-invalid=true] { @apply border-error; }
+}
+
+/* Typography that follows the surrounding text colour (block colours, daisyUI themes, dark mode). */
+@layer components {
+  .prose-themed {
+    --tw-prose-body: currentColor;
+    --tw-prose-headings: currentColor;
+    --tw-prose-lead: currentColor;
+    --tw-prose-bold: currentColor;
+    --tw-prose-counters: currentColor;
+    --tw-prose-bullets: currentColor;
+    --tw-prose-quotes: currentColor;
+    --tw-prose-quote-borders: var(--color-base-300);
+    --tw-prose-links: var(--color-primary);
+  }
 }
 
 /* Links in the rich text editor look like links on the person page (daisyUI link link-primary).
