@@ -1,0 +1,32 @@
+{% extends "public_base.html" %}
+
+{% block title %}Radio archive · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  <h1 class="mb-6 text-3xl font-bold">Radio archive</h1>
+
+  {% if not plays %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p>No radio plays to show yet.</p>
+    </div>
+  {% else %}
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      {% for play in plays %}
+        <a href="{% url 'radio-play' play.pk %}" class="card bg-base-200 shadow-sm transition hover:shadow-md">
+          <figure class="aspect-square w-full items-center justify-center bg-base-300">
+            {% with cover=play.default_image %}
+              {% if cover %}
+                <img src="{{ cover.image.image.url }}" alt="{{ play.title }}" loading="lazy" class="max-h-full max-w-full object-contain" />
+              {% endif %}
+            {% endwith %}
+          </figure>
+          <div class="card-body p-3">
+            <p class="text-center font-semibold">{{ play.title }}</p>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

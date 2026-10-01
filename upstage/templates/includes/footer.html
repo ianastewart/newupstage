@@ -1,5 +1,12 @@
-<footer class="footer sm:footer-horizontal footer-center bg-base-300 text-base-content p-4">
+<footer class="footer sm:footer-horizontal footer-center relative bg-base-300 text-base-content p-4">
     <aside>
       <p class="bg-amber-50">Created by Ian</p>
     </aside>
+    <div class="absolute bottom-4 right-4 text-sm">
+      {% if user.is_authenticated %}
+        <form method="POST" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="link link-hover">Log out</button></form>
+      {% else %}
+        <a href="{% url 'login' %}" class="link link-hover">Log in</a>
+      {% endif %}
+    </div>
   </footer>

@@ -1,0 +1,48 @@
+{% extends "public_base.html" %}
+
+{% block title %}{{ person }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl p-6">
+  <div class="mb-4">
+    <a href="{% url 'public-actors' %}" class="btn btn-ghost btn-sm">← Actors</a>
+  </div>
+
+  <div class="card bg-base-200 shadow-sm">
+    <div class="card-body">
+      <div class="flex flex-wrap items-start gap-6">
+        {# The whole photo, uncropped, at most 300px high. #}
+        <img src="{{ person.image.image.url }}" alt="{{ person }}" class="h-auto max-h-[300px] w-auto max-w-full rounded-box shadow-sm" />
+        <div class="min-w-0 flex-1 basis-72">
+          <h1 class="text-3xl font-bold">{{ person }}</h1>
+          {% if person.biography %}<div class="prose prose-themed mt-4 max-w-none">{{ person.biography|safe }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# Productions and credits, as plain text across the full width of the card. #}
+      {% if cast_in or credits %}
+        <div class="mt-4 w-full space-y-4 border-t border-base-300 pt-4">
+          {% if cast_in %}
+            <section>
+              <h2 class="mb-2 text-lg font-semibold">Cast in</h2>
+              <ul class="space-y-1">
+                {% for production, characters in cast_in %}
+                  <li><span class="font-semibold">{{ production.title }}</span> <span class="opacity-70">· {{ characters|join:", " }}</span></li>
+                {% endfor %}
+              </ul>
+            </section>
+          {% endif %}
+          {% for heading, productions in credits %}
+            <section>
+              <h2 class="mb-2 text-lg font-semibold">{{ heading }}</h2>
+              <ul class="space-y-1">
+                {% for production in productions %}<li>{{ production.title }}</li>{% endfor %}
+              </ul>
+            </section>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

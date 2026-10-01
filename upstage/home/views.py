@@ -1,10 +1,12 @@
 from django.contrib.auth.decorators import login_not_required
-from django.db.models import Min, Q
+from django.db.models import F, Min, Q, Value
+from django.db.models.functions import Coalesce, Lower, NullIf
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from backstage.models import Event, EventDateTime, Production
+from backstage.models import Event, EventDateTime, Person, Production
+from backstage.views import person_productions
 
 from .forms import BlockForm, WebPageForm
 from .models import Block, WebPage
@@ -24,6 +26,55 @@ def webpage(request, slug):
     hero = next((pb.block for pb in page_blocks if pb.block.block_type == Block.BlockType.HERO_IMAGE), None)
     content_blocks = [pb for pb in page_blocks if pb.block != hero]
     return render(request, "home/webpage.html", {"page": page, "hero": hero, "page_blocks": content_blocks})
+
+
+def public_actors():
+    """The actors shown on the public site: people with the Actor role who have a photo."""
+    return Person.objects.filter(roles__name="Actor", image__isnull=False).select_related("image").distinct()
+
+
+@login_not_required
+def actor_list(request):
+    """The public actors page: a grid of photos and names, alphabetical by surname."""
+    # People known by one name ("Divya") sort by that name.
+    actors = public_actors().order_by(
+        Coalesce(NullIf(Lower("last_name"), Value("")), Lower("first_name")), Lower("first_name")
+    )
+    return render(request, "home/actor_list.html", {"actors": actors})
+
+
+@login_not_required
+def actor_detail(request, pk):
+    """One actor's public page: name, photo and biography only."""
+    person = get_object_or_404(public_actors(), pk=pk)
+    cast_in, credits = person_productions(person)
+    return render(request, "home/actor_detail.html", {"person": person, "cast_in": cast_in, "credits": credits})
+
+
+def radio_plays():
+    """Every production that is a radio play, latest broadcast first (those with no date last)."""
+    return Production.objects.filter(type=Production.ProductionType.RADIO).prefetch_related("images__image").order_by(
+        F("broadcast_datetime").desc(nulls_last=True), "title"
+    )
+
+
+@login_not_required
+def radio_archive(request):
+    """The public radio archive: each radio play's image and title, latest first."""
+    return render(request, "home/radio_archive.html", {"plays": radio_plays()})
+
+
+@login_not_required
+def radio_play(request, pk):
+    """One radio play: a bigger image, the writer, the rest of the production team and the cast."""
+    play = get_object_or_404(radio_plays().prefetch_related("cast__actor", "team__person", "team__role"), pk=pk)
+    # The writer has their own line, so the team list leaves them out.
+    team = sorted(
+        (member for member in play.team.all() if member.role.name != "Writer"),
+        key=lambda member: (member.role.name, member.person.last_name, member.person.first_name),
+    )
+    cast = sorted(play.cast.all(), key=lambda part: part.id)
+    return render(request, "home/radio_play.html", {"play": play, "team": team, "cast": cast})
 
 
 def audition_block(production):

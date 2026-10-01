@@ -1,0 +1,22 @@
+{# The navbar for the public pages. Add public links in public_nav_links.html. #}
+<div class="navbar h-[80px] bg-base-100 shadow-sm">
+  <div class="flex-1">
+    {% if navbar_logo %}
+      <a class="btn btn-ghost h-auto px-2 py-1" href="{% url 'home' %}" aria-label="Home">
+        <img src="{{ navbar_logo.image.url }}" alt="Upstage Surrey" class="h-14 w-auto" />
+      </a>
+    {% else %}
+      <a class="btn btn-ghost text-xl" href="{% url 'home' %}" aria-label="Home">🏠</a>
+    {% endif %}
+  </div>
+  <div class="flex-none">
+    {# Links in a row from small screens up; a menu on phones. #}
+    <ul class="menu menu-horizontal hidden gap-1 sm:flex">{% include "includes/public_nav_links.html" %}</ul>
+    <div class="dropdown dropdown-end sm:hidden">
+      <div tabindex="0" role="button" class="btn btn-ghost" aria-label="Menu">
+        <svg class="size-5 fill-none stroke-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </div>
+      <ul tabindex="0" class="dropdown-content menu z-10 w-48 rounded-box bg-base-200 p-2 shadow-lg">{% include "includes/public_nav_links.html" %}</ul>
+    </div>
+  </div>
+</div>

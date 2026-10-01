@@ -27,7 +27,7 @@
 
 <body class="flex min-h-dvh flex-col">
 <div id="nav">
-  {% include "includes/nav.html" %}
+  {% block nav %}{% include "includes/nav.html" %}{% endblock %}
 </div>
 <div id="hero">
   {% block hero %}

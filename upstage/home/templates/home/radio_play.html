@@ -1,0 +1,63 @@
+{% extends "public_base.html" %}
+
+{% block title %}{{ play.title }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl p-6">
+  <div class="mb-4">
+    <a href="{% url 'radio-archive' %}" class="btn btn-ghost btn-sm">← Radio archive</a>
+  </div>
+
+  <div class="card bg-base-200 shadow-sm">
+    <div class="card-body">
+      <div class="flex flex-wrap items-start gap-6">
+        {% with cover=play.default_image %}
+          {% if cover %}
+            {# The whole image, uncropped, at most 500px high. #}
+            <img src="{{ cover.image.image.url }}" alt="{{ play.title }}" class="h-auto max-h-[500px] w-auto max-w-full rounded-box shadow-sm" />
+          {% endif %}
+        {% endwith %}
+        <div class="min-w-0 flex-1 basis-72">
+          <h1 class="text-3xl font-bold">{{ play.title }}</h1>
+          {% if play.strap_line %}<p class="mt-1 text-lg italic">{{ play.strap_line }}</p>{% endif %}
+
+          {% if play.listen_url %}
+            <a href="{{ play.listen_url }}" class="btn btn-primary mt-4" target="_blank" rel="noopener">Listen now</a>
+          {% endif %}
+
+          {% if play.writers %}
+            <section class="mt-4">
+              <h2 class="mb-1 text-lg font-semibold">Writer{{ play.writers|pluralize }}</h2>
+              <p>{{ play.writers|join:", " }}</p>
+            </section>
+          {% endif %}
+
+          {% if team %}
+            <section class="mt-4">
+              <h2 class="mb-1 text-lg font-semibold">Production team</h2>
+              <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
+                {% for member in team %}
+                  <dt class="font-semibold">{{ member.role }}</dt>
+                  <dd>{{ member.person }}</dd>
+                {% endfor %}
+              </dl>
+            </section>
+          {% endif %}
+
+          {% if cast %}
+            <section class="mt-4">
+              <h2 class="mb-1 text-lg font-semibold">Cast</h2>
+              <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
+                {% for part in cast %}
+                  <dt class="font-semibold">{{ part.character_name }}</dt>
+                  <dd>{% if part.actor %}{{ part.actor }}{% else %}—{% endif %}</dd>
+                {% endfor %}
+              </dl>
+            </section>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

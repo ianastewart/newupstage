@@ -225,6 +225,37 @@ class ImageView(CRUDView):
         return super().get_success_url()
 
 
+# Headings for a person's production team credits, in the order they're shown.
+CREDIT_HEADINGS = {"Writer": "Plays written", "Director": "Directed", "Editor": "Edited"}
+
+
+def person_productions(person):
+    """A person's productions: (cast_in, credits). Used by the backstage and public person pages.
+
+    cast_in is [(production, [character names])], newest first. credits is [(heading, [productions])],
+    one section per production team role (writer, director, editor first), newest first.
+    """
+    parts = person.cast_roles.select_related("production").order_by(
+        F("production__broadcast_datetime").desc(nulls_last=True), "production__title", "id"
+    )
+    characters = {}
+    for part in parts:
+        characters.setdefault(part.production, []).append(part.character_name)
+    credits = {}
+    for credit in person.productionteam_set.select_related("production", "role").order_by(
+        F("production__broadcast_datetime").desc(nulls_last=True), "production__title"
+    ):
+        credits.setdefault(credit.role.name, []).append(credit.production)
+    order = list(CREDIT_HEADINGS)
+    sections = [
+        (CREDIT_HEADINGS.get(role, role), productions)
+        for role, productions in sorted(
+            credits.items(), key=lambda item: (order.index(item[0]) if item[0] in order else len(order), item[0])
+        )
+    ]
+    return list(characters.items()), sections
+
+
 class PersonView(CRUDView):
     model = models.Person
     form_class = forms.PersonForm
@@ -238,35 +269,12 @@ class PersonView(CRUDView):
         "writers": ("writer-list", "", "Writers"),
     }
 
-    # Headings for a person's production team credits, in the order they're shown.
-    CREDIT_HEADINGS = {"Writer": "Plays written", "Director": "Directed", "Editor": "Edited"}
-
     def get_context_data(self, **kwargs):
         if self.role == Role.DETAIL:
             url_name, query, label = self.BACK_LINKS.get(self.request.GET.get("from"), ("person-list", "", "People"))
             kwargs["back_url"] = reverse(url_name) + query
             kwargs["back_label"] = label
-            # Productions they were cast in, newest first, with the characters they played in each.
-            parts = self.object.cast_roles.select_related("production").order_by(
-                F("production__broadcast_datetime").desc(nulls_last=True), "production__title", "id"
-            )
-            characters = {}
-            for part in parts:
-                characters.setdefault(part.production, []).append(part.character_name)
-            kwargs["cast_in"] = list(characters.items())
-            # Production team credits, one section per role (writer, director, editor first), newest first.
-            credits = {}
-            for credit in self.object.productionteam_set.select_related("production", "role").order_by(
-                F("production__broadcast_datetime").desc(nulls_last=True), "production__title"
-            ):
-                credits.setdefault(credit.role.name, []).append(credit.production)
-            order = list(self.CREDIT_HEADINGS)
-            kwargs["credits"] = [
-                (self.CREDIT_HEADINGS.get(role, role), productions)
-                for role, productions in sorted(
-                    credits.items(), key=lambda item: (order.index(item[0]) if item[0] in order else len(order), item[0])
-                )
-            ]
+            kwargs["cast_in"], kwargs["credits"] = person_productions(self.object)
         if self.role in (Role.CREATE, Role.UPDATE):
             # Lets the form preview the selected photo.
             photos = kwargs["form"].fields["image"].queryset if "form" in kwargs else models.Image.objects.all()

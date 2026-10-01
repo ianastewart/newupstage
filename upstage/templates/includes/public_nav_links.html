@@ -1,0 +1,5 @@
+{% with current=request.resolver_match.url_name %}
+<li><a href="{% url 'home' %}"{% if current == 'home' or current == 'webpage' %} class="menu-active"{% endif %}>Home</a></li>
+<li><a href="{% url 'auditions' %}"{% if current == 'auditions' %} class="menu-active"{% endif %}>Auditions</a></li>
+<li><a href="{% url 'public-actors' %}"{% if current == 'public-actors' or current == 'public-actor' %} class="menu-active"{% endif %}>Actors</a></li>
+{% endwith %}

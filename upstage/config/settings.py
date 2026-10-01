@@ -152,7 +152,7 @@ AUTH_USER_MODEL = 'accounts.CustomUser'
 
 # Login and password reset
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'home'
+LOGIN_REDIRECT_URL = 'production-list'
 LOGOUT_REDIRECT_URL = 'home'
 
 # Emails (such as password reset links) are printed to the console unless EMAIL_HOST is set in the environment.
