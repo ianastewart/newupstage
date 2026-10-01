@@ -18,13 +18,14 @@ class BlockForm(forms.ModelForm):
     class Meta:
         model = Block
         fields = [
-            "name", "block_type", "title", "subtitle", "text", "production", "image", "image_size", "layout",
+            "name", "block_type", "title", "subtitle", "text", "production", "image", "url", "image_size", "layout",
             "background_colour", "text_colour",
         ]
         widgets = {
             "text": RichTextWidget(attrs={"rows": 10}),
             # Plain text rather than a colour picker, which can't be left blank (blank = theme colour).
             "background_colour": forms.TextInput(attrs={"placeholder": "#rrggbb"}),
+            "url": forms.TextInput(attrs={"placeholder": "https://... or /page/about/"}),
             "text_colour": forms.TextInput(attrs={"placeholder": "#rrggbb"}),
         }
 

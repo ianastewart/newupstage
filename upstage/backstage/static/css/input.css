@@ -128,9 +128,9 @@
 .hero-fade-in {
   animation: hero-fade-in 5s ease-in both;
 }
-/* The hero text starts at half strength and rises to full white over the same 5 seconds. */
+/* The hero subtitle and text fade in over the same 5 seconds; the title is there from the start. */
 @keyframes hero-text-fade {
-  from { opacity: 0.5; }
+  from { opacity: 0; }
   to { opacity: 1; }
 }
 .hero-text-fade {

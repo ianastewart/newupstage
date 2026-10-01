@@ -1,7 +1,9 @@
-{# The block's image at its chosen size (for a cast list, the production's default image if none is chosen). #}
+{# The block's image (a link if the block has one) at its chosen size (for a cast list, the production's default image if none is chosen). #}
 {% with image=block.display_image %}
   {% if image %}
+    {% if block.link_url %}<a href="{{ block.link_url }}" class="block">{% endif %}
     <img src="{{ image.image.url }}" alt="{{ image.description }}" loading="lazy"
       class="mx-auto h-auto rounded-box {% if block.image_size == 'small' %}w-full max-w-xs{% elif block.image_size == 'large' %}w-full max-w-2xl{% elif block.image_size == 'full' %}w-full{% else %}w-full max-w-md{% endif %}" />
+    {% if block.link_url %}</a>{% endif %}
   {% endif %}
 {% endwith %}

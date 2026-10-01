@@ -1,4 +1,4 @@
-{# A hero image block (the image fades in over 5 seconds, with the text showing straight away, at half strength, rising to full white over 5 seconds): the whole image (scaled to the full width available), with its text over it. On phones only the title is over the image; the subtitle and text sit in a panel under it, which grows to fit them. #}
+{# A hero image block (the image fades in over 5 seconds, with the title showing straight away and the subtitle and text fading in over the same 5 seconds): the whole image (scaled to the full width available), with its text over it. On phones only the title is over the image; the subtitle and text sit in a panel under it, which grows to fit them. #}
 <section class="flex justify-center overflow-hidden bg-black {% if not full_width %}rounded-box {% endif %}" style="color: #ffffff;">
   <div class="w-full">
     {# The image and the text over it: the text centres on the image only, not on the panel below. #}
@@ -7,9 +7,9 @@
         <img src="{{ block.image.image.url }}" alt="{{ block.image.description }}" class="hero-fade-in block h-auto w-full" />
       {% endif %}
       {% if block.title or block.subtitle or block.text %}
-        <header class="hero-text-fade absolute inset-0 flex flex-col items-center justify-center overflow-hidden p-3 text-center md:p-10">
+        <header class="absolute inset-0 flex flex-col items-center justify-center overflow-hidden p-3 text-center md:p-10">
           {% if block.title %}<h2 class="text-2xl font-bold drop-shadow sm:text-3xl md:text-6xl">{{ block.title }}</h2>{% endif %}
-          <div class="hidden flex-col items-center md:flex">
+          <div class="hero-text-fade hidden flex-col items-center md:flex">
             {% include "home/blocks/_hero_text.html" %}
           </div>
         </header>

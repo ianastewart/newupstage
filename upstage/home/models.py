@@ -3,6 +3,9 @@ from django.core.validators import RegexValidator
 from django.db import models, transaction
 from django.urls import reverse
 
+link_url = RegexValidator(
+    r"^(https?://\S+|/\S*)$", "Enter a full web address (https://...) or a path on this site, e.g. /page/about/."
+)
 hex_colour = RegexValidator(r"^#[0-9a-fA-F]{6}$", "Enter a colour as #rrggbb, e.g. #7a1f2b.")
 
 
@@ -103,6 +106,11 @@ class Block(models.Model):
     image = models.ForeignKey(
         "backstage.Image", null=True, blank=True, on_delete=models.SET_NULL, related_name="blocks"
     )
+    url = models.CharField(
+        "Image link", max_length=500, blank=True, validators=[link_url],
+        help_text="Where clicking the image goes: a web address, or a path on this site such as /page/about/. "
+                  "Used by text and image, and split, blocks.",
+    )
     image_size = models.CharField(max_length=10, choices=ImageSize.choices, default=ImageSize.MEDIUM)
     layout = models.CharField(
         max_length=20, choices=Layout.choices, default=Layout.TEXT_LEFT,
@@ -133,6 +141,13 @@ class Block(models.Model):
             self.BlockType.IMAGE, self.BlockType.TEXT_IMAGE, self.BlockType.CAST, self.BlockType.HERO_IMAGE,
             self.BlockType.SPLIT,
         )
+
+    @property
+    def link_url(self):
+        """Where clicking the image goes, for the types of block that link their image."""
+        if self.block_type in (self.BlockType.TEXT_IMAGE, self.BlockType.SPLIT):
+            return self.url
+        return ""
 
     @property
     def display_image(self):
