@@ -1,0 +1,20 @@
+{% extends "registration/auth_base.html" %}
+{% block auth_title %}Log in{% endblock %}
+{% block auth_heading %}Log in{% endblock %}
+
+{% block auth_body %}
+  {% if user.is_authenticated %}
+    <div role="alert" class="alert alert-info alert-soft">You are already logged in as {{ user.get_username }}.</div>
+  {% endif %}
+  <form method="POST" action="{% url 'login' %}">
+    {% csrf_token %}
+    {{ form }}
+    <input type="hidden" name="next" value="{{ next }}" />
+    <button type="submit" class="btn btn-primary mt-4 w-full">Log in</button>
+  </form>
+{% endblock %}
+
+{% block auth_links %}
+  <a href="{% url 'password_reset' %}" class="link link-primary">Forgotten your password?</a>
+  <a href="{% url 'signup' %}" class="link link-primary">Create an account</a>
+{% endblock %}

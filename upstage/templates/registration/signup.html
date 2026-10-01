@@ -1,0 +1,15 @@
+{% extends "registration/auth_base.html" %}
+{% block auth_title %}Create an account{% endblock %}
+{% block auth_heading %}Create an account{% endblock %}
+
+{% block auth_body %}
+  <form method="POST">
+    {% csrf_token %}
+    {{ form }}
+    <button type="submit" class="btn btn-primary mt-4 w-full">Create account</button>
+  </form>
+{% endblock %}
+
+{% block auth_links %}
+  <span>Already have an account? <a href="{% url 'login' %}" class="link link-primary">Log in</a></span>
+{% endblock %}

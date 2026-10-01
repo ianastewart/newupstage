@@ -6,3 +6,10 @@
 <li><a href="{% url 'image-list' %}">Images</a></li>
 <li><a href="{% url 'page-list' %}">Pages</a></li>
 <li><a href="{% url 'role-list' %}">Roles</a></li>
+{% if user.is_authenticated %}
+<li><a href="{% url 'password_change' %}">Change password</a></li>
+<li><form method="POST" action="{% url 'logout' %}" class="p-0">{% csrf_token %}<button type="submit" class="w-full px-3 py-1.5 text-left">Log out</button></form></li>
+{% else %}
+<li><a href="{% url 'login' %}">Log in</a></li>
+<li><a href="{% url 'signup' %}">Sign up</a></li>
+{% endif %}

@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_not_required
 from django.db.models import Min, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -9,10 +10,12 @@ from .forms import BlockForm, WebPageForm
 from .models import Block, WebPage
 
 
+@login_not_required
 def home(request):
     return render(request, "home/home.html")
 
 
+@login_not_required
 def webpage(request, slug):
     """A page built from its blocks, in order."""
     page = get_object_or_404(WebPage, slug=slug)
@@ -35,6 +38,7 @@ def audition_block(production):
     return None
 
 
+@login_not_required
 def auditions(request):
     """Every production with an audition still to come, soonest first, each in its audition view."""
     now = timezone.now()
