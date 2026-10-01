@@ -1,0 +1,14 @@
+{# The production's cast: each character with the actor who played them. #}
+{% with members=block.cast_members %}
+  {% if members %}
+    <h3 class="mb-3 text-lg font-semibold uppercase tracking-wide opacity-70">Cast</h3>
+    <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
+      {% for member in members %}
+        <dt class="font-semibold">{{ member.character_name }}</dt>
+        <dd>{% if member.actor %}{{ member.actor }}{% else %}—{% endif %}</dd>
+      {% endfor %}
+    </dl>
+  {% else %}
+    <p class="opacity-70">The cast hasn't been announced yet.</p>
+  {% endif %}
+{% endwith %}

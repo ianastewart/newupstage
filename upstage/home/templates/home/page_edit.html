@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ page.title }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  <div class="mb-4">
+    <a href="{% url 'page-list' %}" class="btn btn-ghost btn-sm">← Pages</a>
+  </div>
+
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-3xl font-bold">{{ page.title }}</h1>
+    <a href="{{ page.get_absolute_url }}" class="btn" target="_blank" rel="noopener">View page</a>
+  </div>
+
+  {# Page details: title and slug. Open if there's an error to fix. #}
+  <details class="collapse collapse-arrow mb-6 bg-base-200 shadow-sm"{% if form.errors %} open{% endif %}>
+    <summary class="collapse-title font-semibold">Page details <span class="font-normal opacity-60">· /page/{{ page.slug }}/</span></summary>
+    <div class="collapse-content">
+      <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="details" />
+        <div class="grid gap-x-4 sm:grid-cols-2">{{ form }}</div>
+        <div class="mt-4 flex justify-end">
+          <button type="submit" class="btn btn-primary btn-sm">Save details</button>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  <div class="space-y-4">
+    {% for page_block in page_blocks %}
+      {% with block=page_block.block %}
+      <div id="page-block-{{ page_block.pk }}" class="card scroll-mt-24 border border-base-300 bg-base-100 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-t-box bg-base-200 px-4 py-2">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <span class="badge badge-neutral">{{ forloop.counter }}</span>
+            <span class="truncate font-semibold">{{ block.name }}</span>
+            <span class="badge badge-secondary badge-sm">{{ block.get_block_type_display }}</span>
+            {% with shared=block.pages.count|add:"-1" %}
+              {% if shared > 0 %}<span class="badge badge-ghost badge-sm" title="Edits to this block show on every page that uses it">Also on {{ shared }} other page{{ shared|pluralize }}</span>{% endif %}
+            {% endwith %}
+          </div>
+          <div class="flex items-center gap-1">
+            <form method="POST">
+              {% csrf_token %}
+              <input type="hidden" name="page_block" value="{{ page_block.pk }}" />
+              <button type="submit" name="action" value="up" class="btn btn-ghost btn-sm" aria-label="Move up" title="Move up"{% if forloop.first %} disabled{% endif %}>↑</button>
+              <button type="submit" name="action" value="down" class="btn btn-ghost btn-sm" aria-label="Move down" title="Move down"{% if forloop.last %} disabled{% endif %}>↓</button>
+            </form>
+            <a href="{% url 'block-edit' page.pk block.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+            <form method="POST">
+              {% csrf_token %}
+              <input type="hidden" name="page_block" value="{{ page_block.pk }}" />
+              <button type="submit" name="action" value="remove" class="btn btn-ghost btn-sm text-error" title="Take this block off the page (the block is kept)">Remove</button>
+            </form>
+          </div>
+        </div>
+        {# Preview: the block as it appears on the page. #}
+        <div class="p-4">
+          {% include block.template %}
+        </div>
+      </div>
+      {% endwith %}
+    {% empty %}
+      <div class="rounded-box bg-base-200 p-12 text-center">
+        <p>This page has no blocks yet. Add the first one below.</p>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="mt-6 flex flex-wrap items-center gap-4 rounded-box bg-base-200 p-4">
+    <a href="{% url 'block-create' page.pk %}" class="btn btn-primary">Add block</a>
+    {% if other_blocks %}
+      <span class="text-sm opacity-60">or</span>
+      <form method="POST" class="flex flex-wrap items-center gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_existing" />
+        <select name="block" class="select select-sm w-64" aria-label="Existing block" required>
+          <option value="">Add an existing block…</option>
+          {% for block in other_blocks %}
+            <option value="{{ block.pk }}">{{ block }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm">Add</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{# A cast list block: a production's image and cast list, side by side (either way round) or image above the cast. #}
+<section class="rounded-box p-6 md:p-10" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+  {% include "home/blocks/_heading.html" %}
+  {% if block.layout == 'image_top' %}
+    <div class="space-y-6">
+      {% include "home/blocks/_image.html" %}
+      {% include "home/blocks/_cast.html" %}
+    </div>
+  {% elif block.layout == 'image_left' %}
+    <div class="grid items-center gap-6 md:grid-cols-2 md:gap-10">
+      <div>{% include "home/blocks/_image.html" %}</div>
+      <div>{% include "home/blocks/_cast.html" %}</div>
+    </div>
+  {% else %}
+    <div class="grid items-center gap-6 md:grid-cols-2 md:gap-10">
+      <div>{% include "home/blocks/_cast.html" %}</div>
+      <div>{% include "home/blocks/_image.html" %}</div>
+    </div>
+  {% endif %}
+</section>

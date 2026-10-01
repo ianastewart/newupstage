@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} · Upstage Theatre{% endblock %}
+
+{% block head %}
+  {% if page.background_colour %}<style>body { background-color: {{ page.background_colour }}; }</style>{% endif %}
+{% endblock %}
+
+{% block hero %}
+  {% if hero %}{% include hero.template with block=hero full_width=True %}{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-6 p-6">
+  {% for page_block in page_blocks %}
+    {% include page_block.block.template with block=page_block.block %}
+  {% empty %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p>This page has no blocks yet.</p>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

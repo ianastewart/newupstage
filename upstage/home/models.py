@@ -11,6 +11,9 @@ class WebPage(models.Model):
 
     title = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
+    background_colour = models.CharField(
+        max_length=7, blank=True, validators=[hex_colour], help_text="#rrggbb; leave blank for the theme's colour."
+    )
     blocks = models.ManyToManyField("Block", through="PageBlock", related_name="pages", blank=True)
 
     class Meta:
@@ -62,6 +65,7 @@ class Block(models.Model):
         IMAGE = "image", "Image"
         TEXT_IMAGE = "text_image", "Text and image"
         CAST = "cast", "Cast list"
+        HERO_IMAGE = "hero_image", "Hero image"
 
     class ImageSize(models.TextChoices):
         SMALL = "small", "Small"
@@ -80,13 +84,14 @@ class Block(models.Model):
         BlockType.IMAGE: "home/blocks/image.html",
         BlockType.TEXT_IMAGE: "home/blocks/text_image.html",
         BlockType.CAST: "home/blocks/cast.html",
+        BlockType.HERO_IMAGE: "home/blocks/hero_image.html",
     }
 
     name = models.CharField(max_length=255, help_text="Identifies the block when adding it to pages.")
     block_type = models.CharField(max_length=20, choices=BlockType.choices, default=BlockType.TEXT)
     title = models.CharField(max_length=255, blank=True)
     subtitle = models.CharField(max_length=255, blank=True)
-    text = models.TextField(blank=True, help_text="HTML. Used by text, and text and image, blocks.")
+    text = models.TextField(blank=True, help_text="HTML. Used by text, text and image, and hero image (optional) blocks.")
     background_colour = models.CharField(
         max_length=7, blank=True, validators=[hex_colour], help_text="#rrggbb; leave blank for the theme's colour."
     )
@@ -122,7 +127,9 @@ class Block(models.Model):
 
     @property
     def has_image(self):
-        return self.block_type in (self.BlockType.IMAGE, self.BlockType.TEXT_IMAGE, self.BlockType.CAST)
+        return self.block_type in (
+            self.BlockType.IMAGE, self.BlockType.TEXT_IMAGE, self.BlockType.CAST, self.BlockType.HERO_IMAGE,
+        )
 
     @property
     def display_image(self):

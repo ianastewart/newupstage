@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}New page · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl p-6">
+  <div class="mb-4">
+    <a href="{% url 'page-list' %}" class="btn btn-ghost btn-sm">← Pages</a>
+  </div>
+  <h1 class="mb-6 text-3xl font-bold">New page</h1>
+
+  <form method="POST" class="card bg-base-200 shadow-sm">
+    {% csrf_token %}
+    <div class="card-body">
+      {{ form }}
+      <p class="text-sm opacity-70">You'll add blocks to the page next.</p>
+      <div class="card-actions mt-4 justify-end">
+        <a href="{% url 'page-list' %}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary">Create page</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% include "home/includes/slug_from_title.html" %}
+{% endblock %}

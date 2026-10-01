@@ -1,0 +1,9 @@
+{# The block's title (for a cast list, the production's title if none is set) and subtitle. Used at the top of every block. #}
+{% with heading=block.heading %}
+  {% if heading or block.subtitle %}
+    <header class="mb-6">
+      {% if heading %}<h2 class="text-3xl font-bold">{{ heading }}</h2>{% endif %}
+      {% if block.subtitle %}<p class="mt-1 text-lg opacity-80">{{ block.subtitle }}</p>{% endif %}
+    </header>
+  {% endif %}
+{% endwith %}

@@ -1,0 +1,15 @@
+<script>
+  // Fill in the slug from the title as you type, until the slug is edited by hand.
+  (() => {
+    const title = document.getElementById('id_title');
+    const slug = document.getElementById('id_slug');
+    if (!title || !slug) return;
+    let edited = slug.value !== '';
+    slug.addEventListener('input', () => { edited = slug.value !== ''; });
+    title.addEventListener('input', () => {
+      if (edited) return;
+      slug.value = title.value.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    });
+  })();
+</script>

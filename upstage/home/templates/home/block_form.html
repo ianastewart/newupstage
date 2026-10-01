@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block head %}
+{% load rmeditor %}
+{% rmeditor_media %}
+{% endblock %}
+{% block title %}{% if block %}Edit {{ block.name }}{% else %}Add block{% endif %} · {{ page.title }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl p-6">
+  <div class="mb-4">
+    <a href="{% url 'page-edit' page.pk %}" class="btn btn-ghost btn-sm">← {{ page.title }}</a>
+  </div>
+  <h1 class="mb-2 text-3xl font-bold">{% if block %}Edit block{% else %}Add a block to {{ page.title }}{% endif %}</h1>
+  {% if other_pages %}
+    <div role="alert" class="alert alert-info alert-soft mb-4">
+      This block is also on {{ other_pages|join:", " }}. Changes show on every page that uses it.
+    </div>
+  {% endif %}
+
+  <form method="POST" class="mt-4">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div role="alert" class="alert alert-error alert-soft mb-4">{{ form.non_field_errors|join:" " }}</div>
+    {% endif %}
+
+    <div class="grid gap-6 md:grid-cols-3">
+      <div class="card bg-base-200 shadow-sm md:col-span-2">
+        <div class="card-body">
+          <h2 class="card-title">Content</h2>
+          <div class="grid gap-x-4 sm:grid-cols-2">
+            {{ form.name.as_field_group }}
+            {{ form.block_type.as_field_group }}
+            {{ form.title.as_field_group }}
+            {{ form.subtitle.as_field_group }}
+          </div>
+          <div data-for="text text_image hero_image">{{ form.text.as_field_group }}</div>
+          <p class="text-xs opacity-70" data-for="hero_image">The text is optional: it is shown over the image, under the subtitle.</p>
+          <div data-for="cast">{{ form.production.as_field_group }}</div>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-6">
+        <div class="card bg-base-200 shadow-sm" data-for="image text_image cast hero_image">
+          <div class="card-body">
+            <h2 class="card-title">Image</h2>
+            {{ form.image.as_field_group }}
+            <p class="text-xs opacity-70" data-for="cast">Leave blank to use the production's default image.</p>
+            <div data-for="image text_image cast">{{ form.image_size.as_field_group }}</div>
+            <div data-for="text_image cast">{{ form.layout.as_field_group }}</div>
+          </div>
+        </div>
+        <div class="card bg-base-200 shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title">Colours</h2>
+            <p class="text-xs opacity-70" data-for="hero_image">The background shows only while the image loads.</p>
+            {{ form.background_colour.as_field_group }}
+            {{ form.text_colour.as_field_group }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-6 flex justify-end gap-2">
+      <a href="{% url 'page-edit' page.pk %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">{% if block %}Save block{% else %}Add block{% endif %}</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  // Only show the fields the chosen type of block uses (data-for lists the block types).
+  (() => {
+    const type = document.getElementById('id_block_type');
+    const update = () => document.querySelectorAll('[data-for]').forEach((el) => {
+      el.hidden = !el.dataset.for.split(' ').includes(type.value);
+    });
+    type.addEventListener('change', update);
+    update();
+  })();
+</script>
+{% endblock %}

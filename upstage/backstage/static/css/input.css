@@ -1,6 +1,17 @@
 @import "tailwindcss" source(none);
 @config "./tailwind.config.js";
 @plugin "@tailwindcss/typography";
+
+/* Lato is loaded from Google Fonts in base.html. */
+@theme {
+  --font-sans: "Lato", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Raise the root size; everything in rem scales with it. */
+@layer base {
+  html { font-size: 112.5%; }
+}
+
 @plugin "daisyui" {
     themes: light, dark;
   }
@@ -95,19 +106,18 @@
   form [aria-invalid=true] { @apply border-error; }
 }
 
-/* Typography that follows the surrounding text colour (block colours, daisyUI themes, dark mode). */
-@layer components {
-  .prose-themed {
-    --tw-prose-body: currentColor;
-    --tw-prose-headings: currentColor;
-    --tw-prose-lead: currentColor;
-    --tw-prose-bold: currentColor;
-    --tw-prose-counters: currentColor;
-    --tw-prose-bullets: currentColor;
-    --tw-prose-quotes: currentColor;
-    --tw-prose-quote-borders: var(--color-base-300);
-    --tw-prose-links: var(--color-primary);
-  }
+/* Typography that follows the surrounding text colour (block colours, daisyUI themes, dark mode).
+   Unlayered on purpose: the typography plugin's own colours are in the utilities layer, which would beat a layered rule. */
+.prose-themed {
+  --tw-prose-body: currentColor;
+  --tw-prose-headings: currentColor;
+  --tw-prose-lead: currentColor;
+  --tw-prose-bold: currentColor;
+  --tw-prose-counters: currentColor;
+  --tw-prose-bullets: currentColor;
+  --tw-prose-quotes: currentColor;
+  --tw-prose-quote-borders: var(--color-base-300);
+  --tw-prose-links: var(--color-primary);
 }
 
 /* Links in the rich text editor look like links on the person page (daisyUI link link-primary).

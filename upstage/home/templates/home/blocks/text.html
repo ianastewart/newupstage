@@ -1,0 +1,5 @@
+{# A text block, in its own background and text colours. #}
+<section class="rounded-box p-6 md:p-10" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+  {% include "home/blocks/_heading.html" %}
+  {% include "home/blocks/_text.html" %}
+</section>

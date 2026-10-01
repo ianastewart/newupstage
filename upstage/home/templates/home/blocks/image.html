@@ -1,0 +1,5 @@
+{# An image block: the image at its chosen size, under the title and subtitle if it has them. #}
+<section class="rounded-box {% if block.title or block.subtitle %}p-6 md:p-10{% else %}p-2{% endif %}" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+  {% include "home/blocks/_heading.html" %}
+  {% include "home/blocks/_image.html" %}
+</section>

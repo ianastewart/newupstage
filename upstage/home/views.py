@@ -16,7 +16,11 @@ def home(request):
 def webpage(request, slug):
     """A page built from its blocks, in order."""
     page = get_object_or_404(WebPage, slug=slug)
-    return render(request, "home/webpage.html", {"page": page})
+    page_blocks = list(page.page_blocks())
+    # The page's first hero image block goes in the base template's hero area, above the content.
+    hero = next((pb.block for pb in page_blocks if pb.block.block_type == Block.BlockType.HERO_IMAGE), None)
+    content_blocks = [pb for pb in page_blocks if pb.block != hero]
+    return render(request, "home/webpage.html", {"page": page, "hero": hero, "page_blocks": content_blocks})
 
 
 def audition_block(production):

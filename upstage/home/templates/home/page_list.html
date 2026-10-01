@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Pages · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl p-6">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-3xl font-bold">Pages</h1>
+    <a href="{% url 'page-create' %}" class="btn btn-primary">New page</a>
+  </div>
+
+  {% if pages %}
+    <ul class="list rounded-box bg-base-200 shadow-sm">
+      {% for page in pages %}
+        <li class="list-row items-center">
+          <div class="list-col-grow">
+            <a href="{% url 'page-edit' page.pk %}" class="font-semibold link-hover">{{ page.title }}</a>
+            <p class="text-sm opacity-60">/page/{{ page.slug }}/ · {{ page.blocks.count }} block{{ page.blocks.count|pluralize }}</p>
+          </div>
+          <a href="{{ page.get_absolute_url }}" class="btn btn-ghost btn-sm">View</a>
+          <a href="{% url 'page-edit' page.pk %}" class="btn btn-sm">Edit</a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p class="mb-4">No pages yet.</p>
+      <a href="{% url 'page-create' %}" class="btn btn-primary">Create the first one</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
