@@ -66,6 +66,7 @@ class Block(models.Model):
         TEXT_IMAGE = "text_image", "Text and image"
         CAST = "cast", "Cast list"
         HERO_IMAGE = "hero_image", "Hero image"
+        SPLIT = "split", "Split text and image"
 
     class ImageSize(models.TextChoices):
         SMALL = "small", "Small"
@@ -85,6 +86,7 @@ class Block(models.Model):
         BlockType.TEXT_IMAGE: "home/blocks/text_image.html",
         BlockType.CAST: "home/blocks/cast.html",
         BlockType.HERO_IMAGE: "home/blocks/hero_image.html",
+        BlockType.SPLIT: "home/blocks/split.html",
     }
 
     name = models.CharField(max_length=255, help_text="Identifies the block when adding it to pages.")
@@ -104,7 +106,7 @@ class Block(models.Model):
     image_size = models.CharField(max_length=10, choices=ImageSize.choices, default=ImageSize.MEDIUM)
     layout = models.CharField(
         max_length=20, choices=Layout.choices, default=Layout.TEXT_LEFT,
-        help_text="Used by text and image, and cast list, blocks (the cast list takes the text's place).",
+        help_text="Used by text and image, split, and cast list, blocks (the cast list takes the text's place).",
     )
     production = models.ForeignKey(
         "backstage.Production", null=True, blank=True, on_delete=models.SET_NULL, related_name="blocks",
@@ -123,12 +125,13 @@ class Block(models.Model):
 
     @property
     def has_text(self):
-        return self.block_type in (self.BlockType.TEXT, self.BlockType.TEXT_IMAGE)
+        return self.block_type in (self.BlockType.TEXT, self.BlockType.TEXT_IMAGE, self.BlockType.SPLIT)
 
     @property
     def has_image(self):
         return self.block_type in (
             self.BlockType.IMAGE, self.BlockType.TEXT_IMAGE, self.BlockType.CAST, self.BlockType.HERO_IMAGE,
+            self.BlockType.SPLIT,
         )
 
     @property

@@ -1,0 +1,6 @@
+{# The image column of a split block: the whole image at the column's full width (never cropped); if the text column is taller, the image is centred in the column. #}
+<div class="flex items-center">
+  {% if block.image %}
+    <img src="{{ block.image.image.url }}" alt="{{ block.image.description }}" loading="lazy" class="block h-auto w-full" />
+  {% endif %}
+</div>

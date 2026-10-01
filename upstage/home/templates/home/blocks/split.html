@@ -1,0 +1,10 @@
+{# A split block: a card in two equal columns, the whole image at the full width of its column and the text in the other. Stacks on phones, in the same order. Image left, or (any other layout) text left. #}
+<section class="grid overflow-hidden rounded-box md:grid-cols-2" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+  {% if block.layout == 'image_left' %}
+    {% include "home/blocks/_split_image.html" %}
+    {% include "home/blocks/_split_text.html" %}
+  {% else %}
+    {% include "home/blocks/_split_text.html" %}
+    {% include "home/blocks/_split_image.html" %}
+  {% endif %}
+</section>

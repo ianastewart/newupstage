@@ -120,6 +120,26 @@
   --tw-prose-links: var(--color-primary);
 }
 
+/* The hero image fades in slowly after the page loads; the text is visible straight away. */
+@keyframes hero-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.hero-fade-in {
+  animation: hero-fade-in 5s ease-in both;
+}
+/* The hero text starts at half strength and rises to full white over the same 5 seconds. */
+@keyframes hero-text-fade {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+.hero-text-fade {
+  animation: hero-text-fade 5s ease-in both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-fade-in, .hero-text-fade { animation: none; }
+}
+
 /* Links in the rich text editor look like links on the person page (daisyUI link link-primary).
    Unlayered on purpose: rmeditor.css is unlayered too, so a layered rule would lose to it. */
 .rmeditor-wrap .rme-area a {
