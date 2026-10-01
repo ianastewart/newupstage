@@ -75,3 +75,16 @@ class PublicNavTests(TestCase):
         self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
         response = self.client.get(reverse("production-list"))
         self.assertContains(response, f'href="{reverse("page-list")}"')
+
+    def test_backstage_link_only_when_logged_in(self):
+        from accounts.models import CustomUser
+
+        self.assertNotContains(self.client.get(reverse("home")), ">Backstage<")
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        response = self.client.get(reverse("home"))
+        self.assertContains(response, f'<a href="{reverse("production-list")}">Backstage</a>', count=2)
+
+    def test_radio_plays_link_is_highlighted_on_the_archive(self):
+        response = self.client.get(reverse("radio-archive"))
+        self.assertContains(response, f'<a href="{reverse("radio-archive")}" class="menu-active">Radio plays</a>', count=2)
+        self.assertContains(self.client.get(reverse("home")), f'<a href="{reverse("radio-archive")}">Radio plays</a>', count=2)

@@ -2,4 +2,8 @@
 <li><a href="{% url 'home' %}"{% if current == 'home' or current == 'webpage' %} class="menu-active"{% endif %}>Home</a></li>
 <li><a href="{% url 'auditions' %}"{% if current == 'auditions' %} class="menu-active"{% endif %}>Auditions</a></li>
 <li><a href="{% url 'public-actors' %}"{% if current == 'public-actors' or current == 'public-actor' %} class="menu-active"{% endif %}>Actors</a></li>
+<li><a href="{% url 'radio-archive' %}"{% if current == 'radio-archive' or current == 'radio-play' %} class="menu-active"{% endif %}>Radio plays</a></li>
 {% endwith %}
+{% if user.is_authenticated %}
+<li><a href="{% url 'production-list' %}">Backstage</a></li>
+{% endif %}
