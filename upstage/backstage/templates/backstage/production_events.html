@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}{{ production }} events · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  {% include "backstage/includes/production_header.html" with active="events" %}
+
+  <div class="mb-6 flex flex-wrap items-center justify-end gap-3">
+    {% if other_events %}
+      <form method="POST" class="flex flex-wrap items-center gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="attach" />
+        <select name="event" class="select select-sm w-64" aria-label="Existing event" required>
+          <option value="">Add an existing event…</option>
+          {% for event in other_events %}
+            <option value="{{ event.pk }}">{{ event }} ({{ event.get_event_type_display }})</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm">Add</button>
+      </form>
+    {% endif %}
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('new-event').showModal()">New event</button>
+  </div>
+
+  {% if events %}
+    <div class="space-y-4">
+      {% for event in events %}
+        <div class="card bg-base-200 shadow-sm">
+          <div class="card-body gap-3">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <a href="{% url 'event-detail' event.pk %}" class="card-title link-hover">{{ event.title }}</a>
+                  <span class="badge badge-sm {% if event.event_type == 'audition' %}badge-info{% elif event.event_type == 'rehearsal' %}badge-accent{% elif event.event_type == 'performance' %}badge-success{% else %}badge-ghost{% endif %}">{{ event.get_event_type_display }}</span>
+                </div>
+                <p class="mt-1 text-sm opacity-80">
+                  {% if event.venue %}{{ event.venue }}{% else %}No venue yet{% endif %}
+                  {% if event.ticket_site %} · Tickets: {% if event.ticket_site.url %}<a href="{{ event.ticket_site.url }}" class="link" target="_blank" rel="noopener">{{ event.ticket_site }}</a>{% else %}{{ event.ticket_site }}{% endif %}{% endif %}
+                </p>
+                {% with others=event.productions.all %}
+                  {% if others|length > 1 %}
+                    <p class="mt-1 text-xs opacity-60">Also for:
+                      {% for other in others %}{% if other.pk != production.pk %}<a href="{% url 'production-events' other.pk %}" class="link-hover">{{ other }}</a>{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}
+                    </p>
+                  {% endif %}
+                {% endwith %}
+              </div>
+              <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="unlink" />
+                <input type="hidden" name="event" value="{{ event.pk }}" />
+                <button type="submit" class="btn btn-ghost btn-xs text-error" title="Take this event off the production (the event is kept)">Remove</button>
+              </form>
+            </div>
+
+            {% if event.description %}<p class="text-sm">{{ event.description|linebreaksbr }}</p>{% endif %}
+
+            <div class="flex flex-wrap items-center gap-2">
+              {% for when in event.datetimes.all %}
+                <form method="POST" class="badge badge-outline h-auto gap-1 py-1">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="remove_datetime" />
+                  <input type="hidden" name="datetime_id" value="{{ when.pk }}" />
+                  {{ when.datetime|date:"D j M Y, H:i" }}
+                  <button type="submit" class="cursor-pointer opacity-60 hover:opacity-100" aria-label="Remove {{ when.datetime|date:'j M Y H:i' }}" title="Remove this date">✕</button>
+                </form>
+              {% empty %}
+                <span class="text-sm opacity-60">No dates yet.</span>
+              {% endfor %}
+              <form method="POST" class="flex items-center gap-1">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_datetime" />
+                <input type="hidden" name="event" value="{{ event.pk }}" />
+                <input type="datetime-local" name="datetime" class="input input-sm w-auto" aria-label="New date and time for {{ event }}" required />
+                <button type="submit" class="btn btn-sm">Add date</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p>This production has no events yet.</p>
+      <p class="mt-2 text-sm opacity-70">Add its auditions, rehearsals and performances with <strong>New event</strong>.</p>
+    </div>
+  {% endif %}
+</div>
+
+<dialog id="new-event" class="modal">
+  <div class="modal-box max-w-2xl">
+    <h2 class="mb-4 text-xl font-bold">New event for {{ production }}</h2>
+    <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create" />
+      {% if event_form.non_field_errors %}
+        <div role="alert" class="alert alert-error alert-soft mb-4">{{ event_form.non_field_errors|join:" " }}</div>
+      {% endif %}
+      <div class="grid gap-x-4 sm:grid-cols-2">
+        {{ event_form.title.as_field_group }}
+        {{ event_form.event_type.as_field_group }}
+        {{ event_form.venue.as_field_group }}
+        {{ event_form.ticket_site.as_field_group }}
+        {{ event_form.first_datetime.as_field_group }}
+      </div>
+      {{ event_form.description.as_field_group }}
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create event</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% if show_create %}
+  <script>document.getElementById('new-event').showModal();  // the form has errors to fix</script>
+{% endif %}
+{% endblock %}

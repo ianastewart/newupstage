@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}{{ venue }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl p-6">
+  <div class="mb-4">
+    <a href="{% url 'venue-list' %}" class="btn btn-ghost btn-sm">← Venues</a>
+  </div>
+
+  <div class="card bg-base-200 shadow-sm">
+    <div class="card-body">
+      <div class="flex flex-wrap items-center gap-6">
+        {% if venue.logo %}
+          {# The whole logo, at most 150px high, on a plain background so transparent logos stay legible. #}
+          <a href="{% url 'image-detail' venue.logo.pk %}" class="shrink-0 rounded-box bg-base-100 p-3 shadow-sm" title="Logo: {{ venue.logo.description }}">
+            <img src="{{ venue.logo.image.url }}" alt="{{ venue.name }} logo" class="h-auto max-h-[150px] w-auto max-w-full" />
+          </a>
+        {% endif %}
+        <div class="min-w-0">
+          <h1 class="text-3xl font-bold">{{ venue.name }}</h1>
+          {% if venue.address %}
+            <address class="mt-2 not-italic opacity-80">{{ venue.address|linebreaksbr }}</address>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card-actions mt-4 justify-end">
+        <a href="{% url 'venue-delete' venue.pk %}" class="btn btn-ghost text-error">Delete</a>
+        <a href="{% url 'venue-update' venue.pk %}" class="btn btn-primary">Edit</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
