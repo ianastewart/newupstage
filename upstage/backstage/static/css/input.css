@@ -13,7 +13,7 @@
 }
 
 @plugin "daisyui" {
-    themes: light, dark;
+    themes: all;
   }
 
 /* Upstage brand theme: theatre red, stage gold, warm programme-paper base. */

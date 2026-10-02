@@ -1,0 +1,55 @@
+{# Theme colour swatches under every colour field marked data-swatches. Click one to fill the field; "None" clears it (the theme's colour). #}
+<script>
+  (() => {
+    const swatches = [
+      ['Theatre red', '#9e1326'],
+      ['Stage gold', '#dca744'],
+      ['Plum', '#554077'],
+      ['Upstage purple', '#660860'],
+      ['Dark', '#2d2020'],
+      ['Black', '#000000'],
+      ['Programme paper', '#fdfaf4'],
+      ['White', '#ffffff'],
+    ];
+    document.querySelectorAll('input[data-swatches]').forEach((input) => {
+      const row = document.createElement('div');
+      row.className = 'mt-1 flex flex-wrap items-center gap-1.5';
+      const buttons = [];
+      const add = (name, value) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.title = value ? `${name} (${value})` : 'None: use the theme\'s colour';
+        button.setAttribute('aria-label', button.title);
+        button.dataset.value = value;
+        button.className = 'size-7 rounded-full border border-base-content/30 transition hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+        if (value) {
+          button.style.backgroundColor = value;
+        } else {
+          button.className += ' bg-base-100 text-xs leading-none';
+          button.textContent = '✕';
+        }
+        button.addEventListener('click', () => {
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          mark();
+        });
+        buttons.push(button);
+        row.appendChild(button);
+      };
+      // The selected swatch gets a ring.
+      const mark = () => buttons.forEach((b) => {
+        const on = b.dataset.value.toLowerCase() === input.value.trim().toLowerCase();
+        b.classList.toggle('ring-2', on);
+        b.classList.toggle('ring-primary', on);
+        b.classList.toggle('ring-offset-2', on);
+        b.setAttribute('aria-pressed', on);
+      });
+      add('None', '');
+      swatches.forEach(([name, value]) => add(name, value));
+      input.addEventListener('input', mark);
+      // Put the swatches inside the field's group, after the input.
+      input.insertAdjacentElement('afterend', row);
+      mark();
+    });
+  })();
+</script>

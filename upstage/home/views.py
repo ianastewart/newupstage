@@ -14,12 +14,13 @@ from .models import Block, WebPage
 
 @login_not_required
 def home(request):
-    return render(request, "home/home.html")
+    return webpage(request, "home")
 
 
 @login_not_required
 def webpage(request, slug):
     """A page built from its blocks, in order."""
+    slug = slug or 'home'
     page = get_object_or_404(WebPage, slug=slug)
     page_blocks = list(page.page_blocks())
     # The page's first hero image block goes in the base template's hero area, above the content.

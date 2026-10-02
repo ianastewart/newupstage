@@ -10,7 +10,7 @@ class WebPageForm(forms.ModelForm):
     class Meta:
         model = WebPage
         fields = ["title", "slug", "background_colour"]
-        widgets = {"background_colour": forms.TextInput(attrs={"placeholder": "#rrggbb"})}
+        widgets = {"background_colour": forms.TextInput(attrs={"placeholder": "#rrggbb", "data-swatches": ""})}
         help_texts = {"slug": "Used in the page's address: /page/<slug>/. Letters, numbers and hyphens."}
 
 
@@ -23,10 +23,10 @@ class BlockForm(forms.ModelForm):
         ]
         widgets = {
             "text": RichTextWidget(attrs={"rows": 10}),
-            # Plain text rather than a colour picker, which can't be left blank (blank = theme colour).
-            "background_colour": forms.TextInput(attrs={"placeholder": "#rrggbb"}),
+            # Plain text rather than a colour picker, which can't be left blank (blank = theme colour); swatches fill it in.
+            "background_colour": forms.TextInput(attrs={"placeholder": "#rrggbb", "data-swatches": ""}),
             "url": forms.TextInput(attrs={"placeholder": "https://... or /page/about/"}),
-            "text_colour": forms.TextInput(attrs={"placeholder": "#rrggbb"}),
+            "text_colour": forms.TextInput(attrs={"placeholder": "#rrggbb", "data-swatches": ""}),
         }
 
     def __init__(self, *args, **kwargs):

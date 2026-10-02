@@ -72,6 +72,9 @@ class AccountPagesTests(TestCase):
 
 class LoginRequiredTests(TestCase):
     def test_public_pages_need_no_login(self):
+        from home.models import WebPage
+
+        WebPage.objects.create(title="Home", slug="home")  # the home view shows the page with this slug
         for name in ("home", "auditions"):
             self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)
 

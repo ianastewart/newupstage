@@ -56,6 +56,13 @@ class RadioArchiveTests(TestCase):
 
 
 class PublicNavTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from home.models import WebPage
+
+        # The home view shows the page with the slug "home".
+        WebPage.objects.create(title="Home", slug="home")
+
     def test_public_pages_have_the_public_navbar(self):
         for name in ("home", "auditions", "public-actors", "radio-archive"):
             response = self.client.get(reverse(name))
@@ -88,3 +95,33 @@ class PublicNavTests(TestCase):
         response = self.client.get(reverse("radio-archive"))
         self.assertContains(response, f'<a href="{reverse("radio-archive")}" class="menu-active">Radio plays</a>', count=2)
         self.assertContains(self.client.get(reverse("home")), f'<a href="{reverse("radio-archive")}">Radio plays</a>', count=2)
+
+
+class ColourSwatchTests(TestCase):
+    def test_colour_fields_get_swatches(self):
+        from accounts.models import CustomUser
+        from home.models import WebPage
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        page = WebPage.objects.create(title="About", slug="about")
+        for url, fields in (
+            (reverse("page-create"), 1),
+            (reverse("page-edit", args=[page.pk]), 1),
+            (reverse("block-create", args=[page.pk]), 2),
+        ):
+            response = self.client.get(url)
+            # One attribute per colour field, plus the script's own selector.
+            self.assertContains(response, "data-swatches", count=fields + 1, msg_prefix=url)
+            self.assertContains(response, "Theatre red", msg_prefix=url)
+
+
+class StylesheetVersionTests(TestCase):
+    def test_the_stylesheet_address_changes_when_the_file_does(self):
+        import re
+
+        from home.models import WebPage
+
+        WebPage.objects.create(title="Home", slug="home")
+        match = re.search(r'output\.css\?v=(\d+)"', self.client.get(reverse("home")).content.decode())
+        self.assertIsNotNone(match)
+        self.assertGreater(int(match.group(1)), 0)  # the file's modification time

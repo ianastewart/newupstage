@@ -6,17 +6,17 @@
   <script>
       // Apply the saved theme before first paint to avoid a flash of the default theme.
       (() => {
-          const themes = ['upstage', 'upstage-dark', 'light', 'dark'];
+          // Any daisyUI theme name (see includes/theme_options.html); anything else is ignored.
           let saved = null;
           try {
               saved = localStorage.getItem('theme');
           } catch (e) {
           }
           const preferred = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'upstage-dark' : 'upstage';
-          document.documentElement.dataset.theme = themes.includes(saved) ? saved : preferred;
+          document.documentElement.dataset.theme = /^[a-z][a-z-]*$/.test(saved || '') ? saved : preferred;
       })();
   </script>
-  <link rel="stylesheet" href="{% static 'css/src/output.css' %}">
+  <link rel="stylesheet" href="{% static 'css/src/output.css' %}?v={{ css_version }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;1,400;1,700&display=swap">

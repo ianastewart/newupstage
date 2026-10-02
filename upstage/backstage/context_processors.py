@@ -1,3 +1,6 @@
+import os
+
+from django.contrib.staticfiles import finders
 from django.utils.functional import SimpleLazyObject
 
 from backstage.models import Image
@@ -18,3 +21,15 @@ def navbar_logo(request):
         )
 
     return {"navbar_logo": SimpleLazyObject(find_logo)}
+
+
+def css_version(request):
+    """
+    `css_version`: when the compiled stylesheet last changed. base.html puts it on the stylesheet's address, so a
+    rebuilt stylesheet (new themes, say) is fetched at once instead of the browser's cached copy being used.
+    """
+    path = finders.find("css/src/output.css")
+    try:
+        return {"css_version": int(os.path.getmtime(path))}
+    except (TypeError, OSError):
+        return {"css_version": 0}
