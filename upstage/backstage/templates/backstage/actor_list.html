@@ -15,6 +15,10 @@
     </div>
   </div>
 
+  <div role="alert" class="alert alert-info alert-soft mb-6">
+    <span>Actors without an image are not shown in the <a href="{% url 'public-actors' %}" class="link">public view</a>.</span>
+  </div>
+
   {% if not actors %}
     <div class="rounded-box bg-base-200 p-12 text-center">
       <p>No one has the Actor role yet.</p>

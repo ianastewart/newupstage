@@ -1,5 +1,6 @@
 from django import forms
 from django.db.models import Q
+from django.db.models.functions import Lower
 
 from backstage import models
 from rmeditor.widgets import RichTextWidget
@@ -36,6 +37,21 @@ class ProductionTeamForm(forms.ModelForm):
     class Meta:
         model = models.ProductionTeam
         fields = ["person", "role"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Alphabetical by first name (as the names are shown), leaving out people who are only actors:
+        # they are cast, not team. Whoever is already on the team stays, so editing still works.
+        actor_only = models.Person.objects.filter(roles__name="Actor").exclude(
+            roles__in=models.Role.objects.exclude(name="Actor")
+        )
+        allowed = ~Q(pk__in=actor_only.values("pk"))
+        if self.instance.person_id:
+            allowed |= Q(pk=self.instance.person_id)
+        self.fields["person"].queryset = models.Person.objects.filter(allowed).order_by(
+            Lower("first_name"), Lower("last_name")
+        )
+        self.fields["person"].help_text = "People with only an Actor role are omitted from the list"
 
 
 class EventForm(forms.ModelForm):
