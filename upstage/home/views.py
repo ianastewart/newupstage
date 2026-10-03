@@ -8,7 +8,7 @@ from django.utils import timezone
 from backstage.models import Event, EventDateTime, Person, Production
 from backstage.views import person_productions
 
-from .forms import BlockForm, WebPageForm
+from .forms import BlockColumnFormSet, BlockForm, WebPageForm
 from .models import Block, WebPage
 
 
@@ -175,26 +175,47 @@ def page_edit(request, pk):
     })
 
 
+def _save_block(request, block=None):
+    """
+    The block form and its columns formset, bound to the POST if there is one. Returns (form, formset, saved block
+    or None). The columns are only checked and saved for the types of block that have columns.
+    """
+    form = BlockForm(request.POST or None, instance=block)
+    formset = BlockColumnFormSet(request.POST or None, instance=block or Block(), prefix="col")
+    if request.method != "POST":
+        return form, formset, None
+    columns = 0
+    if form.is_valid():
+        columns = Block.COLUMN_COUNTS.get(form.cleaned_data["block_type"], 0)
+        formset.required_columns = columns
+    if form.is_valid() and (not columns or formset.is_valid()):
+        saved = form.save()
+        if columns:
+            formset.instance = saved
+            formset.save_columns(saved)
+        return form, formset, saved
+    return form, formset, None
+
+
 def block_create(request, page_pk):
     """Add a new block to the end of a page."""
     page = get_object_or_404(WebPage, pk=page_pk)
-    form = BlockForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
-        page_block = page.add_block(form.save())
+    form, formset, block = _save_block(request)
+    if block:
+        page_block = page.add_block(block)
         return redirect(reverse("page-edit", args=[page.pk]) + f"#page-block-{page_block.pk}")
-    return render(request, "home/block_form.html", {"form": form, "page": page})
+    return render(request, "home/block_form.html", {"form": form, "formset": formset, "page": page})
 
 
 def block_edit(request, page_pk, pk):
     """Edit a block (changes show on every page that uses it), then return to the page editor."""
     page = get_object_or_404(WebPage, pk=page_pk)
     block = get_object_or_404(Block, pk=pk)
-    form = BlockForm(request.POST or None, instance=block)
-    if request.method == "POST" and form.is_valid():
-        form.save()
+    form, formset, saved = _save_block(request, block)
+    if saved:
         page_block = page.pageblock_set.filter(block=block).first()
         return redirect(reverse("page-edit", args=[page.pk]) + (f"#page-block-{page_block.pk}" if page_block else ""))
     return render(request, "home/block_form.html", {
-        "form": form, "page": page, "block": block,
+        "form": form, "formset": formset, "page": page, "block": block,
         "other_pages": block.pages.exclude(pk=page.pk),
     })

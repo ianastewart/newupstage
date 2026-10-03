@@ -3,7 +3,7 @@ from rmeditor.widgets import RichTextWidget
 
 from backstage.models import Image, Production
 
-from .models import Block, WebPage
+from .models import Block, BlockColumn, WebPage
 
 
 class WebPageForm(forms.ModelForm):
@@ -18,7 +18,7 @@ class BlockForm(forms.ModelForm):
     class Meta:
         model = Block
         fields = [
-            "name", "block_type", "title", "subtitle", "text", "production", "image", "url", "image_size", "layout",
+            "name", "block_type", "title", "subtitle", "text", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights",
             "background_colour", "text_colour",
         ]
         widgets = {
@@ -33,3 +33,61 @@ class BlockForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["image"].queryset = Image.objects.order_by("description")
         self.fields["production"].queryset = Production.objects.order_by("title")
+
+
+class BlockColumnForm(forms.ModelForm):
+    """One column of a columns block: an image, some text and an optional link on the image."""
+
+    class Meta:
+        model = BlockColumn
+        fields = ["title", "image", "text", "url"]
+        widgets = {
+            "text": RichTextWidget(attrs={"rows": 6}),
+            "url": forms.TextInput(attrs={"placeholder": "https://... or /page/about/"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["image"].queryset = Image.objects.order_by("description")
+
+    def is_blank(self):
+        data = self.cleaned_data
+        return not (
+            data.get("image") or (data.get("title") or "").strip() or (data.get("text") or "").strip() or data.get("url")
+        )
+
+
+class BaseBlockColumnFormSet(forms.BaseInlineFormSet):
+    """
+    The columns of a block. There is room for the most any block has; a block shows only as many as its type
+    has. `required_columns` (set before validating) is how many of the first columns must have something in them.
+    """
+
+    required_columns = 0
+
+    def clean(self):
+        super().clean()
+        for form in self.forms[: self.required_columns]:
+            if hasattr(form, "cleaned_data") and form.is_blank():
+                form.add_error(None, "This column needs an image, a title or some text.")
+
+    def save_columns(self, block):
+        """Save the columns in order. A column that has been emptied is removed, and an empty new one skipped."""
+        position = 0
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data"):
+                continue
+            if form.is_blank():
+                if form.instance.pk:
+                    form.instance.delete()
+                continue
+            column = form.save(commit=False)
+            column.block, column.position = block, position
+            column.save()
+            position += 1
+
+
+BlockColumnFormSet = forms.inlineformset_factory(
+    Block, BlockColumn, form=BlockColumnForm, formset=BaseBlockColumnFormSet,
+    extra=Block.MAX_COLUMNS, max_num=Block.MAX_COLUMNS, can_delete=False,
+)
