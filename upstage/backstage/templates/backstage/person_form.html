@@ -12,7 +12,7 @@
   </div>
   <h1 class="mb-6 text-3xl font-bold">{% if object %}Edit {{ object }}{% else %}New person{% endif %}</h1>
 
-  <form method="POST" action="{% if object %}{{ update_view_url }}{% else %}{{ create_view_url }}{% endif %}">
+  <form id="person-form" method="POST" action="{% if object %}{{ update_view_url }}{% else %}{{ create_view_url }}{% endif %}">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div role="alert" class="alert alert-error alert-soft mb-4">{{ form.non_field_errors|join:" " }}</div>
@@ -48,7 +48,7 @@
               <div class="grow">{{ form.image }}</div>
             </div>
             {% for error in form.image.errors %}<p class="text-sm text-error">{{ error }}</p>{% endfor %}
-            <p class="text-xs opacity-70">Photo not listed? <a href="{% url 'image-create' %}" class="link">Upload it to the image library</a> first.</p>
+            <p class="text-xs opacity-70">Photo not listed? <a id="upload-photo-link" href="{% url 'image-create' %}?type=headshot&amp;for_person={% if object %}{{ object.pk }}{% else %}new{% endif %}" class="link">Upload it to the image library</a> first (as a headshot). You will come back here with the photo chosen.</p>
           </div>
         </div>
 
@@ -79,15 +79,62 @@
 
 {{ image_urls|json_script:"image-urls" }}
 <script>
-  // Update the round photo preview when a different image is chosen.
   (() => {
+    const form = document.getElementById('person-form');
+    const KEY = 'person-form-draft';
+    const select = document.getElementById('id_image');
+    const params = new URLSearchParams(location.search);
+
+    // Back from uploading a photo: put back what was typed before leaving. This runs before the page has finished
+    // loading, so the rich text editor starts from the restored biography.
+    if (params.has('restore')) {
+      try {
+        const draft = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+        if (draft && draft.path === location.pathname) {
+          for (const el of form.elements) {
+            if (!el.name || !(el.name in draft.fields)) continue;
+            // The photo comes from the address when a new one was uploaded.
+            if (el.name === 'image' && params.has('image')) continue;
+            const value = draft.fields[el.name];
+            if (el.type === 'checkbox') el.checked = value.includes(el.value);
+            else if (el.type === 'radio') el.checked = el.value === value;
+            else el.value = value;
+          }
+        }
+        sessionStorage.removeItem(KEY);
+      } catch (e) {}
+    }
+
+    // Leaving to upload a photo: keep what has been typed, and tell the uploader the person's name so that the new
+    // image's description starts as that.
+    const link = document.getElementById('upload-photo-link');
+    const baseHref = link.getAttribute('href');
+    link.addEventListener('click', () => {
+      const fields = {};
+      for (const el of form.elements) {
+        if (!el.name || el.name === 'csrfmiddlewaretoken' || ['file', 'submit', 'button'].includes(el.type)) continue;
+        if (el.type === 'checkbox') {
+          fields[el.name] = fields[el.name] || [];
+          if (el.checked) fields[el.name].push(el.value);
+        } else if (el.type === 'radio') {
+          if (el.checked) fields[el.name] = el.value;
+        } else fields[el.name] = el.value;
+      }
+      try { sessionStorage.setItem(KEY, JSON.stringify({ path: location.pathname, fields })); } catch (e) {}
+      const name = [form.elements.first_name.value, form.elements.last_name.value].map((s) => s.trim()).filter(Boolean).join(' ');
+      link.href = name ? `${baseHref}&name=${encodeURIComponent(name)}` : baseHref;
+    });
+
+    // The round photo preview follows the chosen image, including one chosen when the page opens.
     const urls = JSON.parse(document.getElementById('image-urls').textContent);
     const preview = document.getElementById('photo-preview');
-    document.getElementById('id_image').addEventListener('change', (event) => {
-      const url = urls[event.target.value];
+    const showPhoto = () => {
+      const url = urls[select.value];
       preview.src = url || '';
       preview.classList.toggle('hidden', !url);
-    });
+    };
+    select.addEventListener('change', showPhoto);
+    showPhoto();
   })();
 </script>
 {% endblock %}

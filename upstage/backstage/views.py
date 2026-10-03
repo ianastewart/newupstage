@@ -1,4 +1,4 @@
-from django.db.models import CharField, F, Min, Prefetch, Value
+from django.db.models import CharField, F, Min, Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
@@ -180,6 +180,38 @@ class ImageView(CRUDView):
         image_type = self.request.GET.get("type")
         return image_type if image_type in models.Image.ImageType.values else None
 
+    def get_form(self, data=None, files=None, **kwargs):
+        if data is None and self.role == Role.CREATE:
+            initial = kwargs.setdefault("initial", {})
+            # The uploader can start on a type of image: /image/new/?type=headshot.
+            if image_type := self.get_image_type():
+                initial["image_type"] = image_type
+            # Started from a person's form (?for_person=new or <pk>, with ?name=...): the description starts as their name.
+            if self.get_upload_person_target() and (name := self.request.GET.get("name", "").strip()):
+                initial["description"] = name[:255]
+        return super().get_form(data, files, **kwargs)
+
+    def get_upload_person_target(self):
+        """
+        When uploading from a person's form (?for_person=new, or the person's id), where to go back to: "new" for the
+        new person form, or the Person being edited. None if the upload didn't come from a person's form.
+        """
+        target = self.request.POST.get("for_person") or self.request.GET.get("for_person", "")
+        if target == "new":
+            return "new"
+        return models.Person.objects.filter(pk=target).first() if target.isdigit() else None
+
+    def person_form_url(self, image=None):
+        """The form to go back to after uploading from a person's form, with the new image chosen on it."""
+        target = self.get_upload_person_target()
+        base = reverse("person-create") if target == "new" else reverse("person-update", args=[target.pk])
+        query = "?restore=1" + (f"&image={image.pk}" if image else "")
+        return base + query
+
+    def get_search(self):
+        """The search text (?q=...)."""
+        return self.request.GET.get("q", "").strip()
+
     def get_sort(self):
         """"name" (the default) or "newest" (?sort=newest)."""
         return "newest" if self.request.GET.get("sort") == "newest" else "name"
@@ -196,14 +228,22 @@ class ImageView(CRUDView):
             ).order_by("sort_name", "id")
         if image_type := self.get_image_type():
             queryset = queryset.filter(image_type=image_type)
+        # Search: every word has to be in the image's description or in its file name (ignoring case).
+        for word in self.get_search().split():
+            queryset = queryset.filter(Q(description__icontains=word) | Q(image__icontains=word))
         return queryset
 
     def get_context_data(self, **kwargs):
+        kwargs["search"] = self.get_search()
         kwargs["image_types"] = models.Image.ImageType.choices
         kwargs["current_type"] = self.get_image_type()
         kwargs["current_sort"] = self.get_sort()
         if self.role == Role.CREATE:
             kwargs["production"] = self.get_upload_production()
+            target = self.get_upload_person_target()
+            if target:
+                kwargs["for_person"] = "new" if target == "new" else target.pk
+                kwargs["person_form_url"] = self.person_form_url()
         if self.role == Role.DETAIL:
             # Opened from a production's Images tab (?production=<pk>): go back there, not to the library.
             production_id = self.request.GET.get("production", "")
@@ -233,6 +273,9 @@ class ImageView(CRUDView):
         return response
 
     def get_success_url(self):
+        if self.role == Role.CREATE and self.get_upload_person_target():
+            # Back to the person's form, with the new image chosen as their photo.
+            return self.person_form_url(self.object)
         if self.role == Role.CREATE and (production := self.get_upload_production()):
             return reverse("production-images", args=[production.pk])
         # After uploading or deleting, go back to the library.
@@ -290,6 +333,11 @@ class PersonView(CRUDView):
         if data is None and self.role == Role.CREATE and self.request.GET.get("role"):
             roles = models.Role.objects.filter(name=self.request.GET["role"])
             kwargs.setdefault("initial", {})["roles"] = list(roles)
+        # Back from uploading a photo (?image=<pk>): it is chosen as the photo (until the form is saved).
+        image_id = self.request.GET.get("image", "")
+        if data is None and self.role in (Role.CREATE, Role.UPDATE) and image_id.isdigit():
+            if models.Image.objects.filter(pk=image_id, image_type=models.Image.ImageType.HEADSHOT).exists():
+                kwargs.setdefault("initial", {})["image"] = int(image_id)
         return super().get_form(data, files, **kwargs)
 
     def get_context_data(self, **kwargs):

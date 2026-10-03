@@ -388,16 +388,25 @@ class ImageLibraryOrderTests(TestCase):
     def test_newest_first_works_with_the_type_filter(self):
         self.assertEqual(self.ids("?type=headshot&sort=newest"), [self.banana.pk, self.apple.pk])
 
+    @staticmethod
+    def link_queries(html, text):
+        """The query (as a dict) of the tab or link whose text is `text`."""
+        import re
+        from urllib.parse import parse_qs
+
+        match = re.search(r'<a [^>]*href="\?([^"]*)"[^>]*>\s*' + re.escape(text) + r"\s*</a>", html)
+        assert match, text
+        return {key: values[0] for key, values in parse_qs(match.group(1).replace("&amp;", "&")).items()}
+
     def test_the_sort_choices_keep_the_type_and_the_types_keep_the_sort(self):
         html = self.client.get(reverse("image-list") + "?type=headshot&sort=newest").content.decode()
-        self.assertIn('href="?type=headshot"', html)  # Name, keeping the type
-        self.assertIn('href="?sort=newest&amp;type=headshot"', html)  # Newest first, keeping the type
-        self.assertIn('href="?type=base&amp;sort=newest"', html)  # another type, keeping the sort
-        self.assertIn('href="?sort=newest"', html)  # All, keeping the sort
-        self.assertRegex(html, r'href="\?sort=newest&amp;type=headshot" class="tab tab-active"')
+        self.assertEqual(self.link_queries(html, "Name"), {"type": "headshot"})  # Name, keeping the type
+        self.assertEqual(self.link_queries(html, "Newest first"), {"type": "headshot", "sort": "newest"})
+        self.assertEqual(self.link_queries(html, "Base"), {"type": "base", "sort": "newest"})  # another type, keeping the sort
+        self.assertEqual(self.link_queries(html, "All"), {"sort": "newest"})
+        self.assertRegex(html, r'class="tab tab-active"[^>]*>\s*Headshot|Headshot\s*</a>')
         by_name = self.client.get(reverse("image-list") + "?type=headshot").content.decode()
-        self.assertIn('href="?type=base"', by_name)  # no sort in the links when it is the default
-        self.assertRegex(by_name, r'href="\?type=headshot" class="tab tab-active"')
+        self.assertEqual(self.link_queries(by_name, "Base"), {"type": "base"})  # no sort in the links when it is the default
 
     def test_the_page_links_keep_the_sort_and_type(self):
         from backstage.models import Image
@@ -405,9 +414,276 @@ class ImageLibraryOrderTests(TestCase):
         for number in range(30):
             Image.objects.create(description=f"Extra {number:02d}", image=f"images/e{number}.jpg", image_type="headshot")
         html = self.client.get(reverse("image-list") + "?type=headshot&sort=newest").content.decode()
-        self.assertIn("type=headshot&sort=newest&page=2", html)
+        self.assertIn("type=headshot&amp;sort=newest&amp;page=2", html)
         second = self.client.get(reverse("image-list") + "?type=headshot&sort=newest&page=2")
-        self.assertIn("type=headshot&sort=newest&page=1", second.content.decode())
+        self.assertIn("type=headshot&amp;sort=newest&amp;page=1", second.content.decode())
         newest = [image.pk for image in Image.objects.filter(image_type="headshot").order_by("-id")]
         self.assertEqual([i.pk for i in second.context["object_list"]], newest[24:])
+
+
+class HeadshotUploadTests(TestCase):
+    """Uploading a photo from the person form starts on the headshot type."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.person = Person.objects.create(first_name="Ann", last_name="Actor")
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    @staticmethod
+    def selected_type(response):
+        import re
+
+        return re.findall(r'<option value="(\w+)" selected', response.content.decode())
+
+    def test_the_new_person_form_links_to_the_uploader_as_a_headshot(self):
+        for url, target in ((reverse("person-create"), "new"), (reverse("person-update", args=[self.person.pk]), self.person.pk)):
+            html = self.client.get(url).content.decode()
+            self.assertIn(f'href="{reverse("image-create")}?type=headshot&amp;for_person={target}"', html, url)
+
+    def test_the_uploader_starts_on_headshot_from_that_link(self):
+        response = self.client.get(reverse("image-create") + "?type=headshot")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.selected_type(response), ["headshot"])
+
+    def test_the_uploader_starts_on_the_default_type_otherwise(self):
+        self.assertEqual(self.selected_type(self.client.get(reverse("image-create"))), ["base"])
+
+    def test_an_unknown_type_is_ignored(self):
+        self.assertEqual(self.selected_type(self.client.get(reverse("image-create") + "?type=nonsense")), ["base"])
+
+    def test_the_type_can_still_be_changed_when_uploading(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from io import BytesIO
+        from PIL import Image as PILImage
+
+        buffer = BytesIO()
+        PILImage.new("RGB", (4, 4), "white").save(buffer, "PNG")
+        import tempfile
+        from django.test import override_settings
+
+        with tempfile.TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
+            response = self.client.post(reverse("image-create") + "?type=headshot", {
+                "image": SimpleUploadedFile("face.png", buffer.getvalue(), content_type="image/png"),
+                "description": "A face", "image_type": "gallery",
+            })
+        self.assertEqual(response.status_code, 302)
+        from backstage.models import Image
+
+        self.assertEqual(Image.objects.get(description="A face").image_type, "gallery")  # the choice is only a starting point
+
+    def test_uploading_from_a_production_is_unchanged(self):
+        production = Production.objects.create(title="A Play")
+        response = self.client.get(reverse("image-create") + f"?production={production.pk}")
+        self.assertEqual(self.selected_type(response), ["base"])
+        self.assertEqual(response.context["production"], production)
+
+
+class UploadFromPersonFormTests(TestCase):
+    """Uploading a photo from a person's form: the description starts as their name, and you come back to the form."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.person = Person.objects.create(first_name="Ann", last_name="Actor")
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def uploader(self, query):
+        return self.client.get(reverse("image-create") + query)
+
+    def upload(self, **data):
+        """Post a (tiny, temporary) image to the uploader, as the uploader's form would."""
+        import tempfile
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+        from PIL import Image as PILImage
+
+        buffer = BytesIO()
+        PILImage.new("RGB", (4, 4), "white").save(buffer, "PNG")
+        fields = {"image": SimpleUploadedFile("face.png", buffer.getvalue(), content_type="image/png"), "image_type": "headshot"}
+        fields.update(data)
+        with tempfile.TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
+            return self.client.post(reverse("image-create"), fields)
+
+    def test_the_description_starts_as_the_persons_name(self):
+        response = self.uploader("?type=headshot&for_person=new&name=Ann+Actor")
+        self.assertEqual(response.context["form"].initial["description"], "Ann Actor")
+        self.assertEqual(response.context["form"].initial["image_type"], "headshot")
+        self.assertContains(response, 'value="Ann Actor"')
+
+    def test_the_name_is_ignored_unless_it_came_from_a_person_form(self):
+        response = self.uploader("?name=Ann+Actor")
+        self.assertNotIn("description", response.context["form"].initial)
+
+    def test_no_name_leaves_the_description_empty(self):
+        response = self.uploader("?type=headshot&for_person=new")
+        self.assertNotIn("description", response.context["form"].initial)
+
+    def test_the_uploader_remembers_where_it_came_from(self):
+        response = self.uploader("?type=headshot&for_person=new")
+        self.assertContains(response, '<input type="hidden" name="for_person" value="new" />')
+        self.assertContains(response, f'href="{reverse("person-create")}?restore=1" class="btn btn-ghost"')  # Cancel goes back to the form
+        response = self.uploader(f"?type=headshot&for_person={self.person.pk}")
+        self.assertContains(response, f'value="{self.person.pk}"')
+        self.assertContains(response, f'href="{reverse("person-update", args=[self.person.pk])}?restore=1" class="btn btn-ghost"')
+
+    def test_uploading_from_the_new_person_form_comes_back_to_it_with_the_photo_chosen(self):
+        from backstage.models import Image
+
+        response = self.upload(description="Ann Actor", for_person="new")
+        image = Image.objects.get(description="Ann Actor")
+        self.assertEqual(image.image_type, "headshot")
+        self.assertEqual(response["Location"], f"{reverse('person-create')}?restore=1&image={image.pk}")
+
+    def test_uploading_from_an_existing_persons_form_comes_back_to_it(self):
+        from backstage.models import Image
+
+        response = self.upload(description="Ann Actor", for_person=str(self.person.pk))
+        image = Image.objects.get(description="Ann Actor")
+        self.assertEqual(response["Location"], f"{reverse('person-update', args=[self.person.pk])}?restore=1&image={image.pk}")
+
+    def test_an_upload_not_from_a_person_form_still_goes_to_the_library(self):
+        for extra in ({}, {"for_person": "abc"}, {"for_person": "999999"}):
+            response = self.upload(description="Plain", **extra)
+            self.assertEqual(response["Location"], reverse("image-list"), extra)
+
+    def test_the_person_form_opens_with_the_new_photo_chosen(self):
+        from backstage.models import Image
+
+        photo = Image.objects.create(description="Ann Actor", image="images/ann.jpg", image_type="headshot")
+        for url in (reverse("person-create"), reverse("person-update", args=[self.person.pk])):
+            response = self.client.get(f"{url}?restore=1&image={photo.pk}")
+            self.assertEqual(response.context["form"].initial["image"], photo.pk, url)
+            self.assertRegex(response.content.decode(), rf'<option value="{photo.pk}" selected>', url)
+
+    def test_only_a_headshot_can_be_chosen_this_way(self):
+        from backstage.models import Image
+
+        other = Image.objects.create(description="Poster", image="images/poster.jpg", image_type="promotion")
+        for value in (str(other.pk), "999999", "abc", ""):
+            response = self.client.get(f"{reverse('person-create')}?image={value}")
+            self.assertNotIn("image", response.context["form"].initial, value)
+
+    def test_the_person_form_has_what_it_needs_to_keep_what_was_typed(self):
+        html = self.client.get(reverse("person-create")).content.decode()
+        for needle in ('id="person-form"', 'id="upload-photo-link"', "person-form-draft", "params.has('restore')", "encodeURIComponent(name)"):
+            self.assertIn(needle, html, needle)
+
+
+class ImageSearchTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from backstage.models import Image
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        make = lambda description, name, kind="base": Image.objects.create(description=description, image=f"images/{name}", image_type=kind)
+        cls.ann = make("Ann Actor", "ann.jpg", "headshot")
+        cls.annie = make("Annie Smith", "annie-smith.jpg", "headshot")
+        cls.poster = make("Hamlet poster", "hamlet-2026.png", "promotion")
+        cls.unnamed = make("", "spotlight-hero.jpg")  # no description: found by its file name
+        cls.other = make("Zed Writer", "zed.jpg", "headshot")
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def found(self, query):
+        response = self.client.get(reverse("image-list") + query)
+        self.assertEqual(response.status_code, 200)
+        return sorted(image.pk for image in response.context["object_list"])
+
+    def pks(self, *images):
+        return sorted(image.pk for image in images)
+
+    def test_search_finds_images_by_description_ignoring_case(self):
+        self.assertEqual(self.found("?q=ann"), self.pks(self.ann, self.annie))
+        self.assertEqual(self.found("?q=ANNIE"), self.pks(self.annie))
+        self.assertEqual(self.found("?q=poster"), self.pks(self.poster))
+
+    def test_search_finds_images_by_file_name(self):
+        self.assertEqual(self.found("?q=spotlight"), self.pks(self.unnamed))
+        self.assertEqual(self.found("?q=2026"), self.pks(self.poster))
+        self.assertEqual(self.found("?q=.png"), self.pks(self.poster))
+
+    def test_every_word_has_to_match(self):
+        self.assertEqual(self.found("?q=ann+smith"), self.pks(self.annie))  # "ann" and "smith"
+        self.assertEqual(self.found("?q=smith+ann"), self.pks(self.annie))  # in any order
+        self.assertEqual(self.found("?q=ann+poster"), [])
+
+    def test_a_blank_or_spaces_only_search_shows_everything(self):
+        everything = self.pks(self.ann, self.annie, self.poster, self.unnamed, self.other)
+        self.assertEqual(self.found("?q="), everything)
+        self.assertEqual(self.found("?q=+++"), everything)
+
+    def test_special_characters_are_searched_for_not_treated_as_patterns(self):
+        for query in ("%", "_", "'", '"', "\\", "<script>"):
+            self.assertEqual(self.found(f"?q={query}"), [], query)
+
+    def test_search_works_with_the_type_filter_and_the_sort(self):
+        self.assertEqual(self.found("?q=ann&type=headshot"), self.pks(self.ann, self.annie))
+        self.assertEqual(self.found("?q=poster&type=headshot"), [])
+        response = self.client.get(reverse("image-list") + "?q=ann&sort=newest")
+        self.assertEqual([i.pk for i in response.context["object_list"]], [self.annie.pk, self.ann.pk])
+        response = self.client.get(reverse("image-list") + "?q=ann")
+        self.assertEqual([i.pk for i in response.context["object_list"]], [self.ann.pk, self.annie.pk])  # by name
+
+    def test_the_search_box_keeps_its_text_the_type_and_the_sort(self):
+        html = self.client.get(reverse("image-list") + "?q=ann&type=headshot&sort=newest").content.decode()
+        self.assertIn('name="q" value="ann"', html)
+        self.assertIn('<input type="hidden" name="type" value="headshot" />', html)
+        self.assertIn('<input type="hidden" name="sort" value="newest" />', html)
+        self.assertIn("2 images matching", html)
+
+    def test_the_search_text_is_escaped(self):
+        html = self.client.get(reverse("image-list") + '?q="><script>alert(1)</script>').content.decode()
+        self.assertNotIn("<script>alert(1)", html)
+
+    def test_the_other_links_keep_the_search_and_clear_removes_it(self):
+        html = self.client.get(reverse("image-list") + "?q=ann&type=headshot").content.decode()
+        for text, expected in (("Newest first", {"q": "ann", "type": "headshot", "sort": "newest"}),
+                               ("Base", {"q": "ann", "type": "base"}), ("All", {"q": "ann"}), ("Clear", {"type": "headshot"})):
+            self.assertEqual(ImageLibraryOrderTests.link_queries(html, text), expected, text)
+
+    def test_no_clear_link_without_a_search(self):
+        self.assertNotIn(">Clear<", self.client.get(reverse("image-list")).content.decode().replace("\n", "").replace("  ", ""))
+
+    def test_nothing_found_says_so(self):
+        response = self.client.get(reverse("image-list") + "?q=nothing-like-this")
+        self.assertContains(response, "match &ldquo;nothing-like-this&rdquo;")
+        self.assertContains(response, "Clear the search")
+        self.assertNotContains(response, "Upload the first one")
+
+    def test_an_empty_library_still_offers_to_upload(self):
+        from backstage.models import Image
+
+        Image.objects.all().delete()
+        self.assertContains(self.client.get(reverse("image-list")), "Upload the first one")
+
+    def test_the_page_links_keep_the_search(self):
+        from backstage.models import Image
+
+        for number in range(30):
+            Image.objects.create(description=f"Chorus {number:02d}", image=f"images/c{number}.jpg")
+        first = self.client.get(reverse("image-list") + "?q=chorus")
+        self.assertEqual(first.context["paginator"].count, 30)
+        self.assertEqual(len(first.context["object_list"]), 24)
+        self.assertIn("q=chorus&amp;page=2", first.content.decode())
+        second = self.client.get(reverse("image-list") + "?q=chorus&page=2")
+        self.assertEqual(len(second.context["object_list"]), 6)
+        self.assertIn("q=chorus&amp;page=1", second.content.decode())
+
+    def test_searching_goes_back_to_the_first_page(self):
+        from backstage.models import Image
+
+        for number in range(30):
+            Image.objects.create(description=f"Chorus {number:02d}", image=f"images/c{number}.jpg")
+        # The search form has no page field, so a new search starts at page 1 even from page 2.
+        html = self.client.get(reverse("image-list") + "?q=chorus&page=2").content.decode()
+        form = html[html.index('<form method="get"'):html.index("</form>")]
+        self.assertNotIn('name="page"', form)
 

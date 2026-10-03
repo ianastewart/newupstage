@@ -9,21 +9,36 @@
     <a href="{{ create_view_url }}" class="btn btn-primary">Upload image</a>
   </div>
 
+  {# Search the descriptions and file names. The type and the sort are kept (hidden fields); the page starts again. #}
+  <form method="get" class="mb-4 flex flex-wrap items-center gap-3">
+    {% if request.GET.type %}<input type="hidden" name="type" value="{{ request.GET.type }}" />{% endif %}
+    {% if request.GET.sort %}<input type="hidden" name="sort" value="{{ request.GET.sort }}" />{% endif %}
+    <label class="input w-full sm:w-80">
+      <svg class="h-4 w-4 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      <input type="search" name="q" value="{{ search }}" placeholder="Search descriptions and file names" aria-label="Search images" />
+    </label>
+    <button type="submit" class="btn">Search</button>
+    {% if search %}
+      <a href="{% querystring q=None page=None %}" class="btn btn-ghost">Clear</a>
+    {% endif %}
+  </form>
+
   <div class="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3">
-    {# Filter by type. Each choice keeps the sort, and each sort keeps the type. #}
+    {# Filter by type. Each choice keeps the search and the sort, and each sort keeps the search and the type. #}
     <div role="tablist" class="tabs tabs-box w-fit flex-wrap">
-      <a role="tab" href="?{% if current_sort == 'newest' %}sort=newest{% endif %}" class="tab{% if not current_type %} tab-active{% endif %}">All</a>
+      <a role="tab" href="{% querystring type=None page=None %}" class="tab{% if not current_type %} tab-active{% endif %}">All</a>
       {% for value, label in image_types %}
-        <a role="tab" href="?type={{ value }}{% if current_sort == 'newest' %}&amp;sort=newest{% endif %}" class="tab{% if current_type == value %} tab-active{% endif %}">{{ label }}</a>
+        <a role="tab" href="{% querystring type=value page=None %}" class="tab{% if current_type == value %} tab-active{% endif %}">{{ label }}</a>
       {% endfor %}
     </div>
     <div class="flex items-center gap-2">
       <span class="text-sm opacity-70">Sort by</span>
       <div role="tablist" class="tabs tabs-box">
-        <a role="tab" href="?{% if current_type %}type={{ current_type }}{% endif %}" class="tab{% if current_sort == 'name' %} tab-active{% endif %}">Name</a>
-        <a role="tab" href="?sort=newest{% if current_type %}&amp;type={{ current_type }}{% endif %}" class="tab{% if current_sort == 'newest' %} tab-active{% endif %}">Newest first</a>
+        <a role="tab" href="{% querystring sort=None page=None %}" class="tab{% if current_sort == 'name' %} tab-active{% endif %}">Name</a>
+        <a role="tab" href="{% querystring sort='newest' page=None %}" class="tab{% if current_sort == 'newest' %} tab-active{% endif %}">Newest first</a>
       </div>
     </div>
+    <p class="text-sm opacity-70">{% if is_paginated %}{{ paginator.count }}{% else %}{{ object_list|length }}{% endif %} image{% if paginator.count != 1 and object_list|length != 1 %}s{% endif %}{% if search %} matching &ldquo;{{ search }}&rdquo;{% endif %}</p>
   </div>
 
   {% if object_list %}
@@ -48,18 +63,23 @@
     {% if is_paginated %}
       <div class="join mt-8 flex justify-center">
         {% if page_obj.has_previous %}
-          <a class="join-item btn" href="?{% if current_type %}type={{ current_type }}&{% endif %}{% if current_sort == 'newest' %}sort=newest&{% endif %}page={{ page_obj.previous_page_number }}">«</a>
+          <a class="join-item btn" href="{% querystring page=page_obj.previous_page_number %}">«</a>
         {% endif %}
         <span class="join-item btn btn-disabled">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
         {% if page_obj.has_next %}
-          <a class="join-item btn" href="?{% if current_type %}type={{ current_type }}&{% endif %}{% if current_sort == 'newest' %}sort=newest&{% endif %}page={{ page_obj.next_page_number }}">»</a>
+          <a class="join-item btn" href="{% querystring page=page_obj.next_page_number %}">»</a>
         {% endif %}
       </div>
     {% endif %}
   {% else %}
     <div class="rounded-box bg-base-200 p-12 text-center">
-      <p class="mb-4">No images{% if current_type %} of this type{% endif %} yet.</p>
-      <a href="{{ create_view_url }}" class="btn btn-primary">Upload the first one</a>
+      {% if search %}
+        <p class="mb-4">No images{% if current_type %} of this type{% endif %} match &ldquo;{{ search }}&rdquo;.</p>
+        <a href="{% querystring q=None page=None %}" class="btn">Clear the search</a>
+      {% else %}
+        <p class="mb-4">No images{% if current_type %} of this type{% endif %} yet.</p>
+        <a href="{{ create_view_url }}" class="btn btn-primary">Upload the first one</a>
+      {% endif %}
     </div>
   {% endif %}
 </div>

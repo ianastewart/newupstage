@@ -12,6 +12,7 @@
         action="{% if object %}{{ update_view_url }}{% else %}{{ create_view_url }}{% endif %}">
         {% csrf_token %}
         {% if production %}<input type="hidden" name="production" value="{{ production.pk }}" />{% endif %}
+        {% if for_person %}<input type="hidden" name="for_person" value="{{ for_person }}" />{% endif %}
         <div class="grid gap-6 md:grid-cols-2">
           <div>{{ form }}</div>
           <div>
@@ -25,7 +26,7 @@
           </div>
         </div>
         <div class="mt-6 flex justify-end gap-2">
-          <a href="{% if object %}{% url 'image-detail' object.pk %}{% elif production %}{% url 'production-images' production.pk %}{% else %}{% url 'image-list' %}{% endif %}" class="btn btn-ghost">Cancel</a>
+          <a href="{% if object %}{% url 'image-detail' object.pk %}{% elif person_form_url %}{{ person_form_url }}{% elif production %}{% url 'production-images' production.pk %}{% else %}{% url 'image-list' %}{% endif %}" class="btn btn-ghost">Cancel</a>
           <button type="submit" class="btn btn-primary">{% if object %}Save{% else %}Upload{% endif %}</button>
         </div>
       </form>
