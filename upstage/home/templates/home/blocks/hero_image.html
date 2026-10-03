@@ -6,7 +6,7 @@
       {% if block.image %}
         <img src="{{ block.image.image.url }}" alt="{{ block.image.description }}" class="hero-fade-in block h-auto w-full" />
       {% endif %}
-      {% if block.title or block.subtitle or block.text %}
+      {% if block.title or block.subtitle or block.has_visible_text %}
         <header class="absolute inset-0 flex flex-col items-center justify-center overflow-hidden p-3 text-center md:p-10">
           {% if block.title %}<h2 class="text-2xl font-bold drop-shadow sm:text-3xl md:text-6xl">{{ block.title }}</h2>{% endif %}
           <div class="hero-text-fade hidden flex-col items-center md:flex">
@@ -15,7 +15,7 @@
         </header>
       {% endif %}
     </div>
-    {% if block.subtitle or block.text %}
+    {% if block.subtitle or block.has_visible_text %}
       <div class="hero-text-fade flex flex-col items-center p-4 text-center md:hidden">
         {% include "home/blocks/_hero_text.html" %}
       </div>

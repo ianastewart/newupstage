@@ -1,12 +1,31 @@
+import html as html_lib
+import re
+
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models, transaction
 from django.urls import reverse
+from django.utils.html import strip_tags
 
 link_url = RegexValidator(
     r"^(https?://\S+|/\S*)$", "Enter a full web address (https://...) or a path on this site, e.g. /page/about/."
 )
 hex_colour = RegexValidator(r"^#[0-9a-fA-F]{6}$", "Enter a colour as #rrggbb, e.g. #7a1f2b.")
+
+
+_MEDIA_TAG = re.compile(r"<(?:img|iframe|video|audio|embed|object)\b", re.IGNORECASE)
+
+
+def html_has_content(html):
+    """
+    Whether some rich text shows anything. The editor can leave "<p></p>", "<p><br></p>" or "<p>&nbsp;</p>" behind
+    when the text is cleared: that is nothing to show. An image or video counts as something.
+    """
+    if not html:
+        return False
+    if _MEDIA_TAG.search(html):
+        return True
+    return bool(html_lib.unescape(strip_tags(html)).replace("\xa0", " ").strip())
 
 
 class WebPage(models.Model):
@@ -77,6 +96,7 @@ class Block(models.Model):
         COLUMNS_2 = "columns_2", "Two columns"
         COLUMNS_3 = "columns_3", "Three columns"
         COLUMNS_4 = "columns_4", "Four columns"
+        AUDITIONS = "auditions", "Auditions"
 
     class ImageSize(models.TextChoices):
         SMALL = "small", "Small"
@@ -100,13 +120,14 @@ class Block(models.Model):
         BlockType.COLUMNS_2: "home/blocks/columns.html",
         BlockType.COLUMNS_3: "home/blocks/columns.html",
         BlockType.COLUMNS_4: "home/blocks/columns.html",
+        BlockType.AUDITIONS: "home/blocks/auditions.html",
     }
 
     name = models.CharField(max_length=255, help_text="Identifies the block when adding it to pages.")
     block_type = models.CharField(max_length=20, choices=BlockType.choices, default=BlockType.TEXT)
     title = models.CharField(max_length=255, blank=True)
     subtitle = models.CharField(max_length=255, blank=True)
-    text = models.TextField(blank=True, help_text="HTML. Used by text, text and image, and hero image (optional) blocks.")
+    text = models.TextField(blank=True, help_text="HTML. Used by text, text and image, hero image (optional) and auditions (optional) blocks.")
     background_colour = models.CharField(
         max_length=7, blank=True, validators=[hex_colour], help_text="#rrggbb; leave blank for the theme's colour."
     )
@@ -171,6 +192,12 @@ class Block(models.Model):
         """The columns to show: the first few, as many as the type of block has."""
         return list(self.columns.all())[: self.column_count]
 
+    def upcoming_auditions(self):
+        """For an auditions block: the productions with an audition still to come (see home.auditions)."""
+        from .auditions import upcoming_auditions
+
+        return upcoming_auditions()
+
     @property
     def image_ratio(self):
         """
@@ -191,6 +218,11 @@ class Block(models.Model):
             if width and height and (shortest is None or height * shortest[0] < shortest[1] * width):
                 shortest = (width, height)
         return f"{shortest[0]} / {shortest[1]}" if shortest else ""
+
+    @property
+    def has_visible_text(self):
+        """Whether the block's text shows anything (an empty paragraph from the editor does not count)."""
+        return html_has_content(self.text)
 
     @property
     def has_text(self):
@@ -233,7 +265,7 @@ class Block(models.Model):
 
     def clean(self):
         errors = {}
-        if self.has_text and not self.text.strip():
+        if self.has_text and not self.has_visible_text:
             errors["text"] = "This type of block needs some text."
         if self.block_type == self.BlockType.CAST:
             if not self.production_id:
@@ -251,7 +283,7 @@ class BlockColumn(models.Model):
 
     block = models.ForeignKey(Block, on_delete=models.CASCADE, related_name="columns")
     position = models.PositiveIntegerField(default=0)
-    title = models.CharField(max_length=255, blank=True, help_text="Shown as a heading between the image and the text.")
+    title = models.CharField(max_length=255, blank=True, help_text="Shown centred at the top of the column, above the image.")
     image = models.ForeignKey(
         "backstage.Image", null=True, blank=True, on_delete=models.SET_NULL, related_name="block_columns"
     )
@@ -263,6 +295,15 @@ class BlockColumn(models.Model):
 
     class Meta:
         ordering = ["position", "id"]
+
+    @property
+    def has_title(self):
+        """Whether the column has a title with some text in it (spaces alone do not count)."""
+        return bool(self.title.strip())
+
+    @property
+    def has_visible_text(self):
+        return html_has_content(self.text)
 
     def __str__(self):
         return f"{self.block}: column {self.position + 1}"

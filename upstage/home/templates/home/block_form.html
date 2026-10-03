@@ -33,8 +33,9 @@
             {{ form.title.as_field_group }}
             {{ form.subtitle.as_field_group }}
           </div>
-          <div data-for="text text_image hero_image split">{{ form.text.as_field_group }}</div>
+          <div data-for="text text_image hero_image split auditions">{{ form.text.as_field_group }}</div>
           <p class="text-xs opacity-70" data-for="hero_image">The text is optional: it is shown over the image, under the subtitle.</p>
+          <p class="text-xs opacity-70" data-for="auditions">The text is optional. Under it, the block lists every production with an audition still to come.</p>
           <div data-for="cast">{{ form.production.as_field_group }}</div>
         </div>
       </div>

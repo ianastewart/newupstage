@@ -1,0 +1,17 @@
+{% comment %}
+What is in one column of a columns block: its title (centred, at the top, above the image) if it has one, then its image (a link if it has one), then its text.
+ratio: when set, every image has this aspect ratio and is cropped to fit, so the images are all the same height.
+flush: the image runs to the edges of the card, so it is square-cornered and the title and text carry the padding (roomy: the larger padding of a separate card).
+The title is large with little space round it: tight padding when flush, otherwise the gap under it is pulled in (-mb-2).
+{% endcomment %}
+{% if column.has_title %}
+  <h3 class="text-center text-2xl font-bold leading-tight md:text-3xl{% if flush %}{% if roomy %} p-4{% else %} p-3{% endif %}{% else %} -mb-2{% endif %}">{{ column.title }}</h3>
+{% endif %}
+{% if column.image %}
+  {% if column.url %}<a href="{{ column.url }}" class="block">{% endif %}
+  <img src="{{ column.image.image.url }}" alt="{{ column.image.description }}" loading="lazy" class="block w-full{% if ratio %} object-cover{% else %} h-auto{% endif %}{% if not flush %} rounded-box{% endif %}"{% if ratio %} style="aspect-ratio: {{ ratio }};"{% endif %} />
+  {% if column.url %}</a>{% endif %}
+{% endif %}
+{% if column.has_visible_text %}
+  <div class="prose prose-themed max-w-none{% if flush %}{% if roomy %} p-6{% else %} p-4{% endif %}{% endif %}">{{ column.text|safe }}</div>
+{% endif %}

@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_not_required
 from django.db.models import F, Min, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -8,6 +9,7 @@ from django.utils import timezone
 from backstage.models import Event, EventDateTime, Person, Production
 from backstage.views import person_productions
 
+from .auditions import audition_view, upcoming_auditions
 from .forms import BlockColumnFormSet, BlockForm, WebPageForm
 from .models import Block, WebPage
 
@@ -78,48 +80,19 @@ def radio_play(request, pk):
     return render(request, "home/radio_play.html", {"play": play, "team": team, "cast": cast})
 
 
-def audition_block(production):
-    """The text for a production's audition view: a block named or titled "Audition: <production>", else "Audition"."""
-    for label in (f"Audition: {production.title}", "Audition"):
-        block = (
-            Block.objects.filter(Q(name__iexact=label) | Q(title__iexact=label))
-            .select_related("image", "production").order_by("id").first()
-        )
-        if block:
-            return block
-    return None
-
-
 @login_not_required
 def auditions(request):
     """Every production with an audition still to come, soonest first, each in its audition view."""
-    now = timezone.now()
-    upcoming = Q(events__event_type=Event.EventType.AUDITION, events__datetimes__datetime__gte=now)
-    productions = (
-        Production.objects.filter(upcoming)
-        .annotate(next_audition=Min("events__datetimes__datetime", filter=upcoming))
-        .prefetch_related("images__image", "team__person", "team__role")
-        .order_by("next_audition", "title")
-    )
-    audition_views = []
-    for production in productions:
-        # Each upcoming audition date, with its event (for the venue).
-        dates = (
-            EventDateTime.objects.filter(
-                event__productions=production, event__event_type=Event.EventType.AUDITION, datetime__gte=now
-            )
-            .select_related("event__venue")
-            .order_by("datetime")
-        )
-        audition_views.append({
-            "production": production,
-            "block": audition_block(production),
-            "dates": dates,
-            "characters": production.cast.order_by("id"),
-            "writers": [m.person for m in production.team.all() if m.role.name == "Writer"],
-            "directors": [m.person for m in production.team.all() if m.role.name == "Director"],
-        })
-    return render(request, "home/auditions.html", {"audition_views": audition_views})
+    return render(request, "home/auditions.html", {"audition_views": [audition_view(p) for p in upcoming_auditions()]})
+
+
+@login_not_required
+def audition_detail(request, pk):
+    """One production's audition view: its dates, who is wanted and what for. Only while an audition is still to come."""
+    productions = upcoming_auditions(pk)
+    if not productions:
+        raise Http404("This production has no audition coming up.")
+    return render(request, "home/audition_detail.html", {"view": audition_view(productions[0])})
 
 
 def page_list(request):
