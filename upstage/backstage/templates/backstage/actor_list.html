@@ -9,9 +9,20 @@
       <h1 class="text-3xl font-bold">Actors</h1>
       <p class="text-sm opacity-70">{{ actors|length }} actor{{ actors|length|pluralize }}</p>
     </div>
-    <div role="tablist" class="tabs tabs-box">
-      <a role="tab" href="?" class="tab{% if not details %} tab-active{% endif %}">Photos</a>
-      <a role="tab" href="?view=details" class="tab{% if details %} tab-active{% endif %}">Details</a>
+    <div class="flex flex-wrap items-center gap-3">
+      {# Sort by surname (the default) or first name. Each choice keeps the view (photos or details) and each view keeps the sort. #}
+      <div class="flex items-center gap-2">
+        <span class="text-sm opacity-70">Sort by</span>
+        <div role="tablist" class="tabs tabs-box">
+          <a role="tab" href="?{% if details %}view=details{% endif %}" class="tab{% if sort == 'last' %} tab-active{% endif %}">Last name</a>
+          <a role="tab" href="?sort=first{% if details %}&amp;view=details{% endif %}" class="tab{% if sort == 'first' %} tab-active{% endif %}">First name</a>
+        </div>
+      </div>
+      <div role="tablist" class="tabs tabs-box">
+        <a role="tab" href="?{% if sort == 'first' %}sort=first{% endif %}" class="tab{% if not details %} tab-active{% endif %}">Photos</a>
+        <a role="tab" href="?view=details{% if sort == 'first' %}&amp;sort=first{% endif %}" class="tab{% if details %} tab-active{% endif %}">Details</a>
+      </div>
+      <a href="{% url 'person-create' %}?role=Actor" class="btn btn-primary">New actor</a>
     </div>
   </div>
 

@@ -3,7 +3,8 @@ import os
 from django.contrib.staticfiles import finders
 from django.utils.functional import SimpleLazyObject
 
-from backstage.models import Image
+from backstage.models import Image, SiteSettings
+from backstage.themes import THEMES, is_theme
 
 # The image library entry shown on the left of the navbar.
 NAVBAR_LOGO_DESCRIPTION = "Upstage Surrey Logo"
@@ -33,3 +34,16 @@ def css_version(request):
         return {"css_version": int(os.path.getmtime(path))}
     except (TypeError, OSError):
         return {"css_version": 0}
+
+
+def themes(request):
+    """
+    `themes`: every theme the site offers, as (name, label). `public_theme`: the theme chosen for the public pages
+    (a name, or "" for automatic). It is only looked up when a template uses it.
+    """
+
+    def find_public_theme():
+        chosen = SiteSettings.load().public_theme
+        return chosen if is_theme(chosen) else ""
+
+    return {"themes": THEMES, "public_theme": SimpleLazyObject(find_public_theme)}

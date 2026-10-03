@@ -74,6 +74,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'backstage.context_processors.navbar_logo',
                 'backstage.context_processors.css_version',
+                'backstage.context_processors.themes',
             ],
         },
     },

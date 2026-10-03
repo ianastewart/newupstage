@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{% block html_attrs %}{% endblock %}>
 <head>
   {% load static %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% block theme_script %}
   <script>
-      // Apply the saved theme before first paint to avoid a flash of the default theme.
+      // The backstage theme is each person's own choice, kept in their browser. Apply it before first paint to avoid a
+      // flash of the default theme. Any daisyUI theme name (see backstage/themes.py); anything else is ignored.
       (() => {
-          // Any daisyUI theme name (see includes/theme_options.html); anything else is ignored.
           let saved = null;
           try {
               saved = localStorage.getItem('theme');
@@ -16,6 +17,7 @@
           document.documentElement.dataset.theme = /^[a-z][a-z-]*$/.test(saved || '') ? saved : preferred;
       })();
   </script>
+  {% endblock %}
   <link rel="stylesheet" href="{% static 'css/src/output.css' %}?v={{ css_version }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

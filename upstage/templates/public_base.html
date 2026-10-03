@@ -1,4 +1,15 @@
-{# The base for the public pages: the same as base.html, but with the public navbar instead of the backstage one. #}
+{# The base for the public pages: the same as base.html, but with the public navbar instead of the backstage one, and the site's public theme (chosen from the backstage navbar) instead of the person's own backstage theme. #}
 {% extends "base.html" %}
+
+{% block html_attrs %}{% if public_theme %} data-theme="{{ public_theme }}"{% endif %}{% endblock %}
+
+{% block theme_script %}
+  {% if not public_theme %}
+  <script>
+      // No theme chosen: Upstage, or Upstage dark if the visitor's device prefers dark.
+      document.documentElement.dataset.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'upstage-dark' : 'upstage';
+  </script>
+  {% endif %}
+{% endblock %}
 
 {% block nav %}{% include "includes/public_nav.html" %}{% endblock %}

@@ -9,11 +9,21 @@
     <a href="{{ create_view_url }}" class="btn btn-primary">Upload image</a>
   </div>
 
-  <div role="tablist" class="tabs tabs-box mb-6 w-fit flex-wrap">
-    <a role="tab" href="?" class="tab{% if not current_type %} tab-active{% endif %}">All</a>
-    {% for value, label in image_types %}
-      <a role="tab" href="?type={{ value }}" class="tab{% if current_type == value %} tab-active{% endif %}">{{ label }}</a>
-    {% endfor %}
+  <div class="mb-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+    {# Filter by type. Each choice keeps the sort, and each sort keeps the type. #}
+    <div role="tablist" class="tabs tabs-box w-fit flex-wrap">
+      <a role="tab" href="?{% if current_sort == 'newest' %}sort=newest{% endif %}" class="tab{% if not current_type %} tab-active{% endif %}">All</a>
+      {% for value, label in image_types %}
+        <a role="tab" href="?type={{ value }}{% if current_sort == 'newest' %}&amp;sort=newest{% endif %}" class="tab{% if current_type == value %} tab-active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-sm opacity-70">Sort by</span>
+      <div role="tablist" class="tabs tabs-box">
+        <a role="tab" href="?{% if current_type %}type={{ current_type }}{% endif %}" class="tab{% if current_sort == 'name' %} tab-active{% endif %}">Name</a>
+        <a role="tab" href="?sort=newest{% if current_type %}&amp;type={{ current_type }}{% endif %}" class="tab{% if current_sort == 'newest' %} tab-active{% endif %}">Newest first</a>
+      </div>
+    </div>
   </div>
 
   {% if object_list %}
@@ -38,11 +48,11 @@
     {% if is_paginated %}
       <div class="join mt-8 flex justify-center">
         {% if page_obj.has_previous %}
-          <a class="join-item btn" href="?{% if current_type %}type={{ current_type }}&{% endif %}page={{ page_obj.previous_page_number }}">«</a>
+          <a class="join-item btn" href="?{% if current_type %}type={{ current_type }}&{% endif %}{% if current_sort == 'newest' %}sort=newest&{% endif %}page={{ page_obj.previous_page_number }}">«</a>
         {% endif %}
         <span class="join-item btn btn-disabled">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
         {% if page_obj.has_next %}
-          <a class="join-item btn" href="?{% if current_type %}type={{ current_type }}&{% endif %}page={{ page_obj.next_page_number }}">»</a>
+          <a class="join-item btn" href="?{% if current_type %}type={{ current_type }}&{% endif %}{% if current_sort == 'newest' %}sort=newest&{% endif %}page={{ page_obj.next_page_number }}">»</a>
         {% endif %}
       </div>
     {% endif %}

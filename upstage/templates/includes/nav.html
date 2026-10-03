@@ -18,15 +18,28 @@
         </div>
         <ul tabindex="0" class="dropdown-content menu z-10 w-48 rounded-box bg-base-200 p-2 shadow-lg">{% include "includes/nav_links.html" %}</ul>
       </div>
+      {# Two themes: the one for these backstage pages (your own, kept in this browser) and the one visitors see on the public pages (for everyone). Many themes: the lists scroll. #}
       <div class="dropdown dropdown-end">
-        <div tabindex="0" role="button" class="btn btn-ghost">
-          Theme
+        <div tabindex="0" role="button" class="btn btn-ghost" title="The theme of these backstage pages: your own choice">
+          Theme<span class="hidden sm:inline">: backstage</span>
           <svg class="size-3 fill-current opacity-60" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" aria-hidden="true"><path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path></svg>
         </div>
-        {# Many themes: the list scrolls. #}
         <ul tabindex="0" class="dropdown-content menu z-10 max-h-96 w-48 flex-nowrap overflow-y-auto rounded-box bg-base-200 p-2 shadow-lg">
           {% include "includes/theme_options.html" %}
         </ul>
+      </div>
+      <div class="dropdown dropdown-end">
+        <div tabindex="0" role="button" class="btn btn-ghost" title="The theme visitors see on the public pages">
+          Public<span class="hidden sm:inline"> theme</span>
+          <svg class="size-3 fill-current opacity-60" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" aria-hidden="true"><path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path></svg>
+        </div>
+        <form method="POST" action="{% url 'public-theme' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+          <ul tabindex="0" class="dropdown-content menu z-10 max-h-96 w-48 flex-nowrap overflow-y-auto rounded-box bg-base-200 p-2 shadow-lg">
+            {% include "includes/public_theme_options.html" %}
+          </ul>
+        </form>
       </div>
     </div>
   </div>

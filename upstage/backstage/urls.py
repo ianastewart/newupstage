@@ -3,6 +3,7 @@ from django.urls import path
 from backstage import views
 
 urlpatterns = [
+    path("public-theme/", views.set_public_theme, name="public-theme"),
     path("actors/", views.actor_list, name="actor-list"),
     path("writers/", views.writer_list, name="writer-list"),
     path("production/<int:pk>/images/", views.production_images, name="production-images"),

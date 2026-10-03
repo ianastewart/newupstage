@@ -11,6 +11,25 @@ class Upstage(models.Model):
         return self.name
 
 
+class SiteSettings(models.Model):
+    """Settings for the whole site: there is one row, which `SiteSettings.load()` finds or makes."""
+
+    public_theme = models.CharField(
+        max_length=40, blank=True,
+        help_text="The theme every visitor sees on the public pages. Blank: Upstage, or Upstage dark if the visitor's device prefers dark.",
+    )
+
+    class Meta:
+        verbose_name_plural = "site settings"
+
+    def __str__(self):
+        return "Site settings"
+
+    @classmethod
+    def load(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+
 class Image(models.Model):
     class ImageType(models.TextChoices):
         BASE = "base", "Base"

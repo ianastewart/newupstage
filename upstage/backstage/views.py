@@ -1,12 +1,15 @@
-from django.db.models import F, Min, Prefetch, Value
+from django.db.models import CharField, F, Min, Prefetch, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
+from django.http import HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from neapolitan.views import CRUDView, Role
 
 from backstage import forms, models
+from backstage.themes import is_theme
 
 
 def _production_members(request, pk, *, related_name, form_class, select_related, order_by, template_name, url_name):
@@ -177,8 +180,20 @@ class ImageView(CRUDView):
         image_type = self.request.GET.get("type")
         return image_type if image_type in models.Image.ImageType.values else None
 
+    def get_sort(self):
+        """"name" (the default) or "newest" (?sort=newest)."""
+        return "newest" if self.request.GET.get("sort") == "newest" else "name"
+
     def get_queryset(self):
-        queryset = super().get_queryset().order_by("-id")
+        queryset = super().get_queryset()
+        if self.get_sort() == "newest":
+            queryset = queryset.order_by("-id")
+        else:
+            # Alphabetical by description (ignoring case); an image with no description is listed by its file name, as
+            # that is what its card shows. The id keeps the order steady between pages for images with the same name.
+            queryset = queryset.annotate(
+                sort_name=Lower(Coalesce(NullIf("description", Value("")), "image", output_field=CharField()))
+            ).order_by("sort_name", "id")
         if image_type := self.get_image_type():
             queryset = queryset.filter(image_type=image_type)
         return queryset
@@ -186,6 +201,7 @@ class ImageView(CRUDView):
     def get_context_data(self, **kwargs):
         kwargs["image_types"] = models.Image.ImageType.choices
         kwargs["current_type"] = self.get_image_type()
+        kwargs["current_sort"] = self.get_sort()
         if self.role == Role.CREATE:
             kwargs["production"] = self.get_upload_production()
         if self.role == Role.DETAIL:
@@ -269,6 +285,13 @@ class PersonView(CRUDView):
         "writers": ("writer-list", "", "Writers"),
     }
 
+    def get_form(self, data=None, files=None, **kwargs):
+        # A new person can start with a role ticked: /person/new/?role=Actor (the "New actor" button).
+        if data is None and self.role == Role.CREATE and self.request.GET.get("role"):
+            roles = models.Role.objects.filter(name=self.request.GET["role"])
+            kwargs.setdefault("initial", {})["roles"] = list(roles)
+        return super().get_form(data, files, **kwargs)
+
     def get_context_data(self, **kwargs):
         if self.role == Role.DETAIL:
             url_name, query, label = self.BACK_LINKS.get(self.request.GET.get("from"), ("person-list", "", "People"))
@@ -304,15 +327,18 @@ def writer_list(request):
 
 
 def actor_list(request):
-    """Everyone with the Actor role, alphabetical by surname: photos and names, or with details."""
+    """
+    Everyone with the Actor role: photos and names, or with details. Alphabetical by surname, or by first name
+    (?sort=first).
+    """
     details = request.GET.get("view") == "details"
-    actors = (
-        models.Person.objects.filter(roles__name="Actor")
-        .select_related("image")
+    sort = "first" if request.GET.get("sort") == "first" else "last"
+    if sort == "first":
+        order = (Lower("first_name"), Lower("last_name"))
+    else:
         # People known by one name ("Divya") sort by that name.
-        .order_by(Coalesce(NullIf(Lower("last_name"), Value("")), Lower("first_name")), Lower("first_name"))
-        .distinct()
-    )
+        order = (Coalesce(NullIf(Lower("last_name"), Value("")), Lower("first_name")), Lower("first_name"))
+    actors = models.Person.objects.filter(roles__name="Actor").select_related("image").order_by(*order).distinct()
     if details:
         actors = actors.prefetch_related(
             Prefetch(
@@ -323,7 +349,7 @@ def actor_list(request):
                 to_attr="parts",
             )
         )
-    return render(request, "backstage/actor_list.html", {"actors": actors, "details": details})
+    return render(request, "backstage/actor_list.html", {"actors": actors, "details": details, "sort": sort})
 
 
 class TicketSiteView(CRUDView):
@@ -418,3 +444,18 @@ class ProductionTeamView(CRUDView):
 class ProductionImageView(CRUDView):
     model = models.ProductionImage
     fields = ["production", "image"]
+
+
+def set_public_theme(request):
+    """Choose the theme the public pages use (POST public_theme: a theme name, or "" for automatic), then go back."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    chosen = request.POST.get("public_theme", "")
+    if chosen == "" or is_theme(chosen):
+        settings_row = models.SiteSettings.load()
+        settings_row.public_theme = chosen
+        settings_row.save()
+    back = request.POST.get("next") or request.META.get("HTTP_REFERER", "")
+    if not url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}):
+        back = reverse("production-list")
+    return redirect(back)

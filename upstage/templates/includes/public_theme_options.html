@@ -1,0 +1,4 @@
+{# The themes, for choosing the public site's theme. Not theme-controller radios: choosing one must not restyle the backstage. #}
+<li><input type="radio" name="public_theme" value="" aria-label="Automatic"{% if not public_theme %} checked{% endif %} onchange="this.form.submit()" class="btn btn-sm btn-ghost btn-block justify-start" /></li>
+{% for value, label in themes %}<li><input type="radio" name="public_theme" value="{{ value }}" aria-label="{{ label }}"{% if public_theme == value %} checked{% endif %} onchange="this.form.submit()" class="btn btn-sm btn-ghost btn-block justify-start" /></li>
+{% endfor %}
