@@ -19,6 +19,11 @@
         <span class="opacity-60">{{ object.image.name }}</span>
         {% if object.image.width %}<span class="opacity-60">· {{ object.image.width }} × {{ object.image.height }} px</span>{% endif %}
       </div>
+      {% if people %}
+        <p id="image-people" class="text-sm">Photo of
+          {% for person in people %}<a href="{% url 'person-detail' person.pk %}" class="link font-semibold">{{ person }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+        </p>
+      {% endif %}
       <div class="card-actions mt-4 justify-end">
         <a href="{% url 'image-delete' object.pk %}" class="btn btn-ghost text-error">Delete</a>
         <a href="{% url 'image-update' object.pk %}" class="btn btn-primary">Edit</a>

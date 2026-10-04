@@ -1,0 +1,6 @@
+{# The three steps of the new actor wizard; `step` is the current one (1, 2 or 3). #}
+<ul class="steps mb-6 w-full" aria-label="New actor: step {{ step }} of 3">
+  <li class="step{% if step >= 1 %} step-primary{% endif %}"{% if step == 1 %} aria-current="step"{% endif %}>Details</li>
+  <li class="step{% if step >= 2 %} step-primary{% endif %}"{% if step == 2 %} aria-current="step"{% endif %}>Photo</li>
+  <li class="step{% if step >= 3 %} step-primary{% endif %}"{% if step == 3 %} aria-current="step"{% endif %}>Roles</li>
+</ul>

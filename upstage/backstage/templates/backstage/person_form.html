@@ -39,11 +39,10 @@
           <div class="card-body">
             <h2 class="card-title">Photo</h2>
             <div class="flex items-center gap-4">
-              <div class="avatar">
-                <div class="w-20 rounded-full bg-base-300">
-                  <img id="photo-preview" alt="" class="{% if not object.image %}hidden{% endif %}"
-                    src="{% if object.image %}{{ object.image.image.url }}{% endif %}" />
-                </div>
+              {# A thumbnail in the headshot's shape (4:5), an empty one until there is a photo. #}
+              <div class="aspect-[4/5] w-24 shrink-0 overflow-hidden rounded-box bg-base-300">
+                <img id="photo-preview" alt="" class="h-full w-full object-cover{% if not object.image %} hidden{% endif %}"
+                  src="{% if object.image %}{{ object.image.image.url }}{% endif %}" />
               </div>
               <div class="flex grow flex-col items-start gap-2">
                 {{ form.image }}

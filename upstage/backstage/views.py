@@ -1,8 +1,10 @@
 from django.db.models import CharField, F, Min, Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import HttpResponseNotAllowed
+from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
+from django.forms import HiddenInput
 from django.urls import reverse
+from django.utils.http import urlencode
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -182,6 +184,20 @@ class ImageView(CRUDView):
         return image_type if image_type in models.Image.ImageType.values else None
 
     def get_form(self, data=None, files=None, **kwargs):
+        if wizard_person := (self.get_upload_wizard_person() if self.role == Role.CREATE else None):
+            # The new actor wizard's photo step: the description and type are settled, so they are not asked for.
+            if data is not None:
+                data = data.copy()
+                data["image_type"] = models.Image.ImageType.HEADSHOT
+                data["description"] = (data.get("description") or str(wizard_person))[:255]
+            else:
+                initial = kwargs.setdefault("initial", {})
+                initial["image_type"] = models.Image.ImageType.HEADSHOT
+                initial["description"] = str(wizard_person)[:255]
+            form = super().get_form(data, files, **kwargs)
+            form.fields["description"].widget = HiddenInput()
+            form.fields["image_type"].widget = HiddenInput()
+            return form
         if data is None and self.role == Role.CREATE:
             initial = kwargs.setdefault("initial", {})
             # The uploader can start on a type of image: /image/new/?type=headshot.
@@ -191,6 +207,13 @@ class ImageView(CRUDView):
             if self.get_upload_person_target() and (name := self.request.GET.get("name", "").strip()):
                 initial["description"] = name[:255]
         return super().get_form(data, files, **kwargs)
+
+    def get_upload_wizard_person(self):
+        """When uploading as step 2 of the new actor wizard (?wizard=1 with ?for_person=<pk>), that person."""
+        if self.request.POST.get("wizard") or self.request.GET.get("wizard") == "1":
+            target = self.get_upload_person_target()
+            return target if isinstance(target, models.Person) else None
+        return None
 
     def get_upload_person_target(self):
         """
@@ -242,9 +265,15 @@ class ImageView(CRUDView):
         if self.role == Role.CREATE:
             kwargs["production"] = self.get_upload_production()
             target = self.get_upload_person_target()
+            if wizard_person := self.get_upload_wizard_person():
+                kwargs["wizard_person"] = wizard_person
+                kwargs["wizard_skip_url"] = reverse("actor-roles", args=[wizard_person.pk])
             if target:
                 kwargs["for_person"] = "new" if target == "new" else target.pk
                 kwargs["person_form_url"] = self.person_form_url()
+        if self.role == Role.DETAIL and self.object.image_type == models.Image.ImageType.HEADSHOT:
+            # Whose photo it is (usually one person).
+            kwargs["people"] = models.Person.objects.filter(image=self.object).order_by("last_name", "first_name")
         if self.role == Role.DETAIL:
             # Opened from a production's Images tab (?production=<pk>): go back there, not to the library.
             production_id = self.request.GET.get("production", "")
@@ -271,9 +300,15 @@ class ImageView(CRUDView):
             # The new image goes straight onto the production (as its default if it's the first).
             models.ProductionImage.objects.create(production=production, image=self.object)
             models.ProductionImage.ensure_default(production)
+        if self.role == Role.CREATE and (person := self.get_upload_wizard_person()):
+            # The new actor wizard: the uploaded photo is the person's photo.
+            person.image = self.object
+            person.save(update_fields=["image"])
         return response
 
     def get_success_url(self):
+        if self.role == Role.CREATE and (person := self.get_upload_wizard_person()):
+            return reverse("actor-roles", args=[person.pk])  # on to step 3
         if self.role == Role.CREATE and self.get_upload_person_target():
             # Back to the person's form, with the new image chosen as their photo.
             return self.person_form_url(self.object)
@@ -341,7 +376,30 @@ class PersonView(CRUDView):
                 kwargs.setdefault("initial", {})["image"] = int(image_id)
         return super().get_form(data, files, **kwargs)
 
+    def photo_uses(self, person):
+        """What else (besides this person) uses their photo, as a list of phrases for the delete page."""
+        image = person.image
+        uses = []
+        if (others := models.Person.objects.filter(image=image).exclude(pk=person.pk).count()):
+            uses.append(f"{others} other {'person' if others == 1 else 'people'}")
+        if (productions := models.ProductionImage.objects.filter(image=image).count()):
+            uses.append(f"{productions} production{'s' if productions != 1 else ''}")
+        if (venues := models.Venue.objects.filter(logo=image).count()):
+            uses.append(f"{venues} venue{'s' if venues != 1 else ''}")
+        return uses
+
+    def process_deletion(self, request, *args, **kwargs):
+        """Deleting a person can also delete their photo, if asked (the checkbox on the delete page)."""
+        self.object = self.get_object()
+        image = self.object.image if request.POST.get("delete_image") else None
+        self.object.delete()
+        if image:
+            image.delete()
+        return HttpResponseRedirect(self.get_success_url())
+
     def get_context_data(self, **kwargs):
+        if self.role == Role.DELETE and self.object.image_id:
+            kwargs["photo_uses"] = self.photo_uses(self.object)
         if self.role == Role.DETAIL:
             url_name, query, label = self.BACK_LINKS.get(self.request.GET.get("from"), ("person-list", "", "People"))
             kwargs["back_url"] = reverse(url_name) + query
@@ -352,6 +410,29 @@ class PersonView(CRUDView):
             photos = kwargs["form"].fields["image"].queryset if "form" in kwargs else models.Image.objects.all()
             kwargs["image_urls"] = {str(image.pk): image.image.url for image in photos.exclude(image="")}
         return super().get_context_data(**kwargs)
+
+
+def actor_new(request):
+    """New actor wizard, step 1 of 3: names, contact details and biography. Saved, then on to the photo."""
+    form = forms.PersonDetailsForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        person = form.save()
+        query = urlencode({"type": "headshot", "for_person": person.pk, "wizard": 1})
+        return redirect(f"{reverse('image-create')}?{query}")
+    return render(request, "backstage/actor_wizard_details.html", {"form": form})
+
+
+def actor_roles(request, pk):
+    """New actor wizard, step 3 of 3: the person as they will appear, and their roles."""
+    person = get_object_or_404(models.Person.objects.select_related("image"), pk=pk)
+    initial = {}
+    if request.method != "POST" and not person.roles.exists():
+        initial["roles"] = models.Role.objects.filter(name="Actor")  # they are being added as an actor
+    form = forms.PersonRolesForm(request.POST or None, instance=person, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return redirect(f"{reverse('person-detail', args=[person.pk])}?from=actors")
+    return render(request, "backstage/actor_wizard_roles.html", {"person": person, "form": form})
 
 
 def writer_list(request):

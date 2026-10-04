@@ -296,7 +296,7 @@ class ActorListTests(TestCase):
 
     def test_there_is_a_new_actor_button(self):
         html = self.client.get(reverse("actor-list")).content.decode()
-        self.assertIn(f'href="{reverse("person-create")}?role=Actor"', html)
+        self.assertIn(f'href="{reverse("actor-new")}"', html)  # the three step wizard
         self.assertIn("New actor", html)
 
     def test_the_new_actor_form_has_the_actor_role_ticked(self):
@@ -1506,6 +1506,8 @@ class PersonPhotoUploadOnlyTests(TestCase):
     def test_the_page_shows_the_current_photo_and_what_the_buttons_do(self):
         html = self.client.get(reverse("person-update", args=[self.person.pk])).content.decode()
         self.assertIn('id="photo-preview"', html)
+        self.assertIn('aspect-[4/5]', html)  # a rectangular thumbnail
+        self.assertNotIn('rounded-full', html)  # not a circle
         self.assertIn("Upload a new photo", html)  # the button says so once there is a photo
         self.assertIn("link.textContent = photo.value", html)
         self.assertIn("removeButton.addEventListener('click'", html)
@@ -1780,3 +1782,238 @@ class BrightnessContrastTests(TestCase):
         # The preview is no longer made grey by a class: the filter does it, together with the sliders.
         self.assertNotIn("shadow-sm grayscale", html)
 
+
+class NewActorWizardTests(TestCase):
+    """New actor: 1. details and biography (saved), 2. photo (can be skipped), 3. review and set roles."""
+
+    def setUp(self):
+        import tempfile
+
+        from django.test import override_settings
+
+        self.media = tempfile.TemporaryDirectory()
+        self.addCleanup(self.media.cleanup)
+        override = override_settings(MEDIA_ROOT=self.media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        self.client.force_login(self.user)
+        self.actor = Role.objects.get_or_create(name="Actor")[0]
+        self.director = Role.objects.get_or_create(name="Director")[0]
+
+    def step_one(self, **extra):
+        data = {"first_name": "Wendy", "last_name": "Wizard", "biography": "<p>Loves <b>panto</b>.</p>"}
+        return self.client.post(reverse("actor-new"), {**data, **extra})
+
+    def photo(self):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image as PILImage
+
+        buffer = BytesIO()
+        PILImage.new("RGB", (600, 750), (200, 40, 40)).save(buffer, "PNG")
+        return SimpleUploadedFile("wendy.png", buffer.getvalue(), content_type="image/png")
+
+    # ---- step 1
+    def test_step_one_shows_the_steps_and_the_detail_fields(self):
+        html = self.client.get(reverse("actor-new")).content.decode()
+        self.assertIn("step 1 of 3", html)
+        for name in ("first_name", "last_name", "email", "mobile", "gender", "dob", "biography"):
+            self.assertIn(f'name="{name}"', html)
+        self.assertNotIn('name="roles"', html)
+        self.assertNotIn('name="image"', html)
+
+    def test_step_one_saves_the_person_and_goes_to_the_photo_step(self):
+        response = self.step_one()
+        person = Person.objects.get(first_name="Wendy")
+        self.assertEqual(person.biography, "<p>Loves <b>panto</b>.</p>")
+        self.assertEqual(person.roles.count(), 0)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("image-create"), response.url)
+        self.assertIn(f"for_person={person.pk}", response.url)
+        self.assertIn("wizard=1", response.url)
+
+    def test_step_one_needs_a_name(self):
+        response = self.client.post(reverse("actor-new"), {"first_name": "", "last_name": ""})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Person.objects.exists())
+
+    # ---- step 2
+    def test_step_two_hides_the_description_and_type_and_can_be_skipped(self):
+        person = Person.objects.create(first_name="Wendy", last_name="Wizard")
+        url = f"{reverse('image-create')}?type=headshot&for_person={person.pk}&wizard=1"
+        html = self.client.get(url).content.decode()
+        self.assertIn("step 2 of 3", html)
+        self.assertRegex(html, r'<input type="hidden" name="description" value="Wendy Wizard"')
+        self.assertRegex(html, r'<input type="hidden" name="image_type" value="headshot"')
+        self.assertNotIn("<select", html)
+        self.assertIn(f'href="{reverse("actor-roles", args=[person.pk])}" class="btn btn-ghost">Skip photo', html)
+
+    def test_uploading_sets_the_photo_and_goes_to_step_three(self):
+        person = Person.objects.create(first_name="Wendy", last_name="Wizard")
+        response = self.client.post(
+            reverse("image-create"),
+            {"image": self.photo(), "for_person": person.pk, "wizard": "1", "description": "", "image_type": "promotion"},
+        )
+        self.assertRedirects(response, reverse("actor-roles", args=[person.pk]))
+        person.refresh_from_db()
+        self.assertEqual(person.image.image_type, "headshot")  # whatever was posted, it is a headshot
+        self.assertEqual(person.image.description, "Wendy Wizard")
+
+    def test_the_ordinary_uploader_still_asks_for_description_and_type(self):
+        html = self.client.get(reverse("image-create")).content.decode()
+        self.assertIn("<select", html)
+        self.assertIn('name="description"', html)
+        self.assertNotIn("step 2 of 3", html)
+
+    # ---- step 3
+    def test_step_three_shows_the_name_biography_and_roles_with_actor_ticked(self):
+        person = Person.objects.create(first_name="Wendy", last_name="Wizard", biography="<p>Loves panto.</p>")
+        response = self.client.get(reverse("actor-roles", args=[person.pk]))
+        html = response.content.decode()
+        self.assertIn("step 3 of 3", html)
+        self.assertIn("Wendy Wizard", html)
+        self.assertIn("<p>Loves panto.</p>", html)
+        self.assertRegex(html, rf'value="{self.actor.pk}"[^>]*checked')
+        self.assertNotRegex(html, rf'value="{self.director.pk}"[^>]*checked')
+
+    def test_step_three_saves_the_roles(self):
+        person = Person.objects.create(first_name="Wendy", last_name="Wizard")
+        response = self.client.post(reverse("actor-roles", args=[person.pk]), {"roles": [self.actor.pk, self.director.pk]})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(set(person.roles.all()), {self.actor, self.director})
+
+    # ---- the whole way through
+    def test_the_whole_wizard_with_a_photo(self):
+        response = self.step_one()
+        response = self.client.post(
+            reverse("image-create"),
+            {"image": self.photo(), "for_person": Person.objects.get().pk, "wizard": "1"},
+            follow=False,
+        )
+        person = Person.objects.get()
+        self.client.post(reverse("actor-roles", args=[person.pk]), {"roles": [self.actor.pk]})
+        person.refresh_from_db()
+        self.assertIsNotNone(person.image)
+        self.assertEqual(list(person.roles.all()), [self.actor])
+        self.assertIn(person, self.client.get(reverse("actor-list")).context["actors"])
+
+    def test_the_whole_wizard_skipping_the_photo(self):
+        self.step_one()
+        person = Person.objects.get()
+        self.assertEqual(self.client.get(reverse("actor-roles", args=[person.pk])).status_code, 200)
+        self.client.post(reverse("actor-roles", args=[person.pk]), {"roles": [self.actor.pk]})
+        person.refresh_from_db()
+        self.assertIsNone(person.image)
+        self.assertEqual(list(person.roles.all()), [self.actor])
+
+    def test_the_wizard_needs_a_login(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("actor-new")).status_code, 302)
+        self.assertEqual(self.client.get(reverse("actor-roles", args=[1])).status_code, 302)
+
+
+class DeletePersonPhotoTests(TestCase):
+    """Deleting a person asks whether their photo should go too."""
+
+    def setUp(self):
+        from backstage.models import Image
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.photo = Image.objects.create(description="Ann", image="images/ann.jpg", image_type="headshot")
+        self.person = Person.objects.create(first_name="Ann", last_name="Actor", image=self.photo)
+
+    def delete(self, **data):
+        return self.client.post(reverse("person-delete", args=[self.person.pk]), data)
+
+    def test_the_page_asks_about_the_photo(self):
+        html = self.client.get(reverse("person-delete", args=[self.person.pk])).content.decode()
+        self.assertIn('name="delete_image"', html)
+        self.assertIn("Also delete their photo", html)
+        self.assertIn("Otherwise the photo stays", html)
+
+    def test_a_person_without_a_photo_is_not_asked(self):
+        self.person.image = None
+        self.person.save()
+        html = self.client.get(reverse("person-delete", args=[self.person.pk])).content.decode()
+        self.assertNotIn("delete_image", html)
+
+    def test_by_default_the_photo_is_kept(self):
+        from backstage.models import Image
+
+        self.assertEqual(self.delete().status_code, 302)
+        self.assertFalse(Person.objects.filter(pk=self.person.pk).exists())
+        self.assertTrue(Image.objects.filter(pk=self.photo.pk).exists())
+
+    def test_ticking_the_box_deletes_the_photo_too(self):
+        from backstage.models import Image
+
+        self.assertEqual(self.delete(delete_image="1").status_code, 302)
+        self.assertFalse(Person.objects.filter(pk=self.person.pk).exists())
+        self.assertFalse(Image.objects.filter(pk=self.photo.pk).exists())
+
+    def test_the_page_warns_when_the_photo_is_used_elsewhere(self):
+        Person.objects.create(first_name="Bo", last_name="Twin", image=self.photo)
+        production = Production.objects.create(title="Panto")
+        from backstage.models import ProductionImage
+
+        ProductionImage.objects.create(production=production, image=self.photo)
+        html = self.client.get(reverse("person-delete", args=[self.person.pk])).content.decode()
+        self.assertIn("1 other person", html)
+        self.assertIn("1 production", html)
+        self.assertNotIn("Otherwise the photo stays", html)
+
+
+class ImageDetailPeopleTests(TestCase):
+    """A headshot's page says whose photo it is."""
+
+    def setUp(self):
+        import tempfile
+
+        from django.test import override_settings
+
+        self.media = tempfile.TemporaryDirectory()
+        self.addCleanup(self.media.cleanup)
+        override = override_settings(MEDIA_ROOT=self.media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.photo = self.make_image("Ann", "headshot")
+
+    def make_image(self, description, image_type):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image as PILImage
+
+        from backstage.models import Image
+
+        buffer = BytesIO()
+        PILImage.new("RGB", (80, 100), (120, 120, 120)).save(buffer, "PNG")
+        file = SimpleUploadedFile(f"{description.lower()}.png", buffer.getvalue(), content_type="image/png")
+        return Image.objects.create(description=description, image=file, image_type=image_type)
+
+    def page(self, image=None):
+        return self.client.get(reverse("image-detail", args=[(image or self.photo).pk])).content.decode()
+
+    def test_the_person_is_named_with_a_link(self):
+        person = Person.objects.create(first_name="Ann", last_name="Actor", image=self.photo)
+        html = self.page()
+        self.assertIn("Photo of", html)
+        self.assertIn(f'href="{reverse("person-detail", args=[person.pk])}" class="link font-semibold">Ann Actor</a>', html)
+
+    def test_everyone_using_it_is_named(self):
+        Person.objects.create(first_name="Ann", last_name="Actor", image=self.photo)
+        Person.objects.create(first_name="Bo", last_name="Twin", image=self.photo)
+        html = self.page()
+        self.assertIn("Ann Actor", html)
+        self.assertIn("Bo Twin", html)
+
+    def test_a_headshot_nobody_uses_says_nothing(self):
+        self.assertNotIn("Photo of", self.page())
+
+    def test_other_types_of_image_do_not_say(self):
+        poster = self.make_image("Poster", "promotion")
+        Person.objects.create(first_name="Cy", last_name="Odd", image=poster)  # not a headshot, but used as a photo
+        self.assertNotIn("Photo of", self.page(poster))

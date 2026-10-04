@@ -29,6 +29,28 @@ class PersonForm(forms.ModelForm):
         self.fields["image"].queryset = models.Image.objects.filter(photos).order_by("description")
 
 
+class PersonDetailsForm(forms.ModelForm):
+    """Step 1 of the new actor wizard: who they are (names, contact details, biography)."""
+
+    class Meta:
+        model = models.Person
+        fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "biography"]
+        labels = {"dob": "Date of birth"}
+        widgets = {
+            "biography": RichTextWidget(attrs={"rows": 8, "data-tools": "bold underline italic link"}),
+            "dob": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+        }
+
+
+class PersonRolesForm(forms.ModelForm):
+    """Step 3 of the new actor wizard: their roles."""
+
+    class Meta:
+        model = models.Person
+        fields = ["roles"]
+        widgets = {"roles": forms.CheckboxSelectMultiple}
+
+
 class CastForm(forms.ModelForm):
     class Meta:
         model = models.Cast

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ object }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl p-6">
+  <h1 class="mb-6 text-3xl font-bold">Delete {{ object }}?</h1>
+
+  <form method="POST" action="{{ delete_view_url }}">
+    {% csrf_token %}
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body">
+        <p>This deletes {{ object }}, and removes them from any productions they are cast in or work on.</p>
+        {% if object.image %}
+          <div class="mt-2 flex items-start gap-4">
+            <img id="person-photo" src="{{ object.image.image.url }}" alt="{{ object }}" class="w-24 shrink-0 rounded-box bg-base-300" />
+            <div>
+              <label class="label cursor-pointer gap-2 text-base-content">
+                <input type="checkbox" name="delete_image" value="1" class="checkbox checkbox-sm" />
+                Also delete their photo from the image library
+              </label>
+              {% if photo_uses %}
+                <p class="mt-1 text-sm text-warning">The photo is also used for {{ photo_uses|join:", " }}; deleting it removes it there too.</p>
+              {% else %}
+                <p class="mt-1 text-sm opacity-70">Otherwise the photo stays in the library.</p>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="mt-6 flex justify-end gap-2">
+      <a href="{% url 'person-detail' object.pk %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-error">Delete</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

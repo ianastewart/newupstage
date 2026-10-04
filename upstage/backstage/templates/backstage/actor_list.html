@@ -22,7 +22,7 @@
         <a role="tab" href="?{% if sort == 'first' %}sort=first{% endif %}" class="tab{% if not details %} tab-active{% endif %}">Photos</a>
         <a role="tab" href="?view=details{% if sort == 'first' %}&amp;sort=first{% endif %}" class="tab{% if details %} tab-active{% endif %}">Details</a>
       </div>
-      <a href="{% url 'person-create' %}?role=Actor" class="btn btn-primary">New actor</a>
+      <a href="{% url 'actor-new' %}" class="btn btn-primary">New actor</a>
     </div>
   </div>
 

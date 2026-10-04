@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block head %}
+{% load rmeditor %}
+{% rmeditor_media  %}
+{% endblock %}
+{% block title %}New actor · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl p-6">
+  {% include "backstage/includes/actor_wizard_steps.html" with step=1 %}
+  <h1 class="mb-6 text-3xl font-bold">New actor</h1>
+
+  <form method="POST" action="{% url 'actor-new' %}">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div role="alert" class="alert alert-error alert-soft mb-4">{{ form.non_field_errors|join:" " }}</div>
+    {% endif %}
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">Details</h2>
+        <div class="grid gap-x-4 sm:grid-cols-2">
+          {{ form.first_name.as_field_group }}
+          {{ form.last_name.as_field_group }}
+          {{ form.email.as_field_group }}
+          {{ form.mobile.as_field_group }}
+          {{ form.gender.as_field_group }}
+          {{ form.dob.as_field_group }}
+        </div>
+        {{ form.biography.as_field_group }}
+      </div>
+    </div>
+    <div class="mt-6 flex justify-end gap-2">
+      <a href="{% url 'actor-list' %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">Save and add a photo</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
