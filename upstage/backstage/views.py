@@ -1,4 +1,4 @@
-from django.db.models import CharField, F, Min, Prefetch, Q, Value
+from django.db.models import CharField, Exists, F, Min, OuterRef, Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
@@ -252,6 +252,9 @@ class ImageView(CRUDView):
             ).order_by("sort_name", "id")
         if image_type := self.get_image_type():
             queryset = queryset.filter(image_type=image_type)
+        if self.role == Role.LIST:
+            # Whether a person has this as their photo, worked out in the same query (the list marks unused headshots).
+            queryset = queryset.annotate(has_person=Exists(models.Person.objects.filter(image=OuterRef("pk"))))
         # Search: every word has to be in the image's description or in its file name (ignoring case).
         for word in self.get_search().split():
             queryset = queryset.filter(Q(description__icontains=word) | Q(image__icontains=word))

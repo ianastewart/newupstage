@@ -50,6 +50,21 @@ class Image(models.Model):
     def __str__(self):
         return self.description or self.image.name
 
+    @property
+    def file_exists(self):
+        """Whether the image's file is there (it can go missing, e.g. when the media folder is out of step)."""
+        return bool(self.image) and self.image.storage.exists(self.image.name)
+
+    @property
+    def dimensions(self):
+        """(width, height) in pixels, or None if the file is missing or can't be read."""
+        if not self.file_exists:
+            return None
+        try:
+            return self.image.width, self.image.height
+        except (OSError, ValueError):
+            return None
+
 
 class Person(models.Model):
     first_name = models.CharField(max_length=255)

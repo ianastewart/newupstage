@@ -54,7 +54,10 @@
           </figure>
           <div class="card-body gap-1 p-3">
             <p class="truncate text-sm font-medium">{{ image.description|default:image.image.name }}</p>
-            <span class="badge badge-sm badge-secondary">{{ image.get_image_type_display }}</span>
+            <div class="flex flex-wrap gap-1">
+              <span class="badge badge-sm badge-secondary">{{ image.get_image_type_display }}</span>
+              {% if image.image_type == 'headshot' and not image.has_person %}<span class="badge badge-sm badge-warning">Unused</span>{% endif %}
+            </div>
           </div>
         </a>
       {% endfor %}

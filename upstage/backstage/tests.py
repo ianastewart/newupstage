@@ -2017,3 +2017,76 @@ class ImageDetailPeopleTests(TestCase):
         poster = self.make_image("Poster", "promotion")
         Person.objects.create(first_name="Cy", last_name="Odd", image=poster)  # not a headshot, but used as a photo
         self.assertNotIn("Photo of", self.page(poster))
+
+
+class UnusedHeadshotBadgeTests(TestCase):
+    """The image library marks headshots that no person uses."""
+
+    def setUp(self):
+        from backstage.models import Image
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.used = Image.objects.create(description="Used", image="images/used.jpg", image_type="headshot")
+        self.unused = Image.objects.create(description="Spare", image="images/spare.jpg", image_type="headshot")
+        self.poster = Image.objects.create(description="Poster", image="images/poster.jpg", image_type="promotion")
+        Person.objects.create(first_name="Ann", last_name="Actor", image=self.used)
+
+    def badges(self, query=""):
+        response = self.client.get(reverse("image-list") + query)
+        return {image.description: image.has_person for image in response.context["object_list"]}, response.content.decode()
+
+    def test_only_an_unused_headshot_gets_the_badge(self):
+        import re
+
+        _, html = self.badges()
+        self.assertEqual(html.count(">Unused</span>"), 1)
+        card = lambda name: re.search(rf'<a href="[^"]*" class="card[^>]*>(?:(?!</a>).)*{name}(?:(?!</a>).)*</a>', html, re.S).group(0)
+        self.assertIn("Unused", card("Spare"))
+        self.assertNotIn("Unused", card("Used"))
+        self.assertNotIn("Unused", card("Poster"))
+
+    def test_a_headshot_becomes_used_once_a_person_has_it(self):
+        Person.objects.create(first_name="Bo", last_name="New", image=self.unused)
+        _, html = self.badges()
+        self.assertNotIn(">Unused</span>", html)
+
+    def test_it_costs_no_extra_queries_per_image(self):
+        from backstage.models import Image
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.client.get(reverse("image-list"))  # warm up: the first request does some one-off work
+        with CaptureQueriesContext(connection) as few:
+            self.client.get(reverse("image-list"))
+        for n in range(10):
+            Image.objects.create(description=f"More {n}", image=f"images/more{n}.jpg", image_type="headshot")
+        with CaptureQueriesContext(connection) as many:
+            self.client.get(reverse("image-list"))
+        self.assertEqual(len(few), len(many))
+
+
+class MissingImageFileTests(TestCase):
+    """An image whose file has gone missing still has a page, instead of an error."""
+
+    def setUp(self):
+        from backstage.models import Image
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.image = Image.objects.create(description="Jan", image="images/not-there.jpg", image_type="headshot")
+
+    def test_the_detail_page_says_the_file_is_missing(self):
+        response = self.client.get(reverse("image-detail", args=[self.image.pk]))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('id="image-missing"', html)
+        self.assertIn("The image file is missing", html)
+        self.assertNotIn("not-there.jpg\" alt", html)  # no broken picture
+        self.assertIn(reverse("image-update", args=[self.image.pk]), html)  # it can still be edited and replaced
+
+    def test_the_library_and_the_edit_page_still_work(self):
+        self.assertEqual(self.client.get(reverse("image-list")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("image-update", args=[self.image.pk])).status_code, 200)
+
+    def test_dimensions_are_none_without_the_file(self):
+        self.assertFalse(self.image.file_exists)
+        self.assertIsNone(self.image.dimensions)
