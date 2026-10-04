@@ -1,5 +1,5 @@
-{# A hero image block (the image fades in over 5 seconds, with the title showing straight away and the subtitle and text fading in over the same 5 seconds): the whole image (scaled to the full width available), with its text over it. On phones only the title is over the image; the subtitle and text sit in a panel under it, which grows to fit them. #}
-<section class="flex justify-center overflow-hidden bg-black {% if not full_width %}rounded-box {% endif %}" style="color: #ffffff;">
+{# A hero image block (the image fades in over the block's fade-in time, 5 seconds unless set, with the title showing straight away and the subtitle and text fading in over the same time): the whole image (scaled to the full width available), with its text over it. On phones only the title is over the image; the subtitle and text sit in a panel under it, which grows to fit them. #}
+{% load l10n %}<section class="flex justify-center overflow-hidden bg-black {% if not full_width %}rounded-box {% endif %}" style="color: #ffffff; --hero-fade: {{ block.fade_in_seconds|unlocalize }}s;">
   <div class="w-full">
     {# The image and the text over it: the text centres on the image only, not on the panel below. #}
     <div class="relative isolate">

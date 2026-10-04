@@ -120,21 +120,22 @@
   --tw-prose-links: var(--color-primary);
 }
 
-/* The hero image fades in slowly after the page loads; the text is visible straight away. */
+/* The hero image fades in slowly after the page loads; the text is visible straight away. The time is the block's
+   (--hero-fade, set on the block in hero_image.html); 5 seconds if it isn't set. */
 @keyframes hero-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 .hero-fade-in {
-  animation: hero-fade-in 5s ease-in both;
+  animation: hero-fade-in var(--hero-fade, 5s) ease-in both;
 }
-/* The hero subtitle and text fade in over the same 5 seconds; the title is there from the start. */
+/* The hero subtitle and text fade in over the same time; the title is there from the start. */
 @keyframes hero-text-fade {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 .hero-text-fade {
-  animation: hero-text-fade 5s ease-in both;
+  animation: hero-text-fade var(--hero-fade, 5s) ease-in both;
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-fade-in, .hero-text-fade { animation: none; }

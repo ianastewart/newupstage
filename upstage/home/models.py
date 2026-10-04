@@ -2,7 +2,7 @@ import html as html_lib
 import re
 
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models, transaction
 from django.urls import reverse
 from django.utils.html import strip_tags
@@ -163,6 +163,10 @@ class Block(models.Model):
     equal_height = models.BooleanField(
         "Equal height columns", default=False,
         help_text="Columns blocks: make all the columns as tall as the tallest one (they are drawn in boxes, unless separate).",
+    )
+    fade_in_seconds = models.FloatField(
+        "Fade-in time (seconds)", default=5, validators=[MinValueValidator(0), MaxValueValidator(30)],
+        help_text="Hero image blocks: how long the image, subtitle and text take to fade in. 0 for no fade.",
     )
     production = models.ForeignKey(
         "backstage.Production", null=True, blank=True, on_delete=models.SET_NULL, related_name="blocks",

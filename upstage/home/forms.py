@@ -18,7 +18,7 @@ class BlockForm(forms.ModelForm):
     class Meta:
         model = Block
         fields = [
-            "name", "block_type", "title", "subtitle", "text", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights",
+            "name", "block_type", "title", "subtitle", "text", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights", "fade_in_seconds",
             "background_colour", "text_colour",
         ]
         widgets = {
@@ -26,6 +26,7 @@ class BlockForm(forms.ModelForm):
             # Plain text rather than a colour picker, which can't be left blank (blank = theme colour); swatches fill it in.
             "background_colour": forms.TextInput(attrs={"placeholder": "#rrggbb", "data-swatches": ""}),
             "url": forms.TextInput(attrs={"placeholder": "https://... or /page/about/"}),
+            "fade_in_seconds": forms.NumberInput(attrs={"min": 0, "max": 30, "step": "0.5"}),
             "text_colour": forms.TextInput(attrs={"placeholder": "#rrggbb", "data-swatches": ""}),
         }
 
@@ -33,6 +34,11 @@ class BlockForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["image"].queryset = Image.objects.order_by("description")
         self.fields["production"].queryset = Production.objects.order_by("title")
+        self.fields["fade_in_seconds"].required = False  # left blank, it is the usual 5 seconds
+
+    def clean_fade_in_seconds(self):
+        seconds = self.cleaned_data.get("fade_in_seconds")
+        return Block._meta.get_field("fade_in_seconds").get_default() if seconds is None else seconds
 
 
 class BlockColumnForm(forms.ModelForm):
@@ -65,16 +71,32 @@ class BaseBlockColumnFormSet(forms.BaseInlineFormSet):
 
     required_columns = 0
 
+    def add_fields(self, form, index):
+        super().add_fields(form, index)
+        # Where the column is in the row, left to right. The page's Move left and Move right buttons change it.
+        form.fields["order"] = forms.IntegerField(
+            required=False, min_value=0, widget=forms.HiddenInput(attrs={"data-column-order": ""}), initial=index
+        )
+
+    def in_order(self):
+        """The forms in the order the columns are to be in: by their order field, then as they came."""
+        def key(item):
+            index, form = item
+            order = getattr(form, "cleaned_data", {}).get("order")
+            return (index if order is None else order, index)
+
+        return [form for _, form in sorted(enumerate(self.forms), key=key)]
+
     def clean(self):
         super().clean()
-        for form in self.forms[: self.required_columns]:
+        for form in self.in_order()[: self.required_columns]:
             if hasattr(form, "cleaned_data") and form.is_blank():
                 form.add_error(None, "This column needs an image, a title or some text.")
 
     def save_columns(self, block):
         """Save the columns in order. A column that has been emptied is removed, and an empty new one skipped."""
         position = 0
-        for form in self.forms:
+        for form in self.in_order():
             if not hasattr(form, "cleaned_data"):
                 continue
             if form.is_blank():

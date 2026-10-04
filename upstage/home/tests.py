@@ -163,7 +163,7 @@ class ColumnsBlockTests(TestCase):
         response = self.client.get(reverse("block-create", args=[self.page.pk]))
         self.assertEqual(len(response.context["formset"].forms), 4)
         for number in (1, 2, 3, 4):
-            self.assertContains(response, f"Column {number}")
+            self.assertContains(response, f"<span data-column-number>{number}</span>")
 
     def test_create_a_two_column_block(self):
         from home.models import Block
@@ -261,6 +261,61 @@ class ColumnsBlockTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual([c.text for c in block.columns.all()], ["<p>A2</p>", "<p>B2</p>"])
         self.assertEqual(block.columns.count(), 2)
+
+    def test_columns_are_saved_in_the_order_they_were_moved_to(self):
+        from home.models import Block
+
+        # The second column is moved to the left: its order is 0 and the first one's is 1.
+        self.post("columns_3", [(self.images[0], "<p>A</p>", ""), (self.images[1], "<p>B</p>", ""), (self.images[2], "<p>C</p>", "")],
+                  **{"col-0-order": "1", "col-1-order": "0", "col-2-order": "2"})
+        block = Block.objects.get(name="Cols")
+        self.assertEqual([c.text for c in block.columns.all()], ["<p>B</p>", "<p>A</p>", "<p>C</p>"])
+        self.assertEqual([c.position for c in block.columns.all()], [0, 1, 2])
+
+    def test_moving_a_column_right_when_editing(self):
+        from home.models import Block
+
+        self.post("columns_3", [(self.images[0], "<p>A</p>", ""), (self.images[1], "<p>B</p>", ""), (self.images[2], "<p>C</p>", "")])
+        block = Block.objects.get(name="Cols")
+        columns = list(block.columns.all())
+        data = {
+            "name": "Cols", "block_type": "columns_3", "title": "Our team", "subtitle": "", "text": "", "layout": "text_left",
+            "image_size": "medium", "background_colour": "", "text_colour": "", "url": "",
+            "col-TOTAL_FORMS": "4", "col-INITIAL_FORMS": "3", "col-MIN_NUM_FORMS": "0", "col-MAX_NUM_FORMS": "4",
+            "col-3-image": "", "col-3-text": "", "col-3-url": "", "col-3-order": "3",
+        }
+        for index, column in enumerate(columns):
+            data[f"col-{index}-id"] = column.pk
+            data[f"col-{index}-block"] = block.pk
+            data[f"col-{index}-image"] = column.image_id
+            data[f"col-{index}-text"] = column.text
+            data[f"col-{index}-url"] = ""
+        data.update({"col-0-order": "1", "col-1-order": "2", "col-2-order": "0"})  # C, A, B
+        response = self.client.post(reverse("block-edit", args=[self.page.pk, block.pk]), data)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual([c.text for c in block.columns.all()], ["<p>C</p>", "<p>A</p>", "<p>B</p>"])
+        # The same columns, so the images moved with their text.
+        self.assertEqual([c.image_id for c in block.columns.all()], [self.images[2].pk, self.images[0].pk, self.images[1].pk])
+
+    def test_the_order_decides_which_columns_must_be_filled_in(self):
+        # A three column block where the empty column is moved to the fourth place: only the first three count.
+        response = self.post("columns_3", [(None, "", ""), (self.images[1], "<p>B</p>", ""), (self.images[2], "<p>C</p>", ""), (self.images[3], "<p>D</p>", "")],
+                             **{"col-0-order": "3", "col-1-order": "0", "col-2-order": "1", "col-3-order": "2"})
+        self.assertEqual(response.status_code, 302)
+
+    def test_without_an_order_the_columns_keep_the_order_they_came_in(self):
+        from home.models import Block
+
+        self.post("columns_2", [(self.images[0], "<p>A</p>", ""), (self.images[1], "<p>B</p>", "")])
+        self.assertEqual([c.text for c in Block.objects.get(name="Cols").columns.all()], ["<p>A</p>", "<p>B</p>"])
+
+    def test_the_form_has_move_buttons_and_an_order_for_each_column(self):
+        html = self.client.get(reverse("block-create", args=[self.page.pk])).content.decode()
+        self.assertEqual(html.count("data-column-card>"), 4)
+        self.assertEqual(html.count('data-move="-1" aria-label'), 4)
+        self.assertEqual(html.count('data-move="1" aria-label'), 4)
+        for index in range(4):
+            self.assertRegex(html, rf'name="col-{index}-order" value="{index}"')
 
     def test_the_edit_form_shows_the_saved_columns(self):
         from home.models import Block, BlockColumn
@@ -862,3 +917,71 @@ class ColumnTitleTests(TestCase):
         box = self.render(equal_height=True, flush_images=True)
         self.assertIn("md:text-3xl p-3", box)  # tighter still in the smaller boxes
 
+
+class HeroFadeInTimeTests(TestCase):
+    """A hero image block's fade-in time is its own setting (5 seconds unless changed; 0 for none)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from accounts.models import CustomUser
+        from home.models import WebPage
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.page = WebPage.objects.create(title="Home", slug="home")
+        cls.image = Image.objects.create(description="x", image="images/x.jpg")
+
+    def hero(self, **options):
+        from home.models import Block
+
+        return Block.objects.create(name="Hero", block_type="hero_image", title="Welcome", image=self.image, **options)
+
+    def render(self, block):
+        return render_to_string(block.template, {"block": block})
+
+    def test_it_is_five_seconds_unless_changed(self):
+        block = self.hero()
+        self.assertEqual(block.fade_in_seconds, 5)
+        self.assertRegex(self.render(block), r"--hero-fade: 5(\.0)?s;")
+
+    def test_the_blocks_own_time_is_used(self):
+        self.assertIn("--hero-fade: 2.5s", self.render(self.hero(fade_in_seconds=2.5)))
+
+    def test_zero_means_no_fade(self):
+        self.assertRegex(self.render(self.hero(fade_in_seconds=0)), r"--hero-fade: 0(\.0)?s;")
+
+    def test_the_stylesheet_uses_the_blocks_time(self):
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parent.parent / "backstage" / "static" / "css" / "input.css").read_text(encoding="utf-8")
+        self.assertIn("animation: hero-fade-in var(--hero-fade, 5s) ease-in both", css)
+        self.assertIn("animation: hero-text-fade var(--hero-fade, 5s) ease-in both", css)
+
+    def test_the_time_must_be_from_0_to_30_seconds(self):
+        from home.forms import BlockForm
+
+        base = {"name": "Hero", "block_type": "hero_image", "title": "Welcome", "layout": "text_left", "image_size": "medium", "image": self.image.pk}
+        for good in ("0", "5", "12.5", "30"):
+            self.assertTrue(BlockForm({**base, "fade_in_seconds": good}).is_valid(), good)
+        for bad in ("-1", "30.5", "abc"):
+            self.assertFalse(BlockForm({**base, "fade_in_seconds": bad}).is_valid(), bad)
+        blank = BlockForm({**base, "fade_in_seconds": ""})  # left blank, it is the usual 5 seconds
+        self.assertTrue(blank.is_valid())
+        self.assertEqual(blank.cleaned_data["fade_in_seconds"], 5)
+
+    def test_the_block_form_asks_for_it_for_hero_blocks_only(self):
+        self.client.force_login(self.user)
+        html = self.client.get(reverse("block-create", args=[self.page.pk])).content.decode()
+        self.assertRegex(html, r'(?s)<div data-for="hero_image" class="max-w-xs">.*?name="fade_in_seconds"')
+        self.assertIn("Fade-in time (seconds)", html)
+
+    def test_saving_a_hero_block_keeps_the_time(self):
+        from home.models import Block
+
+        self.client.force_login(self.user)
+        data = {
+            "name": "Hero", "block_type": "hero_image", "title": "Welcome", "subtitle": "", "text": "", "layout": "text_left",
+            "image_size": "medium", "image": self.image.pk, "background_colour": "", "text_colour": "", "url": "", "fade_in_seconds": "8",
+            "col-TOTAL_FORMS": "4", "col-INITIAL_FORMS": "0", "col-MIN_NUM_FORMS": "0", "col-MAX_NUM_FORMS": "4",
+        }
+        self.assertEqual(self.client.post(reverse("block-create", args=[self.page.pk]), data).status_code, 302)
+        self.assertEqual(Block.objects.get(name="Hero").fade_in_seconds, 8)
