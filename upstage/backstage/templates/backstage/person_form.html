@@ -45,10 +45,15 @@
                     src="{% if object.image %}{{ object.image.image.url }}{% endif %}" />
                 </div>
               </div>
-              <div class="grow">{{ form.image }}</div>
+              <div class="flex grow flex-col items-start gap-2">
+                {{ form.image }}
+                {# The only way to give someone a photo: upload one. You choose how it is cropped there, and come back here with it chosen. #}
+                <a id="upload-photo-link" href="{% url 'image-create' %}?type=headshot&amp;for_person={% if object %}{{ object.pk }}{% else %}new{% endif %}" class="btn btn-primary btn-sm">Upload photo</a>
+                <button type="button" id="remove-photo" class="btn btn-ghost btn-sm{% if not form.image.value %} hidden{% endif %}">Remove photo</button>
+              </div>
             </div>
             {% for error in form.image.errors %}<p class="text-sm text-error">{{ error }}</p>{% endfor %}
-            <p class="text-xs opacity-70">Photo not listed? <a id="upload-photo-link" href="{% url 'image-create' %}?type=headshot&amp;for_person={% if object %}{{ object.pk }}{% else %}new{% endif %}" class="link">Upload it to the image library</a> first (as a headshot). You will come back here with the photo chosen.</p>
+            <p class="text-xs opacity-70">Photos are stored in black and white, 400 wide by 500 high. You choose the crop when you upload, then come back here.</p>
           </div>
         </div>
 
@@ -82,7 +87,8 @@
   (() => {
     const form = document.getElementById('person-form');
     const KEY = 'person-form-draft';
-    const select = document.getElementById('id_image');
+    const photo = document.getElementById('id_image'); // a hidden field: the id of the person's photo, or empty
+    const removeButton = document.getElementById('remove-photo');
     const params = new URLSearchParams(location.search);
 
     // Back from uploading a photo: put back what was typed before leaving. This runs before the page has finished
@@ -129,11 +135,13 @@
     const urls = JSON.parse(document.getElementById('image-urls').textContent);
     const preview = document.getElementById('photo-preview');
     const showPhoto = () => {
-      const url = urls[select.value];
+      const url = urls[photo.value];
       preview.src = url || '';
       preview.classList.toggle('hidden', !url);
+      removeButton.classList.toggle('hidden', !photo.value);
+      link.textContent = photo.value ? 'Upload a new photo' : 'Upload photo';
     };
-    select.addEventListener('change', showPhoto);
+    removeButton.addEventListener('click', () => { photo.value = ''; showPhoto(); });
     showPhoto();
   })();
 </script>

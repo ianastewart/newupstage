@@ -22,6 +22,7 @@ env/
 db.sqlite3
 /media/
 upstage/media/
+upstage/media_backups/
 /staticfiles/
 upstage/backstage/static/css/src/output.css
 

@@ -14,15 +14,50 @@
         {% if production %}<input type="hidden" name="production" value="{{ production.pk }}" />{% endif %}
         {% if for_person %}<input type="hidden" name="for_person" value="{{ for_person }}" />{% endif %}
         <div class="grid gap-6 md:grid-cols-2">
-          <div>{{ form }}</div>
           <div>
-            <p class="fieldset-legend">Preview</p>
-            <figure class="flex aspect-square items-center justify-center overflow-hidden rounded-box bg-base-300">
-              <img id="image-preview" alt="Preview of the selected image"
-                src="{% if object.image %}{{ object.image.url }}{% endif %}"
-                class="h-full w-full object-contain{% if not object.image %} hidden{% endif %}" />
-              <span id="image-placeholder" class="text-sm opacity-60{% if object.image %} hidden{% endif %}">Choose a file to preview it</span>
-            </figure>
+            {# Drop a picture anywhere on the page (this box is where): it is chosen as if it had been picked from the file chooser. #}
+            <label id="drop-zone" for="id_image" class="mb-2 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-box border-2 border-dashed border-base-content/30 p-5 text-center transition">
+              <svg class="size-8 opacity-60" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M7.5 7.5 12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
+              <span class="font-semibold">Drop {% if object %}a new{% else %}an{% endif %} image here</span>
+              <span class="text-sm opacity-70">or click to choose a file</span>
+            </label>
+            <p id="drop-message" role="status" aria-live="polite" class="mb-3 hidden text-sm"></p>
+            {{ form }}
+          </div>
+          <div>
+            {# Any type of image but a headshot (or before a file is chosen): the photo as it is. #}
+            <div id="plain-preview">
+              <p class="fieldset-legend">Preview</p>
+              <figure class="flex aspect-square items-center justify-center overflow-hidden rounded-box bg-base-300">
+                <img id="image-preview" alt="Preview of the selected image"
+                  src="{% if object.image %}{{ object.image.url }}{% endif %}"
+                  class="h-full w-full object-contain{% if not object.image %} hidden{% endif %}" />
+                <span id="image-placeholder" class="text-sm opacity-60{% if object.image %} hidden{% endif %}">Choose a file to preview it</span>
+              </figure>
+            </div>
+
+            {# A headshot: it is stored in black and white, cropped to the headshot shape around a focus point chosen here. #}
+            <div id="headshot-tool" class="hidden space-y-4">
+              <div>
+                <p class="fieldset-legend">Your photo</p>
+                <p class="mb-2 text-xs opacity-70">
+                  Headshots are stored in black and white, 400 wide by 500 high. Click or drag on your photo to choose what
+                  the crop is centred on: the bright frame is what is kept. The arrow keys work too.
+                </p>
+                <div id="focus-area" tabindex="0" role="application"
+                  aria-label="Choose what the headshot is centred on. Click or drag the photo, or use the arrow keys."
+                  class="relative inline-block max-w-full cursor-crosshair touch-none select-none overflow-hidden rounded-box bg-base-300 outline-offset-2 focus-visible:outline-2 focus-visible:outline-primary">
+                  <img id="focus-source" alt="Your photo" draggable="false" class="block max-h-80 w-auto max-w-full" />
+                  <div id="focus-frame" class="pointer-events-none absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]"></div>
+                  <div id="focus-dot" class="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary shadow"></div>
+                </div>
+              </div>
+              <div>
+                <p class="fieldset-legend">How it will look</p>
+                <canvas id="headshot-preview" width="400" height="500" class="w-56 rounded-box bg-base-300 shadow-sm grayscale"></canvas>
+              </div>
+              <button type="button" id="focus-reset" class="btn btn-sm">Centre the crop</button>
+            </div>
           </div>
         </div>
         <div class="mt-6 flex justify-end gap-2">
@@ -35,14 +70,153 @@
 </div>
 
 <script>
-  // Show the chosen file in the preview pane before uploading.
-  document.getElementById('id_image').addEventListener('change', (event) => {
-    const file = event.target.files[0];
+  // Drag and drop: a picture dropped anywhere on the page is chosen like one picked with the file chooser. (Dropping
+  // anywhere, not just on the box, also stops the browser opening the picture and leaving the form.)
+  (() => {
+    const input = document.getElementById('id_image');
+    const zone = document.getElementById('drop-zone');
+    const message = document.getElementById('drop-message');
+    const hasFiles = (event) => event.dataTransfer && Array.from(event.dataTransfer.types || []).includes('Files');
+    const highlight = (on) => {
+      zone.classList.toggle('border-primary', on);
+      zone.classList.toggle('bg-primary/10', on);
+    };
+    const say = (text, isError) => {
+      message.textContent = text;
+      message.classList.toggle('hidden', !text);
+      message.classList.toggle('text-error', Boolean(isError));
+    };
+    const take = (files) => {
+      const pictures = Array.from(files).filter((file) => file.type.startsWith('image/'));
+      if (!pictures.length) {
+        say('That is not a picture. Drop a JPEG, PNG, WebP or GIF image.', true);
+        return;
+      }
+      const chosen = new DataTransfer();
+      chosen.items.add(pictures[0]);
+      input.files = chosen.files;
+      input.dispatchEvent(new Event('change', { bubbles: true })); // the preview and the headshot tool follow, as for a chosen file
+      say(files.length > 1 ? `Only one image can be uploaded at a time, so ${pictures[0].name} is used.` : `${pictures[0].name} is ready to upload.`, false);
+    };
+    let depth = 0; // dragenter and dragleave come in pairs for every element crossed
+    window.addEventListener('dragenter', (event) => { if (hasFiles(event)) { event.preventDefault(); depth += 1; highlight(true); } });
+    window.addEventListener('dragover', (event) => { if (hasFiles(event)) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; } });
+    window.addEventListener('dragleave', (event) => {
+      if (!hasFiles(event)) return;
+      depth = Math.max(0, depth - 1);
+      if (!depth) highlight(false);
+    });
+    window.addEventListener('drop', (event) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      depth = 0;
+      highlight(false);
+      take(event.dataTransfer.files);
+    });
+  })();
+
+  (() => {
+    const input = document.getElementById('id_image');
+    const typeSelect = document.getElementById('id_image_type');
+    const plain = document.getElementById('plain-preview');
     const preview = document.getElementById('image-preview');
-    if (!file) return;
-    preview.src = URL.createObjectURL(file);
-    preview.classList.remove('hidden');
-    document.getElementById('image-placeholder').classList.add('hidden');
-  });
+    const placeholder = document.getElementById('image-placeholder');
+    const tool = document.getElementById('headshot-tool');
+    const area = document.getElementById('focus-area');
+    const source = document.getElementById('focus-source');
+    const frame = document.getElementById('focus-frame');
+    const dot = document.getElementById('focus-dot');
+    const canvas = document.getElementById('headshot-preview');
+    const focalX = document.getElementById('id_focal_x');
+    const focalY = document.getElementById('id_focal_y');
+
+    // The shape of a stored headshot: 400 wide by 500 high (keep in step with HEADSHOT_SIZE in backstage/fields.py).
+    const WIDTH = 400, HEIGHT = 500, RATIO = WIDTH / HEIGHT;
+    const clamp = (n) => Math.min(Math.max(n, 0), 1);
+    let focal = { x: 0.5, y: 0.5 };
+    let size = null; // the photo's own size, once it has loaded
+    let objectUrl = null;
+
+    // The part of the photo that is kept: the biggest window of the headshot's shape, centred on the focus point where
+    // it can be and kept inside the photo where it cannot. The server does the same sum (focal_crop_box in fields.py).
+    const cropBox = (w, h, fx, fy) => {
+      let cw, ch;
+      if (w / h > RATIO) { cw = Math.min(w, Math.floor(h * RATIO + 0.5)); ch = h; }
+      else { cw = w; ch = Math.min(h, Math.floor(w / RATIO + 0.5)); }
+      cw = Math.max(cw, 1); ch = Math.max(ch, 1);
+      const left = Math.floor(Math.min(Math.max(fx * w - cw / 2, 0), w - cw) + 0.5);
+      const top = Math.floor(Math.min(Math.max(fy * h - ch / 2, 0), h - ch) + 0.5);
+      return { left, top, width: cw, height: ch };
+    };
+
+    const draw = () => {
+      focalX.value = focal.x.toFixed(4);
+      focalY.value = focal.y.toFixed(4);
+      if (!size) return;
+      const box = cropBox(size.w, size.h, focal.x, focal.y);
+      frame.style.left = `${(box.left / size.w) * 100}%`;
+      frame.style.top = `${(box.top / size.h) * 100}%`;
+      frame.style.width = `${(box.width / size.w) * 100}%`;
+      frame.style.height = `${(box.height / size.h) * 100}%`;
+      dot.style.left = `${focal.x * 100}%`;
+      dot.style.top = `${focal.y * 100}%`;
+      // The result, as it will be stored (the black and white comes from the canvas's grayscale class).
+      canvas.getContext('2d').drawImage(source, box.left, box.top, box.width, box.height, 0, 0, WIDTH, HEIGHT);
+    };
+
+    // A headshot with a file chosen gets the focus tool; anything else just shows the photo.
+    const refresh = () => {
+      const show = typeSelect.value === 'headshot' && input.files.length > 0;
+      tool.classList.toggle('hidden', !show);
+      plain.classList.toggle('hidden', show);
+      if (show) draw();
+    };
+
+    input.addEventListener('change', () => {
+      const file = input.files[0];
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
+      size = null;
+      if (!file) { refresh(); return; }
+      objectUrl = URL.createObjectURL(file);
+      preview.src = objectUrl;
+      preview.classList.remove('hidden');
+      placeholder.classList.add('hidden');
+      source.onload = () => {
+        size = { w: source.naturalWidth, h: source.naturalHeight };
+        focal = { x: 0.5, y: 0.5 }; // a new photo starts centred
+        refresh();
+        draw();
+      };
+      source.src = objectUrl;
+      refresh();
+    });
+    typeSelect.addEventListener('change', refresh);
+
+    // Click or drag on the photo to choose the focus.
+    const setFromPointer = (event) => {
+      const box = source.getBoundingClientRect();
+      focal = { x: clamp((event.clientX - box.left) / box.width), y: clamp((event.clientY - box.top) / box.height) };
+      draw();
+    };
+    let dragging = false;
+    area.addEventListener('pointerdown', (event) => {
+      dragging = true;
+      area.setPointerCapture(event.pointerId);
+      area.focus();
+      setFromPointer(event);
+    });
+    area.addEventListener('pointermove', (event) => { if (dragging) setFromPointer(event); });
+    for (const name of ['pointerup', 'pointercancel']) area.addEventListener(name, () => { dragging = false; });
+    area.addEventListener('keydown', (event) => {
+      const step = event.shiftKey ? 0.1 : 0.02;
+      const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key];
+      if (!move) return;
+      event.preventDefault();
+      focal = { x: clamp(focal.x + move[0]), y: clamp(focal.y + move[1]) };
+      draw();
+    });
+    document.getElementById('focus-reset').addEventListener('click', () => { focal = { x: 0.5, y: 0.5 }; draw(); });
+  })();
 </script>
 {% endblock %}

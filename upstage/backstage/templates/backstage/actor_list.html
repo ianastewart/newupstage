@@ -73,11 +73,12 @@
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
       {% for person in actors %}
         <a href="{% url 'person-detail' person.pk %}?from=actors" class="card bg-base-200 shadow-sm transition hover:shadow-md">
-          <figure class="aspect-square w-full items-center justify-center bg-base-300">
+          {# Headshots are all 4:5 (400 x 500), so the photo fills the card's width and every card is the same shape. #}
+          <figure class="aspect-[4/5] w-full bg-base-300">
             {% if person.image %}
-              <img src="{{ person.image.image.url }}" alt="" loading="lazy" class="max-h-full max-w-full object-contain" />
+              <img src="{{ person.image.image.url }}" alt="" loading="lazy" class="h-full w-full object-cover" />
             {% else %}
-              <div class="flex aspect-square w-full items-center justify-center bg-neutral text-3xl font-bold text-neutral-content">{{ person.first_name|first }}{{ person.last_name|first }}</div>
+              <div class="flex h-full w-full items-center justify-center bg-neutral text-3xl font-bold text-neutral-content">{{ person.first_name|first }}{{ person.last_name|first }}</div>
             {% endif %}
           </figure>
           <div class="card-body p-3">

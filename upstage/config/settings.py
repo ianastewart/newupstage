@@ -142,6 +142,9 @@ STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
+# Resized images (django-resized) keep the .jpg extension instead of .jpeg.
+DJANGORESIZED_DEFAULT_FORMAT_EXTENSIONS = {'JPEG': '.jpg'}
+
 # Uploaded files (images)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'

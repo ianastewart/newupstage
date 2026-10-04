@@ -3,6 +3,7 @@ from django.db.models import Q
 from django.db.models.functions import Lower
 
 from backstage import models
+from backstage.fields import CENTRE, clamp
 from rmeditor.widgets import RichTextWidget
 
 class PersonForm(forms.ModelForm):
@@ -11,6 +12,8 @@ class PersonForm(forms.ModelForm):
         fields = ["first_name", "last_name", "email", "mobile", "biography", "gender", "dob", "image", "roles"]
         labels = {"dob": "Date of birth", "image": "Photo"}
         widgets = {
+            # Not a list to choose from: the photo comes from the Upload photo button, which returns here with it chosen.
+            "image": forms.HiddenInput(),
             "biography": RichTextWidget(attrs={"rows": 8, "data-tools": "bold underline italic link"}),
             # Date pickers need ISO dates regardless of the site's locale.
             "dob": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
@@ -73,3 +76,31 @@ class EventForm(forms.ModelForm):
         if commit and self.cleaned_data.get("first_datetime"):
             event.datetimes.create(datetime=self.cleaned_data["first_datetime"])
         return event
+
+
+class ImageForm(forms.ModelForm):
+    """
+    The image library's upload form. For a headshot, the photo is cropped around a focus point: the page sets
+    `focal_x` and `focal_y` (0 to 1, from the left and from the top). They are not kept: they only steer the crop
+    made when the file is saved. Anything unusable means the middle.
+    """
+
+    focal_x = forms.CharField(required=False, widget=forms.HiddenInput(attrs={"id": "id_focal_x"}), initial="0.5")
+    focal_y = forms.CharField(required=False, widget=forms.HiddenInput(attrs={"id": "id_focal_y"}), initial="0.5")
+
+    class Meta:
+        model = models.Image
+        fields = ["image", "description", "image_type"]
+        widgets = {"image": forms.ClearableFileInput(attrs={"accept": "image/*"})}
+
+    def clean_focal_x(self):
+        return clamp(self.cleaned_data.get("focal_x"))
+
+    def clean_focal_y(self):
+        return clamp(self.cleaned_data.get("focal_y"))
+
+    def save(self, commit=True):
+        self.instance.focal_point = (
+            self.cleaned_data.get("focal_x", CENTRE[0]), self.cleaned_data.get("focal_y", CENTRE[1])
+        )
+        return super().save(commit)

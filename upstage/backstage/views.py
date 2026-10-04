@@ -173,6 +173,7 @@ class ImageView(CRUDView):
     """Image library (list), uploader (create/update) and viewer (detail)."""
 
     model = models.Image
+    form_class = forms.ImageForm
     fields = ["image", "description", "image_type"]
     paginate_by = 24
 

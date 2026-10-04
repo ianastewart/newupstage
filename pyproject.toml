@@ -6,6 +6,7 @@ dependencies = [
     "django>=6.1.1",
     "django-browser-reload>=1.21.0",
     "django-enum>=2.5.0",
+    "django-resized>=1.0.3",
     "django-rmeditor>=0.1.15",
     "neapolitan>=26.1",
     "pillow>=12.3.0",
@@ -15,5 +16,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "beautifulsoup4>=4.15.0",
+    "debugpy>=1.8.22",
     "requests>=2.34.2",
 ]

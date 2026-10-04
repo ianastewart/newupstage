@@ -1,6 +1,8 @@
 from django.db import models, transaction
 from django_enum import EnumField
 
+from backstage.fields import HeadshotImageField
+
 
 class Upstage(models.Model):
     name = models.CharField(max_length=255)
@@ -40,7 +42,8 @@ class Image(models.Model):
         LOGO = "logo", "Logo"
         OTHER = "other", "Other"
 
-    image = models.ImageField(upload_to="images/")
+    # Headshots are made black and white and resized to 400 x 500 when they are uploaded (see backstage/fields.py); other images are kept as they are.
+    image = HeadshotImageField(upload_to="images/")
     description = models.CharField(max_length=255, blank=True)
     image_type = EnumField(ImageType, default=ImageType.BASE)
 
