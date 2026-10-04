@@ -497,7 +497,26 @@ class VenueView(CRUDView):
 
 class EventView(CRUDView):
     model = models.Event
+    form_class = forms.EventDetailsForm  # the ticket website is typed in, not chosen from a list
     fields = ["title", "event_type", "description", "venue", "ticket_site"]
+
+    def get_production(self):
+        """When editing from a production's Events tab (?production=<pk>), that production: saving or cancelling goes back to it."""
+        production_id = self.request.POST.get("production") or self.request.GET.get("production", "")
+        if self.role == Role.UPDATE and production_id.isdigit():
+            return models.Production.objects.filter(pk=production_id, events=self.object).first()
+        return None
+
+    def get_context_data(self, **kwargs):
+        if production := self.get_production():
+            kwargs["production"] = production
+            kwargs["cancel_url"] = reverse("production-events", args=[production.pk])
+        return super().get_context_data(**kwargs)
+
+    def get_success_url(self):
+        if production := self.get_production():
+            return reverse("production-events", args=[production.pk])
+        return super().get_success_url()
 
 
 class EventDateTimeView(CRUDView):

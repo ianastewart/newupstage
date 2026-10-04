@@ -1,0 +1,23 @@
+{% comment %}
+A promotion block: the promotion image of the next production with a performance still to come, at the block's image size
+(and linking where the block's link says), under the block's title and subtitle if it has them. If that performance's event
+has a ticket address there is a Buy Tickets button, medium sized, on top of the image: centred, 30px up from its bottom edge.
+If the production has no promotion image, or no production has a performance to come, the block shows nothing at all, not
+even its title.
+{% endcomment %}
+{% with image=block.display_image %}
+{% if image %}
+<section class="rounded-box {% if block.title or block.subtitle %}p-6 md:p-10{% else %}p-2{% endif %}" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+  {% include "home/blocks/_heading.html" %}
+  {# The image's own box (at the block's size) is what the button is placed on. #}
+  <div id="promotion-image" class="relative mx-auto w-full {% if block.image_size == 'small' %}max-w-xs{% elif block.image_size == 'large' %}max-w-2xl{% elif block.image_size == 'full' %}{% else %}max-w-md{% endif %}">
+    {% if block.link_url %}<a href="{{ block.link_url }}" class="block">{% endif %}
+    <img src="{{ image.image.url }}" alt="{{ image.description }}" loading="lazy" class="block h-auto w-full rounded-box" />
+    {% if block.link_url %}</a>{% endif %}
+    {% if block.ticket_url %}
+      <a href="{{ block.ticket_url }}" class="btn btn-primary btn-md absolute bottom-[30px] left-1/2 -translate-x-1/2 shadow-lg" target="_blank" rel="noopener noreferrer">Buy Tickets</a>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endwith %}

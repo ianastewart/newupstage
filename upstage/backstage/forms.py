@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from django import forms
 from django.db.models import Q
 from django.db.models.functions import Lower
@@ -79,7 +81,42 @@ class ProductionTeamForm(forms.ModelForm):
         self.fields["person"].help_text = "People with only an Actor role are omitted from the list"
 
 
-class EventForm(forms.ModelForm):
+class EventDetailsForm(forms.ModelForm):
+    """
+    An event's title, type, venue, where to buy tickets and description. The tickets are a web address that is typed in,
+    not picked from a list: it is kept as a TicketSite (found by its address, or made, named after the website).
+    """
+
+    ticket_url = forms.URLField(
+        required=False, label="Ticket website", assume_scheme="https",
+        widget=forms.URLInput(attrs={"placeholder": "https://..."}),
+        help_text="Where to buy tickets. Leave blank if there is no ticket website.",
+    )
+    field_order = ["title", "event_type", "venue", "ticket_url", "description"]
+
+    class Meta:
+        model = models.Event
+        fields = ["title", "event_type", "venue", "description"]
+        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.ticket_site_id:
+            self.fields["ticket_url"].initial = self.instance.ticket_site.url
+
+    def save(self, commit=True):
+        url = self.cleaned_data.get("ticket_url")
+        if url:
+            site = models.TicketSite.objects.filter(url=url).first() or models.TicketSite.objects.create(
+                name=urlparse(url).netloc.removeprefix("www.") or url, url=url
+            )
+        else:
+            site = None
+        self.instance.ticket_site = site
+        return super().save(commit)
+
+
+class EventForm(EventDetailsForm):
     """A new event from a production's Events tab, optionally with its first date and time."""
 
     first_datetime = forms.DateTimeField(
@@ -87,11 +124,7 @@ class EventForm(forms.ModelForm):
         widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
         help_text="More dates can be added on the Events tab.",
     )
-
-    class Meta:
-        model = models.Event
-        fields = ["title", "event_type", "venue", "ticket_site", "description"]
-        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+    field_order = ["title", "event_type", "venue", "ticket_url", "first_datetime", "description"]
 
     def save(self, commit=True):
         event = super().save(commit)

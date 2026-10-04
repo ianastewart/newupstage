@@ -2090,3 +2090,164 @@ class MissingImageFileTests(TestCase):
     def test_dimensions_are_none_without_the_file(self):
         self.assertFalse(self.image.file_exists)
         self.assertIsNone(self.image.dimensions)
+
+
+class EventsTabEditButtonTests(TestCase):
+    """On a production's Events tab each event has an Edit button; its title is not a link."""
+
+    def setUp(self):
+        from backstage.models import Event
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.production = Production.objects.create(title="Panto")
+        self.other = Production.objects.create(title="Other")
+        self.event = Event.objects.create(title="Opening night", event_type="performance")
+        self.event.productions.add(self.production)
+        self.tab = reverse("production-events", args=[self.production.pk])
+
+    def html(self):
+        return self.client.get(self.tab).content.decode()
+
+    def test_each_event_has_an_edit_button(self):
+        html = self.html()
+        self.assertIn(f'<a href="{reverse("event-update", args=[self.event.pk])}?production={self.production.pk}" class="btn btn-sm"', html)
+        self.assertIn(">Edit</a>", html)
+
+    def test_the_title_is_not_a_link(self):
+        html = self.html()
+        self.assertIn('<h3 class="card-title">Opening night</h3>', html)
+        self.assertNotIn(f'href="{reverse("event-detail", args=[self.event.pk])}"', html)
+
+    def test_the_edit_page_goes_back_to_the_events_tab(self):
+        url = reverse("event-update", args=[self.event.pk]) + f"?production={self.production.pk}"
+        html = self.client.get(url).content.decode()
+        self.assertIn(f'name="production" value="{self.production.pk}"', html)
+        self.assertIn(f'href="{self.tab}" class="btn btn-ghost">Cancel', html)
+
+    def test_saving_goes_back_to_the_events_tab(self):
+        url = reverse("event-update", args=[self.event.pk])
+        response = self.client.post(url, {
+            "title": "Gala night", "event_type": "performance", "description": "", "venue": "", "ticket_site": "",
+            "production": self.production.pk,
+        })
+        self.assertRedirects(response, self.tab)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.title, "Gala night")
+
+    def test_a_production_the_event_is_not_part_of_is_ignored(self):
+        url = reverse("event-update", args=[self.event.pk])
+        response = self.client.post(url, {
+            "title": "Opening night", "event_type": "performance", "description": "", "venue": "", "ticket_site": "",
+            "production": self.other.pk,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertNotEqual(response.url, reverse("production-events", args=[self.other.pk]))
+
+    def test_editing_without_coming_from_a_production_is_as_before(self):
+        html = self.client.get(reverse("event-update", args=[self.event.pk])).content.decode()
+        self.assertNotIn('name="production"', html)
+        self.assertEqual(self.client.get(reverse("event-update", args=[self.event.pk])).status_code, 200)
+
+
+class EventTicketWebsiteTests(TestCase):
+    """The ticket website of an event is a web address that is typed in, not a choice from a list."""
+
+    def setUp(self):
+        from backstage.models import Event
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.production = Production.objects.create(title="Panto")
+        self.event = Event.objects.create(title="Opening night", event_type="performance")
+        self.event.productions.add(self.production)
+        self.edit_url = reverse("event-update", args=[self.event.pk])
+
+    def post_edit(self, **extra):
+        data = {"title": "Opening night", "event_type": "performance", "description": "", "venue": "", **extra}
+        return self.client.post(self.edit_url, data)
+
+    def test_the_edit_page_has_a_web_address_field_and_no_ticket_site_list(self):
+        html = self.client.get(self.edit_url).content.decode()
+        self.assertRegex(html, r'<input type="url" name="ticket_url"[^>]*placeholder="https://\.\.\."')
+        self.assertIn("Ticket website", html)
+        self.assertNotIn('name="ticket_site"', html)
+        self.assertNotIn("<select name=\"ticket_site\"", html)
+
+    def test_the_new_event_dialog_has_it_too(self):
+        html = self.client.get(reverse("production-events", args=[self.production.pk])).content.decode()
+        self.assertRegex(html, r'<input type="url" name="ticket_url"')
+        self.assertNotIn('name="ticket_site"', html)
+
+    def test_typing_an_address_sets_the_events_ticket_site(self):
+        from backstage.models import TicketSite
+
+        response = self.post_edit(ticket_url="https://www.tickets.example.com/panto")
+        self.assertEqual(response.status_code, 302)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.ticket_site.url, "https://www.tickets.example.com/panto")
+        self.assertEqual(self.event.ticket_site.name, "tickets.example.com")  # named after the website
+        self.assertEqual(TicketSite.objects.count(), 1)
+
+    def test_the_same_address_uses_the_same_ticket_site(self):
+        from backstage.models import Event, TicketSite
+
+        other = Event.objects.create(title="Matinee", event_type="performance")
+        self.post_edit(ticket_url="https://tickets.example.com/panto")
+        self.client.post(reverse("event-update", args=[other.pk]), {
+            "title": "Matinee", "event_type": "performance", "description": "", "venue": "", "ticket_url": "https://tickets.example.com/panto",
+        })
+        other.refresh_from_db()
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.ticket_site, other.ticket_site)
+        self.assertEqual(TicketSite.objects.count(), 1)
+
+    def test_the_edit_page_shows_the_current_address(self):
+        self.post_edit(ticket_url="https://tickets.example.com/panto")
+        html = self.client.get(self.edit_url).content.decode()
+        self.assertIn('value="https://tickets.example.com/panto"', html)
+
+    def test_blank_removes_the_ticket_website(self):
+        self.post_edit(ticket_url="https://tickets.example.com/panto")
+        self.post_edit(ticket_url="")
+        self.event.refresh_from_db()
+        self.assertIsNone(self.event.ticket_site)
+
+    def test_an_address_without_https_is_given_it(self):
+        self.post_edit(ticket_url="tickets.example.com/panto")
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.ticket_site.url, "https://tickets.example.com/panto")
+
+    def test_something_that_is_not_an_address_is_refused(self):
+        response = self.post_edit(ticket_url="not a web address")
+        self.assertEqual(response.status_code, 200)
+        self.event.refresh_from_db()
+        self.assertIsNone(self.event.ticket_site)
+
+    def test_creating_an_event_from_the_events_tab_with_an_address(self):
+        response = self.client.post(reverse("production-events", args=[self.production.pk]), {
+            "action": "create", "title": "Gala", "event_type": "performance", "venue": "", "description": "",
+            "ticket_url": "https://tickets.example.com/gala", "first_datetime": "",
+        })
+        self.assertEqual(response.status_code, 302)
+        gala = self.production.events.get(title="Gala")
+        self.assertEqual(gala.ticket_site.url, "https://tickets.example.com/gala")
+
+    def test_the_tab_shows_the_ticket_link(self):
+        self.post_edit(ticket_url="https://tickets.example.com/panto")
+        html = self.client.get(reverse("production-events", args=[self.production.pk])).content.decode()
+        self.assertIn('href="https://tickets.example.com/panto"', html)
+
+    def test_the_address_gives_the_promotion_block_its_buy_tickets_button(self):
+        from datetime import timedelta
+
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+
+        from backstage.models import EventDateTime, Image, ProductionImage
+        from home.models import Block
+
+        EventDateTime.objects.create(event=self.event, datetime=timezone.now() + timedelta(days=5))
+        poster = Image.objects.create(description="poster", image="images/poster.jpg", image_type="promotion")
+        ProductionImage.objects.create(production=self.production, image=poster, is_default=True)
+        self.post_edit(ticket_url="https://tickets.example.com/panto")
+        block = Block.objects.create(name="Promo", block_type="promotion")
+        self.assertIn('href="https://tickets.example.com/panto"', render_to_string(block.template, {"block": block}))

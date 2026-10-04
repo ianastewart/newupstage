@@ -31,7 +31,7 @@
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <div class="flex flex-wrap items-center gap-2">
-                  <a href="{% url 'event-detail' event.pk %}" class="card-title link-hover">{{ event.title }}</a>
+                  <h3 class="card-title">{{ event.title }}</h3>
                   <span class="badge badge-sm {% if event.event_type == 'audition' %}badge-info{% elif event.event_type == 'rehearsal' %}badge-accent{% elif event.event_type == 'performance' %}badge-success{% else %}badge-ghost{% endif %}">{{ event.get_event_type_display }}</span>
                 </div>
                 <p class="mt-1 text-sm opacity-80">
@@ -46,12 +46,15 @@
                   {% endif %}
                 {% endwith %}
               </div>
-              <form method="POST">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="unlink" />
-                <input type="hidden" name="event" value="{{ event.pk }}" />
-                <button type="submit" class="btn btn-ghost btn-xs text-error" title="Take this event off the production (the event is kept)">Remove</button>
-              </form>
+              <div class="flex items-center gap-1">
+                <a href="{% url 'event-update' event.pk %}?production={{ production.pk }}" class="btn btn-sm" aria-label="Edit {{ event.title }}">Edit</a>
+                <form method="POST">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="unlink" />
+                  <input type="hidden" name="event" value="{{ event.pk }}" />
+                  <button type="submit" class="btn btn-ghost btn-xs text-error" title="Take this event off the production (the event is kept)">Remove</button>
+                </form>
+              </div>
             </div>
 
             {% if event.description %}<p class="text-sm">{{ event.description|linebreaksbr }}</p>{% endif %}
@@ -101,7 +104,7 @@
         {{ event_form.title.as_field_group }}
         {{ event_form.event_type.as_field_group }}
         {{ event_form.venue.as_field_group }}
-        {{ event_form.ticket_site.as_field_group }}
+        {{ event_form.ticket_url.as_field_group }}
         {{ event_form.first_datetime.as_field_group }}
       </div>
       {{ event_form.description.as_field_group }}

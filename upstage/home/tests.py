@@ -985,3 +985,237 @@ class HeroFadeInTimeTests(TestCase):
         }
         self.assertEqual(self.client.post(reverse("block-create", args=[self.page.pk]), data).status_code, 302)
         self.assertEqual(Block.objects.get(name="Hero").fade_in_seconds, 8)
+
+
+class PromotionBlockTests(TestCase):
+    """A promotion block shows the promotion image of the next production with a performance still to come."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from accounts.models import CustomUser
+        from home.models import Block, WebPage
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.page = WebPage.objects.create(title="Home", slug="home")
+        cls.block = Block.objects.create(name="Promo", block_type="promotion")
+
+    def production(self, title, days=None, event_type="performance", images=(), hours=0):
+        """A production with an event of that type `days` from now, and images [(description, type, default)]."""
+        from backstage.models import Event, EventDateTime, ProductionImage
+
+        production = Production.objects.create(title=title)
+        if days is not None:
+            event = Event.objects.create(title=f"{title} event", event_type=event_type)
+            event.productions.add(production)
+            EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=days, hours=hours))
+        for description, image_type, default in images:
+            image = Image.objects.create(description=description, image=f"images/{description}.jpg", image_type=image_type)
+            ProductionImage.objects.create(production=production, image=image, is_default=default)
+        return production
+
+    def shown(self, block=None):
+        block = block or self.block
+        return render_to_string(block.template, {"block": block})
+
+    def test_the_block_type_is_offered_and_has_its_template(self):
+        from home.models import Block
+
+        self.assertIn(("promotion", "Promotion"), Block.BlockType.choices)
+        self.assertEqual(self.block.template, "home/blocks/promotion.html")
+
+    def test_it_shows_the_promotion_image_of_the_production_with_the_next_performance(self):
+        self.production("Later", days=30, images=[("later-poster", "promotion", True)])
+        self.production("Sooner", days=5, images=[("sooner-poster", "promotion", True)])
+        html = self.shown()
+        self.assertIn("sooner-poster.jpg", html)
+        self.assertNotIn("later-poster", html)
+
+    def test_past_performances_do_not_count(self):
+        self.production("Over", days=-3, images=[("over-poster", "promotion", True)])
+        self.production("Coming", days=9, images=[("coming-poster", "promotion", True)])
+        html = self.shown()
+        self.assertIn("coming-poster.jpg", html)
+        self.assertNotIn("over-poster", html)
+
+    def test_only_performances_count_not_auditions_or_rehearsals(self):
+        self.production("Auditioning", days=2, event_type="audition", images=[("aud-poster", "promotion", True)])
+        self.production("Rehearsing", days=3, event_type="rehearsal", images=[("reh-poster", "promotion", True)])
+        self.production("Playing", days=20, images=[("play-poster", "promotion", True)])
+        html = self.shown()
+        self.assertIn("play-poster.jpg", html)
+        self.assertNotIn("aud-poster", html)
+        self.assertNotIn("reh-poster", html)
+
+    def test_the_soonest_of_a_productions_dates_counts(self):
+        from backstage.models import Event, EventDateTime
+
+        late_first = self.production("Two dates", days=40, images=[("two-poster", "promotion", True)])
+        event = late_first.events.first()
+        EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=4))  # sooner than the other
+        self.production("One date", days=10, images=[("one-poster", "promotion", True)])
+        self.assertIn("two-poster.jpg", self.shown())
+
+    def test_that_production_without_a_promotion_image_shows_nothing(self):
+        # It is the next production, so the block does not go on to a later one.
+        self.production("Next", days=5, images=[("next-headshot", "headshot", True), ("next-gallery", "gallery", False)])
+        self.production("After", days=50, images=[("after-poster", "promotion", True)])
+        self.assertEqual(self.shown().strip(), "")
+
+    def test_no_upcoming_performance_shows_nothing_not_even_the_title(self):
+        from home.models import Block
+
+        titled = Block.objects.create(name="Titled", block_type="promotion", title="Next show", subtitle="Book now")
+        self.production("Over", days=-3, images=[("over-poster", "promotion", True)])
+        self.assertEqual(self.shown(titled).strip(), "")
+
+    def test_only_a_promotion_image_is_used_the_default_one_if_it_is(self):
+        self.production("Show", days=5, images=[
+            ("show-gallery", "gallery", True), ("show-promo-a", "promotion", False), ("show-promo-b", "promotion", False),
+        ])
+        html = self.shown()
+        self.assertIn("show-promo-a.jpg", html)  # the first promotion image: the default is a gallery picture
+        self.assertNotIn("show-gallery", html)
+        self.assertNotIn("show-promo-b", html)
+
+    def test_a_default_promotion_image_is_preferred(self):
+        self.production("Show", days=5, images=[("promo-a", "promotion", False), ("promo-b", "promotion", True)])
+        self.assertIn("promo-b.jpg", self.shown())
+
+    def test_the_title_subtitle_size_and_link_are_used(self):
+        from home.models import Block
+
+        block = Block.objects.create(
+            name="Big promo", block_type="promotion", title="Coming soon", subtitle="Book now", image_size="large", url="/page/tickets/"
+        )
+        self.production("Show", days=5, images=[("show-promo", "promotion", True)])
+        html = self.shown(block)
+        self.assertIn("Coming soon", html)
+        self.assertIn("Book now", html)
+        self.assertIn("max-w-2xl", html)
+        self.assertIn('href="/page/tickets/"', html)
+
+    def test_the_page_shows_it(self):
+        from home.models import Block
+
+        self.production("Show", days=5, images=[("show-promo", "promotion", True)])
+        self.page.add_block(self.block)
+        response = self.client.get(reverse("webpage", args=["home"]))
+        self.assertContains(response, "show-promo.jpg")
+
+    def test_a_promotion_block_needs_no_image_of_its_own(self):
+        from home.forms import BlockForm
+
+        form = BlockForm({"name": "Promo", "block_type": "promotion", "layout": "text_left", "image_size": "medium"})
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_the_form_offers_the_size_and_link_but_not_an_image_to_choose(self):
+        self.client.force_login(self.user)
+        html = self.client.get(reverse("block-create", args=[self.page.pk])).content.decode()
+        self.assertIn('<option value="promotion">Promotion</option>', html)
+        self.assertRegex(html, r'data-for="image text_image cast promotion"')
+        self.assertRegex(html, r'data-for="text_image split promotion"')
+        self.assertRegex(html, r'(?s)<div data-for="image text_image cast hero_image split">.*?name="image"')
+        self.assertIn("promotion image of the next production", html)
+
+    def test_it_takes_few_queries(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.production("Show", days=5, images=[("show-promo", "promotion", True)])
+        with CaptureQueriesContext(connection) as queries:
+            self.shown()
+        self.assertLessEqual(len(queries), 3)  # the production, its image, and where to buy tickets
+
+    # ---- the Buy Tickets button
+
+    def ticketed(self, title, days, url="https://tickets.example.com/show", **kwargs):
+        """A production with a performance whose event sells tickets at `url` (a ticket site with no address if empty)."""
+        from backstage.models import TicketSite
+
+        production = self.production(title, days=days, images=[(f"{title.lower()}-promo", "promotion", True)], **kwargs)
+        event = production.events.get()
+        event.ticket_site = TicketSite.objects.create(name=f"{title} tickets", url=url)
+        event.save()
+        return production
+
+    def test_a_ticketed_event_has_a_buy_tickets_button_linking_to_the_ticket_site(self):
+        self.ticketed("Show", 5)
+        html = self.shown()
+        self.assertRegex(html, r'<a href="https://tickets.example.com/show" class="btn btn-primary btn-md[^"]*"[^>]*>Buy Tickets</a>')
+        self.assertIn('target="_blank"', html)
+        self.assertIn('rel="noopener noreferrer"', html)
+
+    def test_the_button_is_medium_sized_and_sits_on_the_image_centred_30px_from_its_bottom(self):
+        self.ticketed("Show", 5)
+        html = self.shown()
+        self.assertNotIn("btn-sm", html)
+        self.assertNotIn("btn-lg", html)
+        self.assertNotIn("btn-xs", html)
+        # Inside the box that holds the image (positioned, so the button is placed on it), after the picture itself.
+        self.assertRegex(html, r'(?s)<div id="promotion-image" class="relative [^"]*">.*<img .*Buy Tickets</a>\s*</div>')
+        self.assertIn("btn btn-primary btn-md absolute bottom-[30px] left-1/2 -translate-x-1/2", html)  # centred, 30px up
+        self.assertLess(html.index("<img"), html.index("Buy Tickets"))
+
+    def test_the_image_box_has_the_blocks_size_so_the_button_is_centred_on_the_image(self):
+        from home.models import Block
+
+        self.ticketed("Show", 5)
+        for size, expected in (("small", "max-w-xs"), ("medium", "max-w-md"), ("large", "max-w-2xl")):
+            block = Block.objects.create(name=f"Promo {size}", block_type="promotion", image_size=size)
+            self.assertRegex(self.shown(block), rf'<div id="promotion-image" class="relative mx-auto w-full {expected}"')
+        full = Block.objects.create(name="Promo full", block_type="promotion", image_size="full")
+        self.assertRegex(self.shown(full), r'<div id="promotion-image" class="relative mx-auto w-full "')
+
+    def test_a_linked_image_does_not_hold_the_button_in_its_link(self):
+        from home.models import Block
+
+        self.ticketed("Show", 5)
+        block = Block.objects.create(name="Linked promo", block_type="promotion", url="/page/about/")
+        html = self.shown(block)
+        link = html[html.index('<a href="/page/about/"'):html.index("</a>", html.index('<a href="/page/about/"'))]
+        self.assertIn("<img", link)
+        self.assertNotIn("Buy Tickets", link)  # no link inside a link
+
+    def test_no_button_when_the_event_has_no_ticket_site(self):
+        self.production("Show", days=5, images=[("show-promo", "promotion", True)])
+        html = self.shown()
+        self.assertIn("show-promo.jpg", html)
+        self.assertNotIn("Buy Tickets", html)
+        self.assertNotIn("mb-8", html)  # and no extra space
+
+    def test_no_button_when_the_ticket_site_has_no_address(self):
+        self.ticketed("Show", 5, url="")
+        self.assertNotIn("Buy Tickets", self.shown())
+
+    def test_the_button_uses_the_event_of_the_next_performance(self):
+        from backstage.models import Event, EventDateTime, TicketSite
+
+        show = self.ticketed("Show", 20, url="https://tickets.example.com/later")
+        sooner = Event.objects.create(
+            title="Preview", event_type="performance", ticket_site=TicketSite.objects.create(name="Preview", url="https://tickets.example.com/preview")
+        )
+        sooner.productions.add(show)
+        EventDateTime.objects.create(event=sooner, datetime=timezone.now() + timedelta(days=3))
+        html = self.shown()
+        self.assertIn("https://tickets.example.com/preview", html)
+        self.assertNotIn("/later", html)
+
+    def test_other_kinds_of_event_do_not_supply_the_button(self):
+        from backstage.models import Event, EventDateTime, TicketSite
+
+        show = self.production("Show", days=10, images=[("show-promo", "promotion", True)])
+        audition = Event.objects.create(
+            title="Auditions", event_type="audition", ticket_site=TicketSite.objects.create(name="Odd", url="https://tickets.example.com/audition")
+        )
+        audition.productions.add(show)
+        EventDateTime.objects.create(event=audition, datetime=timezone.now() + timedelta(days=2))
+        self.assertNotIn("Buy Tickets", self.shown())
+
+    def test_no_button_without_an_image_to_show(self):
+        from backstage.models import Event, EventDateTime, TicketSite
+
+        production = Production.objects.create(title="No poster")
+        event = Event.objects.create(title="Run", event_type="performance", ticket_site=TicketSite.objects.create(name="T", url="https://tickets.example.com/x"))
+        event.productions.add(production)
+        EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=4))
+        self.assertEqual(self.shown().strip(), "")

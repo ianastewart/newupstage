@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models, transaction
 from django.urls import reverse
+from django.utils.functional import cached_property
 from django.utils.html import strip_tags
 
 link_url = RegexValidator(
@@ -97,6 +98,7 @@ class Block(models.Model):
         COLUMNS_3 = "columns_3", "Three columns"
         COLUMNS_4 = "columns_4", "Four columns"
         AUDITIONS = "auditions", "Auditions"
+        PROMOTION = "promotion", "Promotion"
 
     class ImageSize(models.TextChoices):
         SMALL = "small", "Small"
@@ -121,6 +123,7 @@ class Block(models.Model):
         BlockType.COLUMNS_3: "home/blocks/columns.html",
         BlockType.COLUMNS_4: "home/blocks/columns.html",
         BlockType.AUDITIONS: "home/blocks/auditions.html",
+        BlockType.PROMOTION: "home/blocks/promotion.html",
     }
 
     name = models.CharField(max_length=255, help_text="Identifies the block when adding it to pages.")
@@ -242,13 +245,31 @@ class Block(models.Model):
     @property
     def link_url(self):
         """Where clicking the image goes, for the types of block that link their image."""
-        if self.block_type in (self.BlockType.TEXT_IMAGE, self.BlockType.SPLIT):
+        if self.block_type in (self.BlockType.TEXT_IMAGE, self.BlockType.SPLIT, self.BlockType.PROMOTION):
             return self.url
         return ""
+
+    @cached_property
+    def promotion(self):
+        """For a promotion block: (the promotion image of the next production with a performance to come, or None; where to buy tickets, or "")."""
+        from .promotions import next_promotion
+
+        return next_promotion()
+
+    @property
+    def promotion_image(self):
+        return self.promotion[0]
+
+    @property
+    def ticket_url(self):
+        """For a promotion block: where to buy tickets for that performance (empty if its event has no ticket address)."""
+        return self.promotion[1]
 
     @property
     def display_image(self):
         """The image to show: the block's own, or for a cast list, the production's default image."""
+        if self.block_type == self.BlockType.PROMOTION:
+            return self.promotion_image
         if self.image_id or self.block_type != self.BlockType.CAST or not self.production_id:
             return self.image
         default = self.production.default_image
