@@ -35,29 +35,40 @@
                 <span id="image-placeholder" class="text-sm opacity-60{% if object.image %} hidden{% endif %}">Choose a file to preview it</span>
               </figure>
             </div>
-
-            {# A headshot: it is stored in black and white, cropped to the headshot shape around a focus point chosen here. #}
-            <div id="headshot-tool" class="hidden space-y-4">
-              <div>
-                <p class="fieldset-legend">Your photo</p>
-                <p class="mb-2 text-xs opacity-70">
-                  Headshots are stored in black and white, 400 wide by 500 high. Click or drag on your photo to choose what
-                  the crop is centred on: the bright frame is what is kept. The arrow keys work too.
-                </p>
-                <div id="focus-area" tabindex="0" role="application"
-                  aria-label="Choose what the headshot is centred on. Click or drag the photo, or use the arrow keys."
-                  class="relative inline-block max-w-full cursor-crosshair touch-none select-none overflow-hidden rounded-box bg-base-300 outline-offset-2 focus-visible:outline-2 focus-visible:outline-primary">
-                  <img id="focus-source" alt="Your photo" draggable="false" class="block max-h-80 w-auto max-w-full" />
-                  <div id="focus-frame" class="pointer-events-none absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]"></div>
-                  <div id="focus-dot" class="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary shadow"></div>
-                </div>
-              </div>
-              <div>
-                <p class="fieldset-legend">How it will look</p>
-                <canvas id="headshot-preview" width="400" height="500" class="w-56 rounded-box bg-base-300 shadow-sm grayscale"></canvas>
-              </div>
-              <button type="button" id="focus-reset" class="btn btn-sm">Centre the crop</button>
+          </div>
+        </div>
+        {# A headshot: it is stored in black and white, cropped to the headshot shape around a focus point chosen here. #}
+        <div id="headshot-tool" class="mt-6 hidden space-y-4">
+          <p class="text-xs opacity-70">
+            Headshots are stored in black and white, 400 wide by 500 high. Click or drag on your photo to choose what
+            the crop is centred on: the bright frame is what is kept. The arrow keys work too.
+          </p>
+          <div id="headshot-compare" class="flex flex-wrap items-start gap-6">
+          <div>
+            <p class="fieldset-legend">Your photo</p>
+            <div id="focus-area" tabindex="0" role="application"
+              aria-label="Choose what the headshot is centred on. Click or drag the photo, or use the arrow keys."
+              class="relative inline-block max-w-full cursor-crosshair touch-none select-none overflow-hidden rounded-box bg-base-300 outline-offset-2 focus-visible:outline-2 focus-visible:outline-primary">
+              <img id="focus-source" alt="Your photo" draggable="false" class="block max-h-80 w-auto max-w-full" />
+              <div id="focus-frame" class="pointer-events-none absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]"></div>
+              <div id="focus-dot" class="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-primary shadow"></div>
             </div>
+          </div>
+          <div class="space-y-3">
+            <p class="fieldset-legend">How it will look</p>
+            {# The black and white, brightness and contrast are CSS filters on the canvas (set in the script). #}
+            <canvas id="headshot-preview" width="400" height="500" class="w-56 rounded-box bg-base-300 shadow-sm"></canvas>
+          <div class="w-56 space-y-2">
+            <label class="block text-sm font-semibold" for="brightness-slider">Brightness <span id="brightness-value" class="font-normal opacity-70">0</span></label>
+            <input id="brightness-slider" type="range" min="-100" max="100" step="1" value="0" class="range range-sm w-full" />
+            <label class="block text-sm font-semibold" for="contrast-slider">Contrast <span id="contrast-value" class="font-normal opacity-70">0</span></label>
+            <input id="contrast-slider" type="range" min="-100" max="100" step="1" value="0" class="range range-sm w-full" />
+          </div>
+          </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="focus-reset" class="btn btn-sm">Centre the crop</button>
+            <button type="button" id="tone-reset" class="btn btn-ghost btn-sm">Reset brightness and contrast</button>
           </div>
         </div>
         <div class="mt-6 flex justify-end gap-2">
@@ -129,6 +140,10 @@
     const canvas = document.getElementById('headshot-preview');
     const focalX = document.getElementById('id_focal_x');
     const focalY = document.getElementById('id_focal_y');
+    const brightnessSlider = document.getElementById('brightness-slider');
+    const contrastSlider = document.getElementById('contrast-slider');
+    const brightnessField = document.getElementById('id_brightness');
+    const contrastField = document.getElementById('id_contrast');
 
     // The shape of a stored headshot: 400 wide by 500 high (keep in step with HEADSHOT_SIZE in backstage/fields.py).
     const WIDTH = 400, HEIGHT = 500, RATIO = WIDTH / HEIGHT;
@@ -148,6 +163,24 @@
       const top = Math.floor(Math.min(Math.max(fy * h - ch / 2, 0), h - ch) + 0.5);
       return { left, top, width: cw, height: ch };
     };
+
+    // Brightness and contrast, -100 to 100: each doubles or halves the effect at its ends (2 ** (setting / 100)), as on the
+    // server (tone_lut in fields.py). The preview applies them as the same CSS filters, after the black and white.
+    const toneFactor = (setting) => 2 ** (Number(setting) / 100);
+    const applyTone = () => {
+      const brightness = Number(brightnessSlider.value);
+      const contrast = Number(contrastSlider.value);
+      brightnessField.value = String(brightness);
+      contrastField.value = String(contrast);
+      document.getElementById('brightness-value').textContent = brightness > 0 ? `+${brightness}` : String(brightness);
+      document.getElementById('contrast-value').textContent = contrast > 0 ? `+${contrast}` : String(contrast);
+      canvas.style.filter = `grayscale(1) brightness(${toneFactor(brightness)}) contrast(${toneFactor(contrast)})`;
+    };
+    const resetTone = () => { brightnessSlider.value = 0; contrastSlider.value = 0; applyTone(); };
+    brightnessSlider.addEventListener('input', applyTone);
+    contrastSlider.addEventListener('input', applyTone);
+    document.getElementById('tone-reset').addEventListener('click', resetTone);
+    applyTone();
 
     const draw = () => {
       focalX.value = focal.x.toFixed(4);
@@ -184,7 +217,8 @@
       placeholder.classList.add('hidden');
       source.onload = () => {
         size = { w: source.naturalWidth, h: source.naturalHeight };
-        focal = { x: 0.5, y: 0.5 }; // a new photo starts centred
+        focal = { x: 0.5, y: 0.5 }; // a new photo starts centred, and as it is
+        resetTone();
         refresh();
         draw();
       };

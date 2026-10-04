@@ -3,7 +3,7 @@ from django.db.models import Q
 from django.db.models.functions import Lower
 
 from backstage import models
-from backstage.fields import CENTRE, clamp
+from backstage.fields import CENTRE, NEUTRAL_TONE, clamp, clamp_tone
 from rmeditor.widgets import RichTextWidget
 
 class PersonForm(forms.ModelForm):
@@ -80,13 +80,17 @@ class EventForm(forms.ModelForm):
 
 class ImageForm(forms.ModelForm):
     """
-    The image library's upload form. For a headshot, the photo is cropped around a focus point: the page sets
-    `focal_x` and `focal_y` (0 to 1, from the left and from the top). They are not kept: they only steer the crop
-    made when the file is saved. Anything unusable means the middle.
+    The image library's upload form. For a headshot, the photo is cropped around a focus point (`focal_x` and
+    `focal_y`, 0 to 1 from the left and from the top) and given a brightness and contrast (`brightness` and `contrast`,
+    -100 to 100): the page sets them. They are not kept: they only steer what is done when the file is saved.
+    Anything unusable means the middle, and no change to the tone.
     """
 
     focal_x = forms.CharField(required=False, widget=forms.HiddenInput(attrs={"id": "id_focal_x"}), initial="0.5")
     focal_y = forms.CharField(required=False, widget=forms.HiddenInput(attrs={"id": "id_focal_y"}), initial="0.5")
+    # Brightness and contrast, -100 to 100 (0: as the photo is): set by the sliders on the page, and not kept either.
+    brightness = forms.CharField(required=False, widget=forms.HiddenInput(attrs={"id": "id_brightness"}), initial="0")
+    contrast = forms.CharField(required=False, widget=forms.HiddenInput(attrs={"id": "id_contrast"}), initial="0")
 
     class Meta:
         model = models.Image
@@ -99,8 +103,17 @@ class ImageForm(forms.ModelForm):
     def clean_focal_y(self):
         return clamp(self.cleaned_data.get("focal_y"))
 
+    def clean_brightness(self):
+        return clamp_tone(self.cleaned_data.get("brightness"))
+
+    def clean_contrast(self):
+        return clamp_tone(self.cleaned_data.get("contrast"))
+
     def save(self, commit=True):
         self.instance.focal_point = (
             self.cleaned_data.get("focal_x", CENTRE[0]), self.cleaned_data.get("focal_y", CENTRE[1])
+        )
+        self.instance.tone = (
+            self.cleaned_data.get("brightness", NEUTRAL_TONE[0]), self.cleaned_data.get("contrast", NEUTRAL_TONE[1])
         )
         return super().save(commit)

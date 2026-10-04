@@ -15,6 +15,7 @@ HEADSHOT_CROP = ["middle", "center"]  # vertically, then horizontally
 
 
 CENTRE = (0.5, 0.5)
+NEUTRAL_TONE = (0, 0)  # brightness and contrast, each from -100 to 100; 0 leaves the photo as it is
 
 
 def clamp(value, default=0.5):
@@ -24,6 +25,34 @@ def clamp(value, default=0.5):
     except (TypeError, ValueError):
         return default
     return default if math.isnan(number) else min(max(number, 0.0), 1.0)
+
+
+def clamp_tone(value):
+    """A brightness or contrast setting: a number from -100 to 100 (anything else, or nothing, is 0)."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return 0.0 if math.isnan(number) else min(max(number, -100.0), 100.0)
+
+
+def tone_lut(brightness=0, contrast=0):
+    """
+    A table of the new value (0 to 255) for each grey value (0 to 255), for the brightness and contrast settings.
+
+    Each setting from -100 to 100 doubles or halves the effect at its ends: 2 ** (setting / 100), so -100 is x0.5, 0 is
+    x1 and 100 is x2. Brightness multiplies every grey; contrast then pushes the greys away from (or towards) the middle
+    grey, 127.5. Results stay between 0 and 255. This is what the CSS filters `brightness()` and `contrast()` do, in the
+    same order, so the upload page's preview matches the stored photo (see image_form.html).
+    """
+    bright = 2 ** (clamp_tone(brightness) / 100)
+    contrast_factor = 2 ** (clamp_tone(contrast) / 100)
+    table = []
+    for grey in range(256):
+        level = min(max(grey / 255 * bright, 0.0), 1.0)
+        level = min(max((level - 0.5) * contrast_factor + 0.5, 0.0), 1.0)
+        table.append(math.floor(level * 255 + 0.5))
+    return table
 
 
 def focal_crop_box(width, height, focal=CENTRE):
@@ -46,11 +75,12 @@ def focal_crop_box(width, height, focal=CENTRE):
     return left, top, left + crop_width, top + crop_height
 
 
-def monochrome(content, focal=CENTRE):
+def monochrome(content, focal=CENTRE, tone=NEUTRAL_TONE):
     """
     The uploaded photo in greyscale, in the same file format (as a ContentFile), cropped to the headshot's shape around
-    the focus point (the middle, unless told otherwise). It is turned the right way up first, as a sideways phone photo
-    says so in metadata that would otherwise be lost. A photo with transparency keeps it.
+    the focus point (the middle, unless told otherwise), then made brighter or darker and with more or less contrast as
+    `tone` (brightness, contrast) says. It is turned the right way up first, as a sideways phone photo says so in
+    metadata that would otherwise be lost. A photo with transparency keeps it.
     """
     content.file.seek(0)
     with PILImage.open(content.file) as source:
@@ -59,6 +89,13 @@ def monochrome(content, focal=CENTRE):
         has_alpha = photo.mode in ("RGBA", "LA", "PA") or "transparency" in photo.info
         photo = photo.convert("LA" if has_alpha else "L")
         photo = photo.crop(focal_crop_box(photo.width, photo.height, focal))
+        if (clamp_tone(tone[0]), clamp_tone(tone[1])) != NEUTRAL_TONE:
+            table = tone_lut(*tone)
+            if photo.mode == "LA":  # the transparency is left as it is
+                grey, alpha = photo.split()
+                photo = PILImage.merge("LA", (grey.point(table), alpha))
+            else:
+                photo = photo.point(table)
     options = {}
     if file_format == "JPEG":
         options = {"quality": 100, "subsampling": 0}  # the resize that follows is the one that compresses
@@ -76,13 +113,15 @@ class HeadshotResizedFieldFile(ResizedImageFieldFile):
             return ImageFieldFile.save(self, name, content, save)
         # The focus point the person chose when uploading (the middle if they did not).
         focal = getattr(self.instance, "focal_point", CENTRE)
-        return super().save(name, monochrome(content, focal), save)
+        tone = getattr(self.instance, "tone", NEUTRAL_TONE)  # brightness and contrast, chosen the same way
+        return super().save(name, monochrome(content, focal, tone), save)
 
 
 class HeadshotImageField(ResizedImageField):
     """
     An image that is changed when uploaded, if the image's type (its `image_type`) is Headshot: made black and
-    white, scaled to cover 400 x 500 (width x height) and cropped from the centre. The photo's metadata (location,
+    white (with the brightness and contrast it was uploaded with), scaled to cover 400 x 500 (width x height) and cropped
+    around a focus point. The photo's metadata (location,
     camera...) is removed; a sideways phone photo is turned the right way up first.
     """
 

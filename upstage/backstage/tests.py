@@ -1145,11 +1145,11 @@ class ResizeHeadshotsCommandTests(TestCase):
         # Make the conversion fail for the first photo only.
         calls = {"n": 0}
 
-        def fail_first(content, focal=(0.5, 0.5)):
+        def fail_first(content, focal=(0.5, 0.5), tone=(0, 0)):
             calls["n"] += 1
             if calls["n"] == 1:
                 raise ValueError("cannot convert")
-            return real(content, focal)
+            return real(content, focal, tone)
 
         with mock.patch("backstage.fields.monochrome", side_effect=fail_first):
             output = self.run_command()
@@ -1395,7 +1395,7 @@ class FocalPointTests(TestCase):
                            "ArrowLeft", "pointerdown"):
                 self.assertIn(needle, html, (url, needle))
             # The tool starts hidden: it shows when a headshot's file is chosen.
-            self.assertRegex(html, r'id="headshot-tool" class="hidden ')
+            self.assertRegex(html, r'id="headshot-tool" class="[^"]*\bhidden\b')
             # The page's crop sum uses the same shape as the server's.
             self.assertIn("const WIDTH = 400, HEIGHT = 500", html)
 
@@ -1509,4 +1509,274 @@ class PersonPhotoUploadOnlyTests(TestCase):
         self.assertIn("Upload a new photo", html)  # the button says so once there is a photo
         self.assertIn("link.textContent = photo.value", html)
         self.assertIn("removeButton.addEventListener('click'", html)
+
+
+class BrightnessContrastTests(TestCase):
+    """Headshots can be made brighter or darker and with more or less contrast when they are uploaded."""
+
+    def setUp(self):
+        import tempfile
+
+        from django.test import override_settings
+
+        self.media = tempfile.TemporaryDirectory()
+        self.addCleanup(self.media.cleanup)
+        override = override_settings(MEDIA_ROOT=self.media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+
+    @staticmethod
+    def expected(grey, brightness=0, contrast=0):
+        """What a grey value should become: brightness (x 2 ** (b / 100)), then contrast about 127.5, kept in range."""
+        level = min(max(grey / 255 * 2 ** (brightness / 100), 0), 1)
+        level = min(max((level - 0.5) * 2 ** (contrast / 100) + 0.5, 0), 1)
+        return int(level * 255 + 0.5)
+
+    # ---- the arithmetic
+
+    def test_no_change_is_the_identity(self):
+        from backstage.fields import tone_lut
+
+        self.assertEqual(tone_lut(0, 0), list(range(256)))
+        self.assertEqual(tone_lut(), list(range(256)))
+
+    def test_brightness_scales_the_greys(self):
+        from backstage.fields import tone_lut
+
+        # +100 is x2 (so 100 becomes 200 and anything over 127 is white); -100 is x0.5.
+        self.assertEqual(tone_lut(100, 0)[100], 200)
+        self.assertEqual(tone_lut(100, 0)[128], 255)
+        self.assertEqual(tone_lut(-100, 0)[100], 50)
+        self.assertEqual(tone_lut(-100, 0)[255], 128)
+        self.assertEqual((tone_lut(50, 0)[100], 141), (141, 141))  # x 1.414
+
+    def test_contrast_pushes_greys_away_from_the_middle(self):
+        from backstage.fields import tone_lut
+
+        more = tone_lut(0, 100)  # x2 about the middle grey
+        self.assertEqual((more[191], more[64], more[0], more[255]), (255, 0, 0, 255))
+        self.assertAlmostEqual(more[128], 128, delta=1)  # the middle is unchanged
+        less = tone_lut(0, -100)  # x0.5 about the middle grey
+        self.assertEqual((less[0], less[255]), (64, 191))
+        self.assertAlmostEqual(less[128], 128, delta=1)
+
+    def test_it_matches_the_formula_for_every_grey_and_setting(self):
+        from backstage.fields import tone_lut
+
+        for brightness, contrast in ((0, 0), (40, 0), (0, -60), (-35, 70), (100, 100), (-100, -100), (13, -87)):
+            table = tone_lut(brightness, contrast)
+            for grey in range(256):
+                self.assertEqual(table[grey], self.expected(grey, brightness, contrast), (brightness, contrast, grey))
+
+    def test_brightness_comes_first_then_contrast(self):
+        from backstage.fields import tone_lut
+
+        import math
+
+        # Brightness x1.5 (a setting of 100 * log2(1.5)): 100 becomes 150 (0.588), then contrast x2:
+        # (0.588 - 0.5) * 2 + 0.5 = 0.676, which is 172.5, so 173. The other way round gives
+        # (100/255 - 0.5) * 2 + 0.5 = 0.28, then x1.5 = 0.42, which is 107.
+        brightness = 100 * math.log2(1.5)
+        self.assertEqual(tone_lut(brightness, 100)[100], 173)
+        self.assertNotEqual(tone_lut(brightness, 100)[100], 107)
+
+    def test_the_table_stays_between_0_and_255_and_never_goes_backwards(self):
+        from backstage.fields import tone_lut
+
+        for brightness in (-100, -30, 0, 55, 100):
+            for contrast in (-100, -30, 0, 55, 100):
+                table = tone_lut(brightness, contrast)
+                self.assertEqual(len(table), 256)
+                self.assertTrue(all(0 <= v <= 255 for v in table))
+                self.assertTrue(all(a <= b for a, b in zip(table, table[1:])), (brightness, contrast))  # lighter stays lighter
+
+    def test_settings_are_clamped_and_rubbish_is_zero(self):
+        from backstage.fields import clamp_tone, tone_lut
+
+        self.assertEqual(clamp_tone("55"), 55.0)
+        self.assertEqual(clamp_tone("-12.5"), -12.5)
+        self.assertEqual(clamp_tone(500), 100.0)
+        self.assertEqual(clamp_tone(-500), -100.0)
+        for rubbish in ("abc", "", None, "nan", "<script>", [], "1e999999"):
+            self.assertIn(clamp_tone(rubbish), (0.0, 100.0), rubbish)  # "1e999999" is infinity: clamped
+        self.assertEqual(tone_lut("abc", None), list(range(256)))
+        self.assertEqual(tone_lut(500, 0), tone_lut(100, 0))
+
+    # ---- the stored photo
+
+    @staticmethod
+    def grey_photo(*levels):
+        """A PNG in vertical bands of the given grey levels, 600 wide by 750 high (so the crop keeps all of it)."""
+        from io import BytesIO
+
+        from PIL import Image as PILImage
+
+        image = PILImage.new("L", (len(levels) * 200, 750))
+        for index, level in enumerate(levels):
+            image.paste(level, (index * 200, 0, (index + 1) * 200, 750))
+        buffer = BytesIO()
+        image.save(buffer, "PNG")
+        return buffer.getvalue()
+
+    def store(self, data, tone=None, image_type="headshot", name="photo.png"):
+        from django.core.files.base import ContentFile
+
+        from backstage.models import Image
+
+        image = Image(description="test", image_type=image_type)
+        if tone is not None:
+            image.tone = tone
+        image.image.save(name, ContentFile(data), save=True)
+        return Image.objects.get(pk=image.pk)
+
+    @staticmethod
+    def levels(image, xs=(66, 200, 333)):
+        from PIL import Image as PILImage
+
+        with PILImage.open(image.image.path) as stored:
+            return [stored.convert("L").getpixel((x, 250)) for x in xs]
+
+    def test_without_settings_the_greys_are_unchanged(self):
+        # A 600 x 750 photo is cropped to 600 x 750 (it is 4:5 already) and scaled to 400 x 500: bands are at 0-133 etc.
+        self.assertEqual(self.levels(self.store(self.grey_photo(60, 128, 200))), [60, 128, 200])
+
+    def test_brightness_changes_the_stored_photo(self):
+        image = self.store(self.grey_photo(60, 100, 128), tone=(100, 0))
+        self.assertEqual(self.levels(image), [self.expected(60, 100), self.expected(100, 100), 255])
+        self.assertEqual(self.levels(self.store(self.grey_photo(60, 100, 200), tone=(-100, 0), name="d.png")), [30, 50, 100])
+
+    def test_contrast_changes_the_stored_photo(self):
+        image = self.store(self.grey_photo(64, 128, 191), tone=(0, 100))
+        self.assertEqual(self.levels(image), [self.expected(64, 0, 100), self.expected(128, 0, 100), self.expected(191, 0, 100)])
+        flat = self.store(self.grey_photo(64, 128, 191), tone=(0, -100), name="f.png")
+        self.assertEqual(self.levels(flat), [self.expected(64, 0, -100), self.expected(128, 0, -100), self.expected(191, 0, -100)])
+
+    def test_both_together(self):
+        image = self.store(self.grey_photo(40, 100, 160), tone=(30, -40))
+        self.assertEqual(self.levels(image), [self.expected(g, 30, -40) for g in (40, 100, 160)])
+
+    def test_it_is_applied_after_the_black_and_white(self):
+        from io import BytesIO
+
+        from PIL import Image as PILImage
+
+        buffer = BytesIO()
+        red = PILImage.new("RGB", (600, 750), (200, 40, 40))
+        red.save(buffer, "PNG")
+        grey = red.convert("L").getpixel((0, 0))  # the red as a grey: 88
+        stored = self.store(buffer.getvalue(), tone=(0, 100))
+        self.assertEqual(self.levels(stored)[0], self.expected(grey, 0, 100))
+        self.assertNotEqual(self.levels(stored)[0], grey)  # the contrast really did something
+
+    def test_a_colour_jpeg_with_a_setting_is_still_a_greyscale_400_by_500(self):
+        from io import BytesIO
+
+        from PIL import Image as PILImage
+
+        buffer = BytesIO()
+        PILImage.new("RGB", (900, 700), (30, 90, 160)).save(buffer, "JPEG")
+        stored = self.store(buffer.getvalue(), tone=(25, 25), name="c.jpg")
+        with PILImage.open(stored.image.path) as image:
+            self.assertEqual((image.size, image.mode, image.format), ((400, 500), "L", "JPEG"))
+
+    def test_transparency_is_left_alone(self):
+        from io import BytesIO
+
+        from PIL import Image as PILImage
+
+        photo = PILImage.new("RGBA", (600, 750), (100, 100, 100, 255))
+        photo.paste((0, 0, 0, 0), (0, 0, 600, 100))
+        buffer = BytesIO()
+        photo.save(buffer, "PNG")
+        stored = self.store(buffer.getvalue(), tone=(100, 100))
+        with PILImage.open(stored.image.path) as image:
+            self.assertEqual(image.mode, "LA")
+            self.assertEqual(image.getpixel((200, 10))[1], 0)  # still see-through at the top
+            self.assertEqual(image.getpixel((200, 400))[1], 255)  # and solid below
+            self.assertEqual(image.getpixel((200, 400))[0], self.expected(100, 100, 100))
+
+    def test_other_types_ignore_it(self):
+        data = self.grey_photo(60, 128, 200)
+        image = self.store(data, tone=(100, 100), image_type="promotion")
+        with open(image.image.path, "rb") as stored:
+            self.assertEqual(stored.read(), data)
+
+    # ---- the uploader
+
+    def upload(self, data, **fields):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        user = CustomUser.objects.filter(username="member").first() or CustomUser.objects.create_user(
+            "member", "member@example.com", "a-Long-pa55word!"
+        )
+        self.client.force_login(user)
+        post = {"image": SimpleUploadedFile("face.png", data, content_type="image/png"), "description": "A face", "image_type": "headshot"}
+        post.update(fields)
+        return self.client.post(reverse("image-create"), post)
+
+    def stored(self):
+        from backstage.models import Image
+
+        return Image.objects.get(description="A face")
+
+    def test_the_uploader_applies_the_chosen_settings(self):
+        self.assertEqual(self.upload(self.grey_photo(60, 100, 128), brightness="100", contrast="0").status_code, 302)
+        self.assertEqual(self.levels(self.stored()), [self.expected(60, 100), self.expected(100, 100), 255])
+
+    def test_settings_work_with_the_focus_point(self):
+        # Three bands; focus at the far left shows the darkest band only, which is then brightened.
+        wide = __import__("io").BytesIO()
+        from PIL import Image as PILImage
+
+        image = PILImage.new("L", (1500, 500))
+        for i, level in enumerate((60, 128, 200)):
+            image.paste(level, (i * 500, 0, (i + 1) * 500, 500))
+        image.save(wide, "PNG")
+        self.upload(wide.getvalue(), focal_x="0", focal_y="0.5", brightness="50", contrast="0")
+        self.assertEqual(self.levels(self.stored(), xs=(5, 200, 395)), [self.expected(60, 50)] * 3)
+
+    def test_missing_or_rubbish_settings_mean_no_change(self):
+        from backstage.models import Image
+
+        for fields in ({}, {"brightness": "", "contrast": ""}, {"brightness": "abc", "contrast": "<script>"}):
+            Image.objects.all().delete()
+            self.assertEqual(self.upload(self.grey_photo(60, 128, 200), **fields).status_code, 302, fields)
+            self.assertEqual(self.levels(self.stored()), [60, 128, 200], fields)
+
+    def test_out_of_range_settings_are_clamped_not_refused(self):
+        self.assertEqual(self.upload(self.grey_photo(60, 100, 128), brightness="900", contrast="-900").status_code, 302)
+        # +100 brightness then -100 contrast (the nearest the settings can go).
+        self.assertEqual(self.levels(self.stored()), [self.expected(g, 100, -100) for g in (60, 100, 128)])
+
+    def test_decimal_settings_are_fine(self):
+        self.assertEqual(self.upload(self.grey_photo(60, 128, 200), brightness="12.5", contrast="-7.25").status_code, 302)
+        self.assertEqual(self.levels(self.stored()), [self.expected(g, 12.5, -7.25) for g in (60, 128, 200)])
+
+    def test_the_settings_are_not_stored(self):
+        from backstage.models import Image
+
+        self.upload(self.grey_photo(60, 128, 200), brightness="40", contrast="40")
+        names = [f.name for f in Image._meta.get_fields()]
+        self.assertNotIn("brightness", names)
+        self.assertNotIn("contrast", names)
+        self.assertFalse(hasattr(Image.objects.get(description="A face"), "tone"))
+
+    def test_the_form_has_the_hidden_setting_fields(self):
+        user = CustomUser.objects.create_user("member7", "member7@example.com", "a-Long-pa55word!")
+        self.client.force_login(user)
+        html = self.client.get(reverse("image-create")).content.decode()
+        self.assertRegex(html, r'<input type="hidden" name="brightness" value="0"[^>]*id="id_brightness"')
+        self.assertRegex(html, r'<input type="hidden" name="contrast" value="0"[^>]*id="id_contrast"')
+
+    def test_the_page_has_the_sliders_and_the_matching_preview_filter(self):
+        user = CustomUser.objects.create_user("member8", "member8@example.com", "a-Long-pa55word!")
+        self.client.force_login(user)
+        html = self.client.get(reverse("image-create")).content.decode()
+        for needle in ('id="brightness-slider"', 'id="contrast-slider"', 'type="range" min="-100" max="100" step="1" value="0"',
+                       ">Brightness <", ">Contrast <", 'id="brightness-value"', 'id="contrast-value"', 'id="tone-reset"',
+                       "Reset brightness and contrast", "2 ** (Number(setting) / 100)",
+                       "grayscale(1) brightness(", "contrast(${toneFactor(contrast)})"):
+            self.assertIn(needle, html, needle)
+        # The preview is no longer made grey by a class: the filter does it, together with the sliders.
+        self.assertNotIn("shadow-sm grayscale", html)
 
