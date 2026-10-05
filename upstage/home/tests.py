@@ -1257,3 +1257,70 @@ class PromotionBlockTests(TestCase):
         event.productions.add(production)
         EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=4))
         self.assertEqual(self.shown().strip(), "")
+
+
+class DiaryBlockTests(TestCase):
+    """A diary block lists productions with published auditions and/or performances still to come."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from backstage.models import Event, EventDateTime, ProductionImage, TicketSite, Venue
+        from home.models import Block
+
+        cls.venue = Venue.objects.create(name="Esher Theatre")
+        cls.site = TicketSite.objects.create(name="Tickets", url="https://tickets.example.com/x")
+
+        def make(title, event_type, days, publish="published", ticket=False):
+            production = Production.objects.create(title=title)
+            event = Event.objects.create(
+                event_type=event_type, publish=publish, venue=cls.venue, ticket_site=cls.site if ticket else None
+            )
+            event.productions.add(production)
+            EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=days))
+            ProductionImage.objects.create(
+                production=production, is_default=True,
+                image=Image.objects.create(description=title, image=f"images/{title}.jpg"),
+            )
+            return production
+
+        make("Audition Play", "audition", 5)
+        make("Show Play", "performance", 10, ticket=True)
+        make("Hidden Play", "performance", 3, publish="not_published")
+        make("Past Play", "performance", -3)
+        make("Radio Play", "broadcast", 4)
+        cls.Block = Block
+
+    def shown(self, show):
+        block = self.Block.objects.create(name=f"Diary {show}", block_type="diary", title="What's on", diary_show=show)
+        return render_to_string(block.template, {"block": block})
+
+    def test_the_type_is_offered_and_shows_its_title(self):
+        self.assertIn(("diary", "Diary"), self.Block.BlockType.choices)
+        self.assertEqual([c[1] for c in self.Block.DiaryShow.choices], ["Auditions", "Performances", "Auditions and Performances"])
+        self.assertIn("What&#x27;s on", self.shown("both"))
+
+    def test_each_option_lists_its_events_only(self):
+        auditions, performances, both = self.shown("auditions"), self.shown("performances"), self.shown("both")
+        self.assertIn("Audition Play", auditions)
+        self.assertNotIn("Show Play", auditions)
+        self.assertIn("Show Play", performances)
+        self.assertNotIn("Audition Play", performances)
+        self.assertIn("Audition Play", both)
+        self.assertIn("Show Play", both)
+
+    def test_unpublished_past_and_other_events_are_left_out(self):
+        html = self.shown("both")
+        for title in ("Hidden Play", "Past Play", "Radio Play"):
+            self.assertNotIn(title, html)
+
+    def test_the_event_details_are_shown_with_the_image(self):
+        html = self.shown("performances")
+        self.assertIn("Performance at Esher Theatre", html)
+        self.assertIn("images/Show%20Play.jpg", html)
+        self.assertIn("https://tickets.example.com/x", html)
+
+    def test_with_nothing_to_show_the_block_is_empty(self):
+        from backstage.models import Event
+
+        Event.objects.update(publish="not_published")
+        self.assertEqual(self.shown("both").strip(), "")

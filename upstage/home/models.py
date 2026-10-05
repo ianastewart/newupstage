@@ -99,6 +99,12 @@ class Block(models.Model):
         COLUMNS_4 = "columns_4", "Four columns"
         AUDITIONS = "auditions", "Auditions"
         PROMOTION = "promotion", "Promotion"
+        DIARY = "diary", "Diary"
+
+    class DiaryShow(models.TextChoices):
+        AUDITIONS = "auditions", "Auditions"
+        PERFORMANCES = "performances", "Performances"
+        BOTH = "both", "Auditions and Performances"
 
     class ImageSize(models.TextChoices):
         SMALL = "small", "Small"
@@ -124,6 +130,7 @@ class Block(models.Model):
         BlockType.COLUMNS_4: "home/blocks/columns.html",
         BlockType.AUDITIONS: "home/blocks/auditions.html",
         BlockType.PROMOTION: "home/blocks/promotion.html",
+        BlockType.DIARY: "home/blocks/diary.html",
     }
 
     name = models.CharField(max_length=255, help_text="Identifies the block when adding it to pages.")
@@ -171,6 +178,10 @@ class Block(models.Model):
         "Fade-in time (seconds)", default=5, validators=[MinValueValidator(0), MaxValueValidator(30)],
         help_text="Hero image blocks: how long the image, subtitle and text take to fade in. 0 for no fade.",
     )
+    diary_show = models.CharField(
+        "Show", max_length=20, choices=DiaryShow.choices, default=DiaryShow.BOTH,
+        help_text="Diary blocks: which events to list.",
+    )
     production = models.ForeignKey(
         "backstage.Production", null=True, blank=True, on_delete=models.SET_NULL, related_name="blocks",
         help_text="Cast list blocks show this production's cast (and its default image if no image is chosen).",
@@ -204,6 +215,12 @@ class Block(models.Model):
         from .auditions import upcoming_auditions
 
         return upcoming_auditions()
+
+    def diary_productions(self):
+        """For a diary block: the productions with a published event still to come (see home.diary)."""
+        from .diary import diary_productions
+
+        return diary_productions(self.diary_show)
 
     @property
     def image_ratio(self):

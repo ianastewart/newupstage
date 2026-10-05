@@ -18,7 +18,7 @@ class BlockForm(forms.ModelForm):
     class Meta:
         model = Block
         fields = [
-            "name", "block_type", "title", "subtitle", "text", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights", "fade_in_seconds",
+            "name", "block_type", "title", "subtitle", "text", "diary_show", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights", "fade_in_seconds",
             "background_colour", "text_colour",
         ]
         widgets = {
@@ -35,6 +35,10 @@ class BlockForm(forms.ModelForm):
         self.fields["image"].queryset = Image.objects.order_by("description")
         self.fields["production"].queryset = Production.objects.order_by("title")
         self.fields["fade_in_seconds"].required = False  # left blank, it is the usual 5 seconds
+        self.fields["diary_show"].required = False  # left blank, it is both
+
+    def clean_diary_show(self):
+        return self.cleaned_data.get("diary_show") or Block.DiaryShow.BOTH
 
     def clean_fade_in_seconds(self):
         seconds = self.cleaned_data.get("fade_in_seconds")

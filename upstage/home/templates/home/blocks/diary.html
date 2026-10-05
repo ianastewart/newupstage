@@ -1,0 +1,47 @@
+{% comment %}
+A diary block: its title, subtitle and text, then every production with a published audition and/or performance (as the block's
+Show option says) still to come. Each is a card of two columns: the production's image on the left, the details of its events on the
+right (what kind of event, where, when, and a ticket link). On phones the columns stack.
+With nothing to come the block shows nothing at all, not even its title.
+{% endcomment %}
+{% with productions=block.diary_productions %}
+{% if productions %}
+<section class="rounded-box p-6 md:p-10" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+  {% include "home/blocks/_heading.html" %}
+  {% if block.has_visible_text %}
+    <div class="mb-8">{% include "home/blocks/_text.html" %}</div>
+  {% endif %}
+  <ul class="space-y-4">
+    {% for production in productions %}
+      <li class="grid gap-4 rounded-box bg-base-100 p-4 text-base-content shadow-sm md:grid-cols-2">
+        {# Left: the production's image (an empty column if there is none, so the cards still line up). #}
+        <div>
+          {% with cover=production.default_image %}
+            {% if cover %}
+              <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" loading="lazy" class="h-auto max-h-60 w-auto max-w-full rounded-box shadow-sm" />
+            {% endif %}
+          {% endwith %}
+        </div>
+        {# Right: the title, then each event with its venue and dates. #}
+        <div>
+          <h3 class="text-2xl font-bold">{{ production.title }}</h3>
+          {% if production.strap_line %}<p class="mt-1 italic opacity-80">{{ production.strap_line }}</p>{% endif %}
+          {% for event in production.diary_events %}
+            <div class="mt-4">
+              <p class="font-semibold">{{ event.get_event_type_display }}{% if event.venue %} at {{ event.venue.name }}{% endif %}</p>
+              <ul class="mt-1 space-y-0.5">
+                {% for date in event.future_dates %}<li>{{ date.datetime|date:"D j M Y, g:i a" }}</li>{% endfor %}
+              </ul>
+              {% if event.description %}<p class="mt-1 text-sm opacity-80">{{ event.description }}</p>{% endif %}
+              {% if event.ticket_site and event.ticket_site.url %}
+                <a href="{{ event.ticket_site.url }}" class="btn btn-primary btn-sm mt-2" target="_blank" rel="noopener noreferrer">Buy Tickets</a>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endwith %}
