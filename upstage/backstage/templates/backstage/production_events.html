@@ -7,19 +7,6 @@
   {% include "backstage/includes/production_header.html" with active="events" %}
 
   <div class="mb-6 flex flex-wrap items-center justify-end gap-3">
-    {% if other_events %}
-      <form method="POST" class="flex flex-wrap items-center gap-2">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="attach" />
-        <select name="event" class="select select-sm w-64" aria-label="Existing event" required>
-          <option value="">Add an existing event…</option>
-          {% for event in other_events %}
-            <option value="{{ event.pk }}">{{ event }} ({{ event.get_event_type_display }})</option>
-          {% endfor %}
-        </select>
-        <button type="submit" class="btn btn-sm">Add</button>
-      </form>
-    {% endif %}
     <button type="button" class="btn btn-primary" onclick="document.getElementById('new-event').showModal()">New event</button>
   </div>
 
@@ -31,8 +18,8 @@
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <div class="flex flex-wrap items-center gap-2">
-                  <h3 class="card-title">{{ event.title }}</h3>
-                  <span class="badge badge-sm {% if event.event_type == 'audition' %}badge-info{% elif event.event_type == 'rehearsal' %}badge-accent{% elif event.event_type == 'performance' %}badge-success{% else %}badge-ghost{% endif %}">{{ event.get_event_type_display }}</span>
+                  <h3 class="text-3xl font-bold">{{ event.get_event_type_display }}</h3>
+                  {% if event.publish == 'published' %}<span class="badge badge-sm badge-outline">Published</span>{% elif event.publish == 'promoted' %}<span class="badge badge-sm badge-primary">Promoted</span>{% endif %}
                 </div>
                 <p class="mt-1 text-sm opacity-80">
                   {% if event.venue %}{{ event.venue }}{% else %}No venue yet{% endif %}
@@ -47,13 +34,15 @@
                 {% endwith %}
               </div>
               <div class="flex items-center gap-1">
-                <a href="{% url 'event-update' event.pk %}?production={{ production.pk }}" class="btn btn-sm" aria-label="Edit {{ event.title }}">Edit</a>
-                <form method="POST">
+                <a href="{% url 'event-update' event.pk %}?production={{ production.pk }}" class="btn btn-sm" aria-label="Edit {{ event }}">Edit</a>
+                {% with others=event.productions.all %}
+                <form method="POST" onsubmit="return confirm('Delete this {{ event.get_event_type_display|lower }} and its dates?{% if others|length > 1 %} It is also an event of other productions, and will be deleted for them too.{% endif %}');">
                   {% csrf_token %}
-                  <input type="hidden" name="action" value="unlink" />
+                  <input type="hidden" name="action" value="delete" />
                   <input type="hidden" name="event" value="{{ event.pk }}" />
-                  <button type="submit" class="btn btn-ghost btn-xs text-error" title="Take this event off the production (the event is kept)">Remove</button>
+                  <button type="submit" class="btn btn-ghost btn-sm text-error" title="Delete this event and its dates">Delete</button>
                 </form>
+                {% endwith %}
               </div>
             </div>
 
@@ -101,8 +90,8 @@
         <div role="alert" class="alert alert-error alert-soft mb-4">{{ event_form.non_field_errors|join:" " }}</div>
       {% endif %}
       <div class="grid gap-x-4 sm:grid-cols-2">
-        {{ event_form.title.as_field_group }}
         {{ event_form.event_type.as_field_group }}
+        {{ event_form.publish.as_field_group }}
         {{ event_form.venue.as_field_group }}
         {{ event_form.ticket_url.as_field_group }}
         {{ event_form.first_datetime.as_field_group }}

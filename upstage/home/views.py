@@ -56,8 +56,11 @@ def actor_detail(request, pk):
 
 def radio_plays():
     """Every production that is a radio play, latest broadcast first (those with no date last)."""
-    return Production.objects.filter(type=Production.ProductionType.RADIO).prefetch_related("images__image").order_by(
-        F("broadcast_datetime").desc(nulls_last=True), "title"
+    return (
+        Production.objects.filter(type=Production.ProductionType.RADIO)
+        .with_broadcast_date()
+        .prefetch_related("images__image")
+        .order_by(F("broadcast_at").desc(nulls_last=True), "title")
     )
 
 

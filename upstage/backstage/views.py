@@ -77,7 +77,7 @@ def production_team(request, pk):
 def production_events(request, pk):
     """
     A production's events (auditions, rehearsals, performances...) with their dates: create an event
-    for the production, attach an existing one, unlink one, and add or remove an event's dates.
+    for the production, delete one, and add or remove an event's dates.
     """
     production = get_object_or_404(models.Production, pk=pk)
     event_form = forms.EventForm()
@@ -85,7 +85,7 @@ def production_events(request, pk):
     if request.method == "POST":
         action = request.POST.get("action")
         event_id = request.POST.get("event", "")
-        # Only events linked to this production can be changed from its tab (except when attaching one).
+        # Only events linked to this production can be changed from its tab.
         linked_event = production.events.filter(pk=event_id).first() if event_id.isdigit() else None
         if action == "create":
             event_form = forms.EventForm(request.POST)
@@ -93,11 +93,8 @@ def production_events(request, pk):
                 production.events.add(event_form.save())
                 return redirect("production-events", pk=production.pk)
         else:
-            if action == "attach" and event_id.isdigit():
-                if event := models.Event.objects.filter(pk=event_id).first():
-                    production.events.add(event)
-            elif action == "unlink" and linked_event:
-                production.events.remove(linked_event)
+            if action == "delete" and linked_event:
+                linked_event.delete()  # the event and its dates
             elif action == "add_datetime" and linked_event:
                 when = parse_datetime(request.POST.get("datetime", ""))
                 if when:
@@ -114,13 +111,12 @@ def production_events(request, pk):
         production.events.select_related("venue", "ticket_site")
         .prefetch_related("datetimes")
         .annotate(first_datetime=Min("datetimes__datetime"))
-        .order_by(F("first_datetime").asc(nulls_last=True), "title")
+        .order_by(F("first_datetime").asc(nulls_last=True), "event_type", "pk")
     )
     return render(request, "backstage/production_events.html", {
         "production": production,
         "events": events,
         "event_form": event_form,
-        "other_events": models.Event.objects.exclude(productions=production).order_by("title"),
         "show_create": event_form.is_bound,  # reopen the New event dialog when the form has errors
     })
 
@@ -333,15 +329,19 @@ def person_productions(person):
     cast_in is [(production, [character names])], newest first. credits is [(heading, [productions])],
     one section per production team role (writer, director, editor first), newest first.
     """
-    parts = person.cast_roles.select_related("production").order_by(
-        F("production__broadcast_datetime").desc(nulls_last=True), "production__title", "id"
+    parts = (
+        person.cast_roles.select_related("production")
+        .annotate(broadcast_at=models.broadcast_date("production__"))
+        .order_by(F("broadcast_at").desc(nulls_last=True), "production__title", "id")
     )
     characters = {}
     for part in parts:
         characters.setdefault(part.production, []).append(part.character_name)
     credits = {}
-    for credit in person.productionteam_set.select_related("production", "role").order_by(
-        F("production__broadcast_datetime").desc(nulls_last=True), "production__title"
+    for credit in (
+        person.productionteam_set.select_related("production", "role")
+        .annotate(broadcast_at=models.broadcast_date("production__"))
+        .order_by(F("broadcast_at").desc(nulls_last=True), "production__title")
     ):
         credits.setdefault(credit.role.name, []).append(credit.production)
     order = list(CREDIT_HEADINGS)
@@ -448,7 +448,8 @@ def writer_list(request):
                 "productionteam_set",
                 queryset=models.ProductionTeam.objects.filter(role__name="Writer")
                 .select_related("production")
-                .order_by(F("production__broadcast_datetime").desc(nulls_last=True), "production__title"),
+                .annotate(broadcast_at=models.broadcast_date("production__"))
+                .order_by(F("broadcast_at").desc(nulls_last=True), "production__title"),
                 to_attr="writing_credits",
             )
         )
@@ -476,9 +477,9 @@ def actor_list(request):
         actors = actors.prefetch_related(
             Prefetch(
                 "cast_roles",
-                queryset=models.Cast.objects.select_related("production").order_by(
-                    F("production__broadcast_datetime").desc(nulls_last=True), "production__title"
-                ),
+                queryset=models.Cast.objects.select_related("production")
+                .annotate(broadcast_at=models.broadcast_date("production__"))
+                .order_by(F("broadcast_at").desc(nulls_last=True), "production__title"),
                 to_attr="parts",
             )
         )
@@ -498,7 +499,7 @@ class VenueView(CRUDView):
 class EventView(CRUDView):
     model = models.Event
     form_class = forms.EventDetailsForm  # the ticket website is typed in, not chosen from a list
-    fields = ["title", "event_type", "description", "venue", "ticket_site"]
+    fields = ["event_type", "publish", "description", "venue", "ticket_site"]
 
     def get_production(self):
         """When editing from a production's Events tab (?production=<pk>), that production: saving or cancelling goes back to it."""
@@ -526,7 +527,7 @@ class EventDateTimeView(CRUDView):
 
 class ProductionView(CRUDView):
     model = models.Production
-    fields = ["title", "strap_line", "description", "state", "type", "listen_url", "broadcast_datetime"]
+    fields = ["title", "strap_line", "description", "state", "type", "listen_url"]
     paginate_by = 24
 
     def get_state(self):
@@ -540,10 +541,10 @@ class ProductionView(CRUDView):
     def get_search(self):
         return self.request.GET.get("q", "").strip()
 
-    # By broadcast date; productions without one go last, most recently added first.
+    # By broadcast date (that of its Broadcast event); productions without one go last, most recently added first.
     SORTS = {
-        "newest": ("Newest first", [F("broadcast_datetime").desc(nulls_last=True), "-id"]),
-        "oldest": ("Oldest first", [F("broadcast_datetime").asc(nulls_last=True), "-id"]),
+        "newest": ("Newest first", [F("broadcast_at").desc(nulls_last=True), "-id"]),
+        "oldest": ("Oldest first", [F("broadcast_at").asc(nulls_last=True), "-id"]),
         "title": ("Alphabetical", [Lower("title"), "-id"]),
     }
 
@@ -554,6 +555,7 @@ class ProductionView(CRUDView):
     def get_queryset(self):
         queryset = super().get_queryset().order_by("-id")
         if self.role == Role.LIST:
+            queryset = queryset.with_broadcast_date()
             # The default image is used as the cover in the list (Production.default_image).
             queryset = queryset.prefetch_related(
                 Prefetch("images", queryset=models.ProductionImage.objects.select_related("image").order_by("id"))

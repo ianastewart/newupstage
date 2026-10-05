@@ -14,8 +14,10 @@ class RadioArchiveTests(TestCase):
         now = timezone.now()
         # Only the image's file name is stored: nothing is written to the media folder.
         cls.image = Image.objects.create(description="Cover", image="images/test-cover.jpg")
-        cls.old = Production.objects.create(title="Old Play", broadcast_datetime=now - timedelta(days=100))
-        cls.new = Production.objects.create(title="New Play", broadcast_datetime=now - timedelta(days=1))
+        cls.old = Production.objects.create(title="Old Play")
+        cls.old.set_broadcast(now - timedelta(days=100))
+        cls.new = Production.objects.create(title="New Play")
+        cls.new.set_broadcast(now - timedelta(days=1))
         cls.undated = Production.objects.create(title="Undated Play")
         cls.stage = Production.objects.create(title="A Stage Play", type=Production.ProductionType.STAGE)
         ProductionImage.objects.create(production=cls.new, image=cls.image, is_default=True)
@@ -602,7 +604,7 @@ class AuditionsBlockTests(TestCase):
 
         def audition(title, *days, event_type=Event.EventType.AUDITION, image=True):
             production = Production.objects.create(title=title)
-            event = Event.objects.create(title=f"{title} auditions", event_type=event_type, venue=venue)
+            event = Event.objects.create(event_type=event_type, venue=venue)
             event.productions.add(production)
             for day in days:
                 EventDateTime.objects.create(event=event, datetime=now + timedelta(days=day))
@@ -780,7 +782,7 @@ class AuditionsBlockTests(TestCase):
 
         day = timezone.now() + timedelta(days=60)
         production = Production.objects.create(title="Two Sessions")
-        event = Event.objects.create(title="Sessions", event_type=Event.EventType.AUDITION)
+        event = Event.objects.create(event_type=Event.EventType.AUDITION)
         event.productions.add(production)
         for hour in (0, 4):  # two sessions on the same day
             EventDateTime.objects.create(event=event, datetime=day.replace(hour=10, minute=0) + timedelta(hours=hour))
@@ -809,7 +811,7 @@ class EmptyTextTests(TestCase):
         from home.models import Block
 
         production = Production.objects.create(title="Live One")
-        event = Event.objects.create(title="Auditions", event_type=Event.EventType.AUDITION)
+        event = Event.objects.create(event_type=Event.EventType.AUDITION)
         event.productions.add(production)
         EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=5))
         for text in self.EMPTY:
@@ -1005,7 +1007,7 @@ class PromotionBlockTests(TestCase):
 
         production = Production.objects.create(title=title)
         if days is not None:
-            event = Event.objects.create(title=f"{title} event", event_type=event_type)
+            event = Event.objects.create(event_type=event_type)
             event.productions.add(production)
             EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=days, hours=hours))
         for description, image_type, default in images:
@@ -1192,7 +1194,7 @@ class PromotionBlockTests(TestCase):
 
         show = self.ticketed("Show", 20, url="https://tickets.example.com/later")
         sooner = Event.objects.create(
-            title="Preview", event_type="performance", ticket_site=TicketSite.objects.create(name="Preview", url="https://tickets.example.com/preview")
+            event_type="performance", ticket_site=TicketSite.objects.create(name="Preview", url="https://tickets.example.com/preview")
         )
         sooner.productions.add(show)
         EventDateTime.objects.create(event=sooner, datetime=timezone.now() + timedelta(days=3))
@@ -1205,7 +1207,7 @@ class PromotionBlockTests(TestCase):
 
         show = self.production("Show", days=10, images=[("show-promo", "promotion", True)])
         audition = Event.objects.create(
-            title="Auditions", event_type="audition", ticket_site=TicketSite.objects.create(name="Odd", url="https://tickets.example.com/audition")
+            event_type="audition", ticket_site=TicketSite.objects.create(name="Odd", url="https://tickets.example.com/audition")
         )
         audition.productions.add(show)
         EventDateTime.objects.create(event=audition, datetime=timezone.now() + timedelta(days=2))
@@ -1215,7 +1217,7 @@ class PromotionBlockTests(TestCase):
         from backstage.models import Event, EventDateTime, TicketSite
 
         production = Production.objects.create(title="No poster")
-        event = Event.objects.create(title="Run", event_type="performance", ticket_site=TicketSite.objects.create(name="T", url="https://tickets.example.com/x"))
+        event = Event.objects.create(event_type="performance", ticket_site=TicketSite.objects.create(name="T", url="https://tickets.example.com/x"))
         event.productions.add(production)
         EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=4))
         self.assertEqual(self.shown().strip(), "")

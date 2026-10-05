@@ -111,10 +111,10 @@ class Command(BaseCommand):
             production.description = description
         if play["listen_url"] and (created or options["overwrite"] or not production.listen_url):
             production.listen_url = play["listen_url"]
-        if play["broadcast_date"] and (created or options["overwrite"] or not production.broadcast_datetime):
-            # The podcast file name only has the date; store midnight UK time.
-            production.broadcast_datetime = timezone.make_aware(datetime.combine(play["broadcast_date"], time()))
         production.save()
+        if play["broadcast_date"] and (created or options["overwrite"] or not production.broadcast_datetime):
+            # The podcast file name only has the date; the production's Broadcast event gets midnight UK time.
+            production.set_broadcast(timezone.make_aware(datetime.combine(play["broadcast_date"], time())))
 
         for person, role in team:
             ProductionTeam.objects.get_or_create(production=production, person=person, role=self.roles[role])

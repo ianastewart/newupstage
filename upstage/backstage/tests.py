@@ -2,7 +2,7 @@ from io import StringIO
 from unittest import mock
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
 from accounts.models import CustomUser
@@ -2101,7 +2101,7 @@ class EventsTabEditButtonTests(TestCase):
         self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
         self.production = Production.objects.create(title="Panto")
         self.other = Production.objects.create(title="Other")
-        self.event = Event.objects.create(title="Opening night", event_type="performance")
+        self.event = Event.objects.create(event_type="performance")
         self.event.productions.add(self.production)
         self.tab = reverse("production-events", args=[self.production.pk])
 
@@ -2113,10 +2113,13 @@ class EventsTabEditButtonTests(TestCase):
         self.assertIn(f'<a href="{reverse("event-update", args=[self.event.pk])}?production={self.production.pk}" class="btn btn-sm"', html)
         self.assertIn(">Edit</a>", html)
 
-    def test_the_title_is_not_a_link(self):
+    def test_the_event_type_is_shown_in_large_text_not_a_badge_and_is_not_a_link(self):
         html = self.html()
-        self.assertIn('<h3 class="card-title">Opening night</h3>', html)
+        self.assertIn('<h3 class="text-3xl font-bold">Performance</h3>', html)
+        self.assertNotIn("badge-success", html)  # the type used to be a coloured badge
+        self.assertNotRegex(html, r'<span class="badge[^>]*>Performance</span>')
         self.assertNotIn(f'href="{reverse("event-detail", args=[self.event.pk])}"', html)
+        self.assertNotIn("Opening night", html)  # events have no title
 
     def test_the_edit_page_goes_back_to_the_events_tab(self):
         url = reverse("event-update", args=[self.event.pk]) + f"?production={self.production.pk}"
@@ -2127,17 +2130,17 @@ class EventsTabEditButtonTests(TestCase):
     def test_saving_goes_back_to_the_events_tab(self):
         url = reverse("event-update", args=[self.event.pk])
         response = self.client.post(url, {
-            "title": "Gala night", "event_type": "performance", "description": "", "venue": "", "ticket_site": "",
+            "event_type": "rehearsal", "publish": "not_published", "description": "Run through", "venue": "",
             "production": self.production.pk,
         })
         self.assertRedirects(response, self.tab)
         self.event.refresh_from_db()
-        self.assertEqual(self.event.title, "Gala night")
+        self.assertEqual((self.event.event_type, self.event.description), ("rehearsal", "Run through"))
 
     def test_a_production_the_event_is_not_part_of_is_ignored(self):
         url = reverse("event-update", args=[self.event.pk])
         response = self.client.post(url, {
-            "title": "Opening night", "event_type": "performance", "description": "", "venue": "", "ticket_site": "",
+            "event_type": "performance", "publish": "not_published", "description": "", "venue": "", "ticket_site": "",
             "production": self.other.pk,
         })
         self.assertEqual(response.status_code, 302)
@@ -2157,12 +2160,12 @@ class EventTicketWebsiteTests(TestCase):
 
         self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
         self.production = Production.objects.create(title="Panto")
-        self.event = Event.objects.create(title="Opening night", event_type="performance")
+        self.event = Event.objects.create(event_type="performance")
         self.event.productions.add(self.production)
         self.edit_url = reverse("event-update", args=[self.event.pk])
 
     def post_edit(self, **extra):
-        data = {"title": "Opening night", "event_type": "performance", "description": "", "venue": "", **extra}
+        data = {"event_type": "performance", "publish": "not_published", "description": "", "venue": "", **extra}
         return self.client.post(self.edit_url, data)
 
     def test_the_edit_page_has_a_web_address_field_and_no_ticket_site_list(self):
@@ -2190,10 +2193,10 @@ class EventTicketWebsiteTests(TestCase):
     def test_the_same_address_uses_the_same_ticket_site(self):
         from backstage.models import Event, TicketSite
 
-        other = Event.objects.create(title="Matinee", event_type="performance")
+        other = Event.objects.create(event_type="performance")
         self.post_edit(ticket_url="https://tickets.example.com/panto")
         self.client.post(reverse("event-update", args=[other.pk]), {
-            "title": "Matinee", "event_type": "performance", "description": "", "venue": "", "ticket_url": "https://tickets.example.com/panto",
+            "title": "Matinee", "event_type": "performance", "publish": "not_published", "description": "", "venue": "", "ticket_url": "https://tickets.example.com/panto",
         })
         other.refresh_from_db()
         self.event.refresh_from_db()
@@ -2224,11 +2227,11 @@ class EventTicketWebsiteTests(TestCase):
 
     def test_creating_an_event_from_the_events_tab_with_an_address(self):
         response = self.client.post(reverse("production-events", args=[self.production.pk]), {
-            "action": "create", "title": "Gala", "event_type": "performance", "venue": "", "description": "",
+            "action": "create", "event_type": "rehearsal", "publish": "not_published", "venue": "", "description": "",
             "ticket_url": "https://tickets.example.com/gala", "first_datetime": "",
         })
         self.assertEqual(response.status_code, 302)
-        gala = self.production.events.get(title="Gala")
+        gala = self.production.events.get(event_type="rehearsal")
         self.assertEqual(gala.ticket_site.url, "https://tickets.example.com/gala")
 
     def test_the_tab_shows_the_ticket_link(self):
@@ -2251,3 +2254,355 @@ class EventTicketWebsiteTests(TestCase):
         self.post_edit(ticket_url="https://tickets.example.com/panto")
         block = Block.objects.create(name="Promo", block_type="promotion")
         self.assertIn('href="https://tickets.example.com/panto"', render_to_string(block.template, {"block": block}))
+
+
+class BroadcastEventTests(TestCase):
+    """A production's broadcast date is the date of its Broadcast event."""
+
+    def setUp(self):
+        from datetime import datetime, timezone as dt_timezone
+
+        self.when = datetime(2026, 5, 22, 0, 0, tzinfo=dt_timezone.utc)
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+
+    def test_broadcast_is_an_event_type(self):
+        from backstage.models import Event
+
+        self.assertIn(("broadcast", "Broadcast"), Event.EventType.choices)
+
+    def test_the_production_has_no_broadcast_field_any_more(self):
+        self.assertNotIn("broadcast_datetime", [f.name for f in Production._meta.get_fields()])
+
+    def test_a_production_without_a_broadcast_event_has_no_date(self):
+        production = Production.objects.create(title="Unaired")
+        self.assertIsNone(production.broadcast_datetime)
+        self.assertIsNone(Production.objects.with_broadcast_date().get().broadcast_at)
+
+    def test_set_broadcast_makes_a_broadcast_event_connected_to_the_production(self):
+        from backstage.models import Event
+
+        production = Production.objects.create(title="Aired")
+        production.set_broadcast(self.when)
+        event = production.events.get()
+        self.assertEqual(event.event_type, "broadcast")
+        self.assertEqual(str(event), "Broadcast")
+        self.assertEqual([d.datetime for d in event.datetimes.all()], [self.when])
+        self.assertEqual(production.broadcast_datetime, self.when)
+        self.assertEqual(Production.objects.with_broadcast_date().get().broadcast_at, self.when)
+        self.assertEqual(Event.objects.count(), 1)
+
+    def test_set_broadcast_again_changes_the_date_not_makes_another_event(self):
+        from datetime import timedelta
+
+        production = Production.objects.create(title="Aired")
+        production.set_broadcast(self.when)
+        production.set_broadcast(self.when + timedelta(days=7))
+        self.assertEqual(production.events.count(), 1)
+        self.assertEqual(production.broadcast_datetime, self.when + timedelta(days=7))
+
+    def test_only_broadcast_events_count_for_the_date(self):
+        from datetime import timedelta
+
+        from backstage.models import Event, EventDateTime
+
+        production = Production.objects.create(title="Show")
+        for kind in ("performance", "audition", "rehearsal", "other"):
+            event = Event.objects.create(event_type=kind)
+            event.productions.add(production)
+            EventDateTime.objects.create(event=event, datetime=self.when - timedelta(days=30))
+        self.assertIsNone(production.broadcast_datetime)
+        production.set_broadcast(self.when)
+        self.assertEqual(production.broadcast_datetime, self.when)
+
+    def test_the_first_broadcast_date_is_the_production_date(self):
+        from datetime import timedelta
+
+        from backstage.models import EventDateTime
+
+        production = Production.objects.create(title="Repeated")
+        production.set_broadcast(self.when)
+        EventDateTime.objects.create(event=production.events.get(), datetime=self.when + timedelta(days=60))  # a repeat
+        self.assertEqual(production.broadcast_datetime, self.when)
+        self.assertEqual(Production.objects.with_broadcast_date().get().broadcast_at, self.when)
+
+    def test_the_production_page_shows_the_date(self):
+        production = Production.objects.create(title="Aired")
+        production.set_broadcast(self.when)
+        html = self.client.get(reverse("production-detail", args=[production.pk])).content.decode()
+        self.assertIn("22 May 2026", html)
+
+    def test_the_events_tab_lists_it_as_a_broadcast(self):
+        production = Production.objects.create(title="Aired")
+        production.set_broadcast(self.when)
+        html = self.client.get(reverse("production-events", args=[production.pk])).content.decode()
+        self.assertIn('<h3 class="text-3xl font-bold">Broadcast</h3>', html)
+        self.assertNotIn("Aired broadcast", html)  # events have no title
+
+    def test_the_production_form_no_longer_asks_for_a_broadcast_date(self):
+        html = self.client.get(reverse("production-create")).content.decode()
+        self.assertNotIn("broadcast_datetime", html)
+
+    def test_the_production_list_sorts_by_the_broadcast_date(self):
+        from datetime import timedelta
+
+        early = Production.objects.create(title="Early")
+        early.set_broadcast(self.when)
+        late = Production.objects.create(title="Late")
+        late.set_broadcast(self.when + timedelta(days=100))
+        Production.objects.create(title="Undated")
+        newest = [p.title for p in self.client.get(reverse("production-list") + "?sort=newest").context["object_list"]]
+        oldest = [p.title for p in self.client.get(reverse("production-list") + "?sort=oldest").context["object_list"]]
+        self.assertEqual(newest[:2], ["Late", "Early"])
+        self.assertEqual(newest[-1], "Undated")  # no date goes last
+        self.assertEqual(oldest[:2], ["Early", "Late"])
+        self.assertEqual(oldest[-1], "Undated")
+
+    def test_a_persons_productions_are_newest_broadcast_first(self):
+        from datetime import timedelta
+
+        from backstage.views import person_productions
+
+        person = Person.objects.create(first_name="Ann", last_name="Actor")
+        director = Role.objects.get_or_create(name="Director")[0]
+        for title, days in (("Early", 0), ("Late", 100)):
+            production = Production.objects.create(title=title)
+            production.set_broadcast(self.when + timedelta(days=days))
+            Cast.objects.create(production=production, character_name=title, actor=person)
+            ProductionTeam.objects.create(production=production, person=person, role=director)
+        cast_in, credits = person_productions(person)
+        self.assertEqual([p.title for p, _ in cast_in], ["Late", "Early"])
+        self.assertEqual([p.title for p in credits[0][1]], ["Late", "Early"])
+
+
+class BroadcastMigrationTests(TransactionTestCase):
+    """The data migration turns each production's broadcast date into a Broadcast event, and back again."""
+
+    before = [("backstage", "0013_event_type_broadcast")]
+    after = [("backstage", "0014_broadcast_events")]
+
+    def apps_at(self, targets):
+        from django.db import connection
+        from django.db.migrations.executor import MigrationExecutor
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(targets)
+        return executor.loader.project_state(targets).apps
+
+    def tearDown(self):
+        from django.db import connection
+        from django.db.migrations.executor import MigrationExecutor
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())  # leave the database as the code expects
+
+    def test_forwards_and_backwards(self):
+        from datetime import datetime, timezone as dt_timezone
+
+        when = datetime(2025, 10, 2, 23, 0, tzinfo=dt_timezone.utc)
+        old = self.apps_at(self.before)
+        OldProduction = old.get_model("backstage", "Production")
+        aired = OldProduction.objects.create(title="Aired", broadcast_datetime=when)
+        unaired = OldProduction.objects.create(title="Unaired")
+
+        new = self.apps_at(self.after)
+        Event, EventDateTime = new.get_model("backstage", "Event"), new.get_model("backstage", "EventDateTime")
+        Production = new.get_model("backstage", "Production")
+        event = Production.objects.get(pk=aired.pk).events.get()
+        self.assertEqual((event.event_type, event.title), ("broadcast", "Aired broadcast"))
+        self.assertEqual([d.datetime for d in EventDateTime.objects.filter(event=event)], [when])
+        self.assertFalse(Production.objects.get(pk=unaired.pk).events.exists())  # no date, no event
+        self.assertEqual(Event.objects.count(), 1)
+
+        back = self.apps_at(self.before)
+        self.assertEqual(back.get_model("backstage", "Production").objects.get(pk=aired.pk).broadcast_datetime, when)
+        self.assertEqual(back.get_model("backstage", "Event").objects.count(), 0)
+
+    def test_running_it_twice_does_not_make_a_second_event(self):
+        import importlib
+        from datetime import datetime, timezone as dt_timezone
+
+        when = datetime(2025, 1, 17, 0, 0, tzinfo=dt_timezone.utc)
+        old = self.apps_at(self.before)
+        old.get_model("backstage", "Production").objects.create(title="Aired", broadcast_datetime=when)
+        new = self.apps_at(self.after)
+        module = importlib.import_module("backstage.migrations.0014_broadcast_events")
+        module.broadcast_dates_to_events(new, None)  # again
+        self.assertEqual(new.get_model("backstage", "Event").objects.count(), 1)
+
+
+class EventPublishTests(TestCase):
+    """An event is Not published, Published or Promoted."""
+
+    def setUp(self):
+        from backstage.models import Event
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.production = Production.objects.create(title="Panto")
+        self.event = Event.objects.create(event_type="performance")
+        self.event.productions.add(self.production)
+        self.edit_url = reverse("event-update", args=[self.event.pk])
+        self.tab = reverse("production-events", args=[self.production.pk])
+
+    def post_edit(self, **extra):
+        data = {"event_type": "performance", "description": "", "venue": "", **extra}
+        return self.client.post(self.edit_url, data)
+
+    def test_the_options_are_not_published_published_and_promoted(self):
+        from backstage.models import Event
+
+        self.assertEqual(
+            Event.Publish.choices,
+            [("not_published", "Not published"), ("published", "Published"), ("promoted", "Promoted")],
+        )
+
+    def test_an_event_starts_not_published(self):
+        self.assertEqual(self.event.publish, "not_published")
+        self.assertEqual(self.event.get_publish_display(), "Not published")
+
+    def test_the_edit_page_offers_the_three_options_with_the_current_one_chosen(self):
+        html = self.client.get(self.edit_url).content.decode()
+        self.assertRegex(html, r'<select name="publish"')
+        for value, label in (("not_published", "Not published"), ("published", "Published"), ("promoted", "Promoted")):
+            self.assertIn(f'<option value="{value}"', html)
+            self.assertIn(f">{label}</option>", html)
+        self.assertRegex(html, r'<option value="not_published" selected>')
+
+    def test_the_new_event_dialog_offers_it_too(self):
+        html = self.client.get(self.tab).content.decode()
+        self.assertRegex(html, r'<select name="publish"')
+        self.assertIn(">Promoted</option>", html)
+
+    def test_each_option_can_be_saved(self):
+        for value in ("published", "promoted", "not_published"):
+            self.assertEqual(self.post_edit(publish=value).status_code, 302)
+            self.event.refresh_from_db()
+            self.assertEqual(self.event.publish, value)
+
+    def test_something_else_is_refused(self):
+        response = self.post_edit(publish="everywhere")
+        self.assertEqual(response.status_code, 200)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.publish, "not_published")
+
+    def test_a_new_event_from_the_tab_can_be_published_straight_away(self):
+        self.client.post(self.tab, {
+            "action": "create", "event_type": "rehearsal", "publish": "promoted",
+            "venue": "", "description": "", "ticket_url": "", "first_datetime": "",
+        })
+        self.assertEqual(self.production.events.get(event_type="rehearsal").publish, "promoted")
+
+    def test_the_tab_shows_published_and_promoted_events(self):
+        from backstage.models import Event
+
+        for title, value in (("Quiet", "not_published"), ("Out", "published"), ("Star", "promoted")):
+            Event.objects.create(event_type="performance", publish=value).productions.add(self.production)
+        html = self.client.get(self.tab).content.decode()
+        self.assertEqual(html.count(">Published</span>"), 1)
+        self.assertEqual(html.count(">Promoted</span>"), 1)
+        self.assertNotIn(">Not published</span>", html)  # the usual state is not shown
+
+
+class EventWithoutTitleTests(TestCase):
+    """An event has no title: the Events tab shows its type, and Delete deletes the event."""
+
+    def setUp(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from backstage.models import Event, EventDateTime
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.production = Production.objects.create(title="Panto")
+        self.other = Production.objects.create(title="Other")
+        self.event = Event.objects.create(event_type="audition")
+        self.event.productions.add(self.production)
+        self.when = EventDateTime.objects.create(event=self.event, datetime=timezone.now() + timedelta(days=5))
+        self.tab = reverse("production-events", args=[self.production.pk])
+
+    def test_the_model_has_no_title(self):
+        from backstage.models import Event
+
+        self.assertNotIn("title", [f.name for f in Event._meta.get_fields()])
+        self.assertEqual(str(self.event), "Audition")
+
+    def test_the_forms_do_not_ask_for_a_title(self):
+        html = self.client.get(self.tab).content.decode()
+        self.assertNotIn('name="title"', html[html.index('id="new-event"'):])  # the New event dialog
+        edit = self.client.get(reverse("event-update", args=[self.event.pk])).content.decode()
+        self.assertNotIn('name="title"', edit)
+        self.assertNotIn("Title", edit)
+
+    def test_an_event_can_be_made_without_a_title(self):
+        response = self.client.post(self.tab, {
+            "action": "create", "event_type": "performance", "publish": "published", "venue": "", "description": "",
+            "ticket_url": "", "first_datetime": "",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.production.events.filter(event_type="performance").count(), 1)
+
+    def test_the_type_is_the_big_heading_of_each_event(self):
+        from backstage.models import Event
+
+        for kind in ("rehearsal", "performance", "broadcast", "other"):
+            Event.objects.create(event_type=kind).productions.add(self.production)
+        html = self.client.get(self.tab).content.decode()
+        for label in ("Audition", "Rehearsal", "Performance", "Broadcast", "Other"):
+            self.assertIn(f'<h3 class="text-3xl font-bold">{label}</h3>', html)
+        self.assertNotRegex(html, r'<span class="badge[^>]*>(Audition|Rehearsal|Performance|Broadcast|Other)</span>')
+
+    def test_there_is_no_add_an_existing_event(self):
+        from backstage.models import Event
+
+        elsewhere = Event.objects.create(event_type="performance")
+        elsewhere.productions.add(self.other)
+        html = self.client.get(self.tab).content.decode()
+        self.assertNotIn("Add an existing event", html)
+        self.assertNotIn('value="attach"', html)
+        # and posting it does nothing
+        self.client.post(self.tab, {"action": "attach", "event": elsewhere.pk})
+        self.assertNotIn(elsewhere, self.production.events.all())
+
+    def test_remove_is_now_delete(self):
+        html = self.client.get(self.tab).content.decode()
+        self.assertIn('name="action" value="delete"', html)
+        self.assertRegex(html, r'>Delete</button>')
+        self.assertNotIn('value="unlink"', html)
+        self.assertNotRegex(html, r'>Remove</button>')
+
+    def test_delete_asks_for_confirmation(self):
+        html = self.client.get(self.tab).content.decode()
+        self.assertIn("return confirm('Delete this audition and its dates?')", html)
+
+    def test_delete_deletes_the_event_and_its_dates(self):
+        from backstage.models import Event, EventDateTime
+
+        response = self.client.post(self.tab, {"action": "delete", "event": self.event.pk})
+        self.assertRedirects(response, self.tab)
+        self.assertFalse(Event.objects.filter(pk=self.event.pk).exists())
+        self.assertFalse(EventDateTime.objects.filter(pk=self.when.pk).exists())
+
+    def test_only_this_productions_events_can_be_deleted_from_its_tab(self):
+        from backstage.models import Event
+
+        elsewhere = Event.objects.create(event_type="performance")
+        elsewhere.productions.add(self.other)
+        self.client.post(self.tab, {"action": "delete", "event": elsewhere.pk})
+        self.assertTrue(Event.objects.filter(pk=elsewhere.pk).exists())
+
+    def test_the_confirmation_warns_when_other_productions_share_the_event(self):
+        self.event.productions.add(self.other)
+        html = self.client.get(self.tab).content.decode()
+        self.assertIn("It is also an event of other productions, and will be deleted for them too.", html)
+
+    def test_no_warning_for_an_event_of_one_production(self):
+        html = self.client.get(self.tab).content.decode()
+        self.assertNotIn("also an event of other productions", html)
+
+    def test_the_other_actions_still_work(self):
+        from datetime import datetime
+
+        self.client.post(self.tab, {"action": "add_datetime", "event": self.event.pk, "datetime": "2030-01-02T19:30"})
+        self.assertEqual(self.event.datetimes.count(), 2)
+        self.client.post(self.tab, {"action": "remove_datetime", "datetime_id": self.when.pk})
+        self.assertEqual(self.event.datetimes.count(), 1)

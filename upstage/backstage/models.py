@@ -1,4 +1,5 @@
 from django.db import models, transaction
+from django.db.models import Min, Q
 from django_enum import EnumField
 
 from backstage.fields import HeadshotImageField
@@ -115,12 +116,18 @@ class Event(models.Model):
         AUDITION = "audition", "Audition"
         REHEARSAL = "rehearsal", "Rehearsal"
         PERFORMANCE = "performance", "Performance"
+        BROADCAST = "broadcast", "Broadcast"
         OTHER = "other", "Other"
 
-    title = models.CharField(max_length=255)
+    class Publish(models.TextChoices):
+        NOT_PUBLISHED = "not_published", "Not published"
+        PUBLISHED = "published", "Published"
+        PROMOTED = "promoted", "Promoted"
+
     event_type = models.CharField(
         max_length=20, choices=EventType.choices, default=EventType.PERFORMANCE
     )
+    publish = models.CharField(max_length=20, choices=Publish.choices, default=Publish.NOT_PUBLISHED)
     description = models.TextField(blank=True)
     venue = models.ForeignKey(Venue, null=True, blank=True, on_delete=models.SET_NULL)
     ticket_site = models.ForeignKey(
@@ -128,7 +135,7 @@ class Event(models.Model):
     )
 
     def __str__(self):
-        return self.title
+        return self.get_event_type_display()
 
 
 class EventDateTime(models.Model):
@@ -143,6 +150,22 @@ class EventDateTime(models.Model):
 
     def __str__(self):
         return f"{self.event} - {self.datetime}"
+
+
+def broadcast_date(prefix=""):
+    """
+    An expression for a production's broadcast date: the first date of its Broadcast events (nothing if it has none).
+    `prefix` is the way from the model being queried to the production, e.g. "production__" for a Cast.
+    """
+    return Min(
+        f"{prefix}events__datetimes__datetime", filter=Q(**{f"{prefix}events__event_type": Event.EventType.BROADCAST})
+    )
+
+
+class ProductionQuerySet(models.QuerySet):
+    def with_broadcast_date(self):
+        """Each production has `broadcast_at`: its broadcast date, or None (see Production.broadcast_datetime)."""
+        return self.annotate(broadcast_at=broadcast_date())
 
 
 class Production(models.Model):
@@ -172,10 +195,36 @@ class Production(models.Model):
     # Auditions, rehearsals, performances...; an event (e.g. an evening of plays) can include several productions.
     events = models.ManyToManyField(Event, blank=True, related_name="productions")
     listen_url = models.URLField(null=True, blank=True)
-    broadcast_datetime = models.DateTimeField(null=True, blank=True)
+
+    objects = ProductionQuerySet.as_manager()
 
     def __str__(self):
         return self.title
+
+    @property
+    def broadcast_datetime(self):
+        """When it is (or was) broadcast: the first date of its Broadcast events, or None. Uses `broadcast_at` if the
+        production came from `with_broadcast_date()`."""
+        if "broadcast_at" in self.__dict__:
+            return self.broadcast_at
+        return (
+            EventDateTime.objects.filter(event__productions=self, event__event_type=Event.EventType.BROADCAST)
+            .order_by("datetime").values_list("datetime", flat=True).first()
+        )
+
+    def set_broadcast(self, when):
+        """Make `when` the production's broadcast date: its first Broadcast date is changed, or a Broadcast event is made."""
+        date = (
+            EventDateTime.objects.filter(event__productions=self, event__event_type=Event.EventType.BROADCAST)
+            .order_by("datetime", "pk").first()
+        )
+        if date:
+            date.datetime = when
+            date.save(update_fields=["datetime"])
+            return
+        event = Event.objects.create(event_type=Event.EventType.BROADCAST)
+        EventDateTime.objects.create(event=event, datetime=when)
+        self.events.add(event)
 
     @property
     def default_image(self):

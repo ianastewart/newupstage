@@ -83,7 +83,7 @@ class ProductionTeamForm(forms.ModelForm):
 
 class EventDetailsForm(forms.ModelForm):
     """
-    An event's title, type, venue, where to buy tickets and description. The tickets are a web address that is typed in,
+    An event's type, whether it is published, venue, where to buy tickets and description. The tickets are a web address that is typed in,
     not picked from a list: it is kept as a TicketSite (found by its address, or made, named after the website).
     """
 
@@ -92,11 +92,11 @@ class EventDetailsForm(forms.ModelForm):
         widget=forms.URLInput(attrs={"placeholder": "https://..."}),
         help_text="Where to buy tickets. Leave blank if there is no ticket website.",
     )
-    field_order = ["title", "event_type", "venue", "ticket_url", "description"]
+    field_order = ["event_type", "publish", "venue", "ticket_url", "description"]
 
     class Meta:
         model = models.Event
-        fields = ["title", "event_type", "venue", "description"]
+        fields = ["event_type", "publish", "venue", "description"]
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
@@ -124,7 +124,7 @@ class EventForm(EventDetailsForm):
         widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
         help_text="More dates can be added on the Events tab.",
     )
-    field_order = ["title", "event_type", "venue", "ticket_url", "first_datetime", "description"]
+    field_order = ["event_type", "publish", "venue", "ticket_url", "first_datetime", "description"]
 
     def save(self, commit=True):
         event = super().save(commit)
