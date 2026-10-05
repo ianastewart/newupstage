@@ -351,7 +351,7 @@ class ImageLibraryOrderTests(TestCase):
         from backstage.models import Image
 
         cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
-        make = lambda description, name, kind="base": Image.objects.create(description=description, image=f"images/{name}", image_type=kind)
+        make = lambda description, name, kind="production": Image.objects.create(description=description, image=f"images/{name}", image_type=kind)
         # Created in an order that is neither alphabetical nor reverse alphabetical.
         cls.mango = make("mango", "1.jpg")
         cls.apple = make("Apple", "2.jpg", "headshot")
@@ -423,11 +423,11 @@ class ImageLibraryOrderTests(TestCase):
         html = self.client.get(reverse("image-list") + "?type=headshot&sort=newest").content.decode()
         self.assertEqual(self.link_queries(html, "Name"), {"type": "headshot"})  # Name, keeping the type
         self.assertEqual(self.link_queries(html, "Newest first"), {"type": "headshot", "sort": "newest"})
-        self.assertEqual(self.link_queries(html, "Base"), {"type": "base", "sort": "newest"})  # another type, keeping the sort
+        self.assertEqual(self.link_queries(html, "Production"), {"type": "production", "sort": "newest"})  # another type, keeping the sort
         self.assertEqual(self.link_queries(html, "All"), {"sort": "newest"})
         self.assertRegex(html, r'class="tab tab-active"[^>]*>\s*Headshot|Headshot\s*</a>')
         by_name = self.client.get(reverse("image-list") + "?type=headshot").content.decode()
-        self.assertEqual(self.link_queries(by_name, "Base"), {"type": "base"})  # no sort in the links when it is the default
+        self.assertEqual(self.link_queries(by_name, "Production"), {"type": "production"})  # no sort in the links when it is the default
 
     def test_the_page_links_keep_the_sort_and_type(self):
         from backstage.models import Image
@@ -470,10 +470,10 @@ class HeadshotUploadTests(TestCase):
         self.assertEqual(self.selected_type(response), ["headshot"])
 
     def test_the_uploader_starts_on_the_default_type_otherwise(self):
-        self.assertEqual(self.selected_type(self.client.get(reverse("image-create"))), ["base"])
+        self.assertEqual(self.selected_type(self.client.get(reverse("image-create"))), ["production"])
 
     def test_an_unknown_type_is_ignored(self):
-        self.assertEqual(self.selected_type(self.client.get(reverse("image-create") + "?type=nonsense")), ["base"])
+        self.assertEqual(self.selected_type(self.client.get(reverse("image-create") + "?type=nonsense")), ["production"])
 
     def test_the_type_can_still_be_changed_when_uploading(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -498,7 +498,7 @@ class HeadshotUploadTests(TestCase):
     def test_uploading_from_a_production_is_unchanged(self):
         production = Production.objects.create(title="A Play")
         response = self.client.get(reverse("image-create") + f"?production={production.pk}")
-        self.assertEqual(self.selected_type(response), ["base"])
+        self.assertEqual(self.selected_type(response), ["production"])
         self.assertEqual(response.context["production"], production)
 
 
@@ -603,7 +603,7 @@ class ImageSearchTests(TestCase):
         from backstage.models import Image
 
         cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
-        make = lambda description, name, kind="base": Image.objects.create(description=description, image=f"images/{name}", image_type=kind)
+        make = lambda description, name, kind="production": Image.objects.create(description=description, image=f"images/{name}", image_type=kind)
         cls.ann = make("Ann Actor", "ann.jpg", "headshot")
         cls.annie = make("Annie Smith", "annie-smith.jpg", "headshot")
         cls.poster = make("Hamlet poster", "hamlet-2026.png", "promotion")
@@ -667,7 +667,7 @@ class ImageSearchTests(TestCase):
     def test_the_other_links_keep_the_search_and_clear_removes_it(self):
         html = self.client.get(reverse("image-list") + "?q=ann&type=headshot").content.decode()
         for text, expected in (("Newest first", {"q": "ann", "type": "headshot", "sort": "newest"}),
-                               ("Base", {"q": "ann", "type": "base"}), ("All", {"q": "ann"}), ("Clear", {"type": "headshot"})):
+                               ("Production", {"q": "ann", "type": "production"}), ("All", {"q": "ann"}), ("Clear", {"type": "headshot"})):
             self.assertEqual(ImageLibraryOrderTests.link_queries(html, text), expected, text)
 
     def test_no_clear_link_without_a_search(self):
@@ -780,13 +780,13 @@ class HeadshotResizeTests(TestCase):
     def test_other_types_of_image_are_not_resized(self):
         from backstage.models import Image
 
-        for image_type in ("base", "promotion", "gallery", "audition", "logo", "other"):
+        for image_type in ("production", "promotion", "gallery", "audition", "logo", "other"):
             stored = self.opened(self.store(self.bands(1000, 400), image_type=image_type, name=f"{image_type}.png"))
             self.assertEqual(stored.size, (1000, 400), image_type)
 
     def test_other_types_keep_their_exact_file(self):
         data = self.bands(1000, 400)
-        image = self.store(data, image_type="base")
+        image = self.store(data, image_type="production")
         with open(image.image.path, "rb") as stored:
             self.assertEqual(stored.read(), data)  # byte for byte
 
@@ -2251,7 +2251,7 @@ class EventTicketWebsiteTests(TestCase):
         EventDateTime.objects.create(event=self.event, datetime=timezone.now() + timedelta(days=5))
         poster = Image.objects.create(description="poster", image="images/poster.jpg", image_type="promotion")
         ProductionImage.objects.create(production=self.production, image=poster, is_default=True)
-        self.post_edit(ticket_url="https://tickets.example.com/panto")
+        self.post_edit(ticket_url="https://tickets.example.com/panto", publish="promoted")  # the promotion block uses promoted events
         block = Block.objects.create(name="Promo", block_type="promotion")
         self.assertIn('href="https://tickets.example.com/panto"', render_to_string(block.template, {"block": block}))
 

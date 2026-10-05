@@ -35,7 +35,7 @@ class SiteSettings(models.Model):
 
 class Image(models.Model):
     class ImageType(models.TextChoices):
-        BASE = "base", "Base"
+        PRODUCTION = "production", "Production"
         AUDITION = "audition", "Audition"
         PROMOTION = "promotion", "Promotion"
         GALLERY = "gallery", "Gallery"
@@ -46,7 +46,7 @@ class Image(models.Model):
     # Headshots are made black and white and resized to 400 x 500 when they are uploaded (see backstage/fields.py); other images are kept as they are.
     image = HeadshotImageField(upload_to="images/")
     description = models.CharField(max_length=255, blank=True)
-    image_type = EnumField(ImageType, default=ImageType.BASE)
+    image_type = EnumField(ImageType, default=ImageType.PRODUCTION)
 
     def __str__(self):
         return self.description or self.image.name
