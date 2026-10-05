@@ -5,7 +5,7 @@
 {% block content %}
 <div class="mx-auto max-w-4xl p-6">
   {% if wizard_person %}{% include "backstage/includes/actor_wizard_steps.html" with step=2 %}{% endif %}
-  <h1 class="mb-6 text-3xl font-bold">{% if wizard_person %}Photo for {{ wizard_person }}{% elif object %}Edit image{% elif production %}Upload image to {{ production }}{% else %}Upload image{% endif %}</h1>
+  <h1 class="mb-6 text-3xl font-bold">{% if wizard_person %}Photo for {{ wizard_person }}{% elif object %}Edit image{% elif production %}Add image to {{ production }}{% else %}Upload image{% endif %}</h1>
   {% if wizard_person %}<p class="mb-4 opacity-70">Upload a photo of {{ wizard_person.first_name }}, or skip this step and add one later.</p>{% endif %}
 
   <div class="card bg-base-200 shadow-sm">
@@ -76,7 +76,7 @@
         </div>
         <div class="mt-6 flex justify-end gap-2">
           <a href="{% if object %}{% url 'image-detail' object.pk %}{% elif wizard_skip_url %}{{ wizard_skip_url }}{% elif person_form_url %}{{ person_form_url }}{% elif production %}{% url 'production-images' production.pk %}{% else %}{% url 'image-list' %}{% endif %}" class="btn btn-ghost">{% if wizard_skip_url %}Skip photo{% else %}Cancel{% endif %}</a>
-          <button type="submit" class="btn btn-primary">{% if object %}Save{% else %}Upload{% endif %}</button>
+          <button type="submit" class="btn btn-primary">{% if object %}Save{% elif production %}Add image{% else %}Upload{% endif %}</button>
         </div>
       </form>
     </div>

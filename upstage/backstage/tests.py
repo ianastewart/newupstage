@@ -532,6 +532,26 @@ class UploadFromPersonFormTests(TestCase):
         with tempfile.TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
             return self.client.post(reverse("image-create"), fields)
 
+
+    def test_only_production_kinds_are_offered_and_production_is_the_start(self):
+        production = Production.objects.create(title="A Play")
+        response = self.uploader(f"?production={production.pk}")
+        form = response.context["form"]
+        self.assertEqual([value for value, _ in form.fields["image_type"].choices], ["production", "promotion", "audition", "gallery"])
+        self.assertEqual(form.initial["image_type"], "production")
+        self.assertContains(self.client.get(reverse("production-images", args=[production.pk])), "Add image")
+
+    def test_other_kinds_are_refused_and_a_good_one_returns_to_the_production(self):
+        from backstage.models import Image
+
+        production = Production.objects.create(title="A Play")
+        response = self.upload(production=production.pk, image_type="headshot")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Image.objects.count(), 0)
+        response = self.upload(production=production.pk, image_type="gallery")
+        self.assertRedirects(response, reverse("production-images", args=[production.pk]))
+        self.assertEqual(Image.objects.get().image_type, "gallery")
+
     def test_the_description_starts_as_the_persons_name(self):
         response = self.uploader("?type=headshot&for_person=new&name=Ann+Actor")
         self.assertEqual(response.context["form"].initial["description"], "Ann Actor")

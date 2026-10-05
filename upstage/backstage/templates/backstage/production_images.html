@@ -8,18 +8,18 @@
 
   <div class="mb-6 flex flex-wrap items-center justify-end gap-4">
     <div class="flex gap-2">
-      <a href="{% url 'image-create' %}?production={{ production.pk }}" class="btn btn-ghost">Upload</a>
+      <a href="{% url 'image-create' %}?production={{ production.pk }}" class="btn btn-ghost">Add image</a>
       <button type="button" class="btn btn-primary" onclick="document.getElementById('add-images').showModal()"{% if not available_images %} disabled{% endif %}>Add from library</button>
     </div>
   </div>
 
   {% if production_images %}
-    <div class="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
       {% for production_image in production_images %}
         <div class="card bg-base-200 shadow-sm{% if production_image.is_default %} ring-4 ring-primary{% endif %}">
           <a href="{% url 'image-detail' production_image.image.pk %}?production={{ production.pk }}" class="relative">
             <figure class="bg-base-300 rounded-t-box">
-              <img src="{{ production_image.image.image.url }}" alt="{{ production_image.image.description }}" loading="lazy" class="aspect-square w-full object-cover" />
+              <img src="{{ production_image.image.image.url }}" alt="{{ production_image.image.description }}" loading="lazy" class="aspect-video w-full object-cover" />
             </figure>
             {% if production_image.is_default %}
               <span class="badge badge-primary badge-sm absolute left-2 top-2">Default</span>
@@ -53,7 +53,7 @@
   {% else %}
     <div class="rounded-box bg-base-200 p-12 text-center">
       <p>This production has no images yet.</p>
-      <p class="mt-2 text-sm opacity-70">Upload one{% if available_images %} or add one from the library{% endif %}.</p>
+      <p class="mt-2 text-sm opacity-70">Add one{% if available_images %} or add one from the library{% endif %}.</p>
     </div>
   {% endif %}
 </div>
@@ -67,7 +67,7 @@
       <div class="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto p-1 sm:grid-cols-3 md:grid-cols-4">
         {% for image in available_images %}
           <label class="relative cursor-pointer overflow-hidden rounded-box bg-base-200 ring-primary has-checked:ring-4">
-            <img src="{{ image.image.url }}" alt="{{ image.description }}" loading="lazy" class="aspect-square w-full object-cover" />
+            <img src="{{ image.image.url }}" alt="{{ image.description }}" loading="lazy" class="aspect-video w-full object-cover" />
             <input type="checkbox" name="images" value="{{ image.pk }}" class="absolute left-2 top-2 bg-base-100" />
             <span class="block truncate px-2 py-1 text-xs">{{ image }}</span>
           </label>

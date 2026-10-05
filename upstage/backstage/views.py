@@ -194,6 +194,16 @@ class ImageView(CRUDView):
             form.fields["description"].widget = HiddenInput()
             form.fields["image_type"].widget = HiddenInput()
             return form
+        if self.role == Role.CREATE and self.get_upload_production():
+            # Adding an image from a production's Images tab: only the kinds of image a production uses, starting on Production.
+            kinds = models.Image.ImageType
+            allowed = [kinds.PRODUCTION, kinds.PROMOTION, kinds.AUDITION, kinds.GALLERY]
+            if data is None:
+                kwargs.setdefault("initial", {}).setdefault("image_type", kinds.PRODUCTION)
+            form = super().get_form(data, files, **kwargs)
+            form.fields["image_type"].choices = [(kind.value, kind.label) for kind in allowed]
+            form.allowed_types = allowed
+            return form
         if data is None and self.role == Role.CREATE:
             initial = kwargs.setdefault("initial", {})
             # The uploader can start on a type of image: /image/new/?type=headshot.

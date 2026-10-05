@@ -152,6 +152,15 @@ class ImageForm(forms.ModelForm):
         fields = ["image", "description", "image_type"]
         widgets = {"image": forms.ClearableFileInput(attrs={"accept": "image/*"})}
 
+    # When set (a list of image types), only those can be chosen: see ImageView.get_form.
+    allowed_types = None
+
+    def clean_image_type(self):
+        image_type = self.cleaned_data.get("image_type")
+        if self.allowed_types is not None and image_type not in self.allowed_types:
+            raise forms.ValidationError("This type of image cannot be added here.")
+        return image_type
+
     def clean_focal_x(self):
         return clamp(self.cleaned_data.get("focal_x"))
 
