@@ -1,6 +1,6 @@
 {% comment %}
-A diary block: its title, subtitle and text, then every production with a published audition and/or performance (as the block's
-Show option says) still to come. Each is a card of two columns: the production's image on the left, the details of its events on the
+A diary block: its title, subtitle and text, then every production with a published event of the kind the block's
+Show option has ticked (recent radio plays, upcoming radio plays, upcoming stage plays, auditions), earliest first. Each is a card of two columns: the production's image on the left, the details of its events on the
 right (what kind of event, where, when, and a ticket link). On phones the columns stack.
 With nothing to come the block shows nothing at all, not even its title.
 {% endcomment %}
@@ -30,10 +30,10 @@ With nothing to come the block shows nothing at all, not even its title.
             <div class="mt-4">
               <p class="font-semibold">{{ event.get_event_type_display }}{% if event.venue %} at {{ event.venue.name }}{% endif %}</p>
               <ul class="mt-1 space-y-0.5">
-                {% for date in event.future_dates %}<li>{{ date.datetime|date:"D j M Y, g:i a" }}</li>{% endfor %}
+                {% for date in event.dates %}<li>{{ date.datetime|date:"D j M Y, g:i a" }}</li>{% endfor %}
               </ul>
               {% if event.description %}<p class="mt-1 text-sm opacity-80">{{ event.description }}</p>{% endif %}
-              {% if event.ticket_site and event.ticket_site.url %}
+              {% if event.upcoming and event.ticket_site and event.ticket_site.url %}
                 <a href="{{ event.ticket_site.url }}" class="btn btn-primary btn-sm mt-2" target="_blank" rel="noopener noreferrer">Buy Tickets</a>
               {% endif %}
             </div>

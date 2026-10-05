@@ -29,6 +29,10 @@ def html_has_content(html):
     return bool(html_lib.unescape(strip_tags(html)).replace("\xa0", " ").strip())
 
 
+def default_diary_shows():
+    return ["upcoming_stage"]
+
+
 class WebPage(models.Model):
     """A web page built from a sequence of blocks."""
 
@@ -102,9 +106,10 @@ class Block(models.Model):
         DIARY = "diary", "Diary"
 
     class DiaryShow(models.TextChoices):
+        RECENT_RADIO = "recent_radio", "Recent radio plays"
+        UPCOMING_RADIO = "upcoming_radio", "Upcoming radio plays"
+        UPCOMING_STAGE = "upcoming_stage", "Upcoming stage plays"
         AUDITIONS = "auditions", "Auditions"
-        PERFORMANCES = "performances", "Performances"
-        BOTH = "both", "Auditions and Performances"
 
     class ImageSize(models.TextChoices):
         SMALL = "small", "Small"
@@ -178,9 +183,9 @@ class Block(models.Model):
         "Fade-in time (seconds)", default=5, validators=[MinValueValidator(0), MaxValueValidator(30)],
         help_text="Hero image blocks: how long the image, subtitle and text take to fade in. 0 for no fade.",
     )
-    diary_show = models.CharField(
-        "Show", max_length=20, choices=DiaryShow.choices, default=DiaryShow.BOTH,
-        help_text="Diary blocks: which events to list.",
+    diary_shows = models.JSONField(
+        "Show", default=default_diary_shows, blank=True,
+        help_text="Diary blocks: which kinds of event to list (a list of DiaryShow values).",
     )
     production = models.ForeignKey(
         "backstage.Production", null=True, blank=True, on_delete=models.SET_NULL, related_name="blocks",
@@ -220,7 +225,7 @@ class Block(models.Model):
         """For a diary block: the productions with a published event still to come (see home.diary)."""
         from .diary import diary_productions
 
-        return diary_productions(self.diary_show)
+        return diary_productions(self.diary_shows)
 
     @property
     def image_ratio(self):

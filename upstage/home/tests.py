@@ -1260,7 +1260,7 @@ class PromotionBlockTests(TestCase):
 
 
 class DiaryBlockTests(TestCase):
-    """A diary block lists productions with published auditions and/or performances still to come."""
+    """A diary block lists productions with published events of one kind: recent or upcoming radio plays, upcoming stage plays or auditions."""
 
     @classmethod
     def setUpTestData(cls):
@@ -1284,43 +1284,78 @@ class DiaryBlockTests(TestCase):
             return production
 
         make("Audition Play", "audition", 5)
-        make("Show Play", "performance", 10, ticket=True)
-        make("Hidden Play", "performance", 3, publish="not_published")
-        make("Past Play", "performance", -3)
-        make("Radio Play", "broadcast", 4)
+        make("Later Stage", "performance", 20, ticket=True)
+        make("Sooner Stage", "performance", 10)
+        make("Hidden Stage", "performance", 3, publish="not_published")
+        make("Past Stage", "performance", -3)
+        make("Recent Radio", "broadcast", -30)
+        make("Older Radio", "broadcast", -150)
+        make("Old Radio", "broadcast", -200)
+        make("Coming Radio", "broadcast", 4, ticket=True)
         cls.Block = Block
 
-    def shown(self, show):
-        block = self.Block.objects.create(name=f"Diary {show}", block_type="diary", title="What's on", diary_show=show)
+    def shown(self, *shows):
+        block = self.Block.objects.create(name=f"Diary {shows}", block_type="diary", title="What's on", diary_shows=list(shows))
         return render_to_string(block.template, {"block": block})
 
-    def test_the_type_is_offered_and_shows_its_title(self):
+    def titles(self, *shows):
+        block = self.Block(block_type="diary", diary_shows=list(shows))
+        return [production.title for production in block.diary_productions()]
+
+    def test_the_type_is_offered_with_four_options_as_radio_buttons(self):
+        from home.forms import BlockForm
+
         self.assertIn(("diary", "Diary"), self.Block.BlockType.choices)
-        self.assertEqual([c[1] for c in self.Block.DiaryShow.choices], ["Auditions", "Performances", "Auditions and Performances"])
-        self.assertIn("What&#x27;s on", self.shown("both"))
+        self.assertEqual(
+            [c[1] for c in self.Block.DiaryShow.choices],
+            ["Recent radio plays", "Upcoming radio plays", "Upcoming stage plays", "Auditions"],
+        )
+        self.assertIn('type="checkbox" name="diary_shows"', str(BlockForm()["diary_shows"]))
+        self.assertIn("What&#x27;s on", self.shown("auditions"))
 
-    def test_each_option_lists_its_events_only(self):
-        auditions, performances, both = self.shown("auditions"), self.shown("performances"), self.shown("both")
-        self.assertIn("Audition Play", auditions)
-        self.assertNotIn("Show Play", auditions)
-        self.assertIn("Show Play", performances)
-        self.assertNotIn("Audition Play", performances)
-        self.assertIn("Audition Play", both)
-        self.assertIn("Show Play", both)
+    def test_recent_radio_plays_are_the_last_6_months_oldest_first(self):
+        self.assertEqual(self.titles("recent_radio"), ["Older Radio", "Recent Radio"])
 
-    def test_unpublished_past_and_other_events_are_left_out(self):
-        html = self.shown("both")
-        for title in ("Hidden Play", "Past Play", "Radio Play"):
-            self.assertNotIn(title, html)
+    def test_upcoming_radio_plays(self):
+        self.assertEqual(self.titles("upcoming_radio"), ["Coming Radio"])
+
+    def test_upcoming_stage_plays_are_earliest_first(self):
+        self.assertEqual(self.titles("upcoming_stage"), ["Sooner Stage", "Later Stage"])
+
+    def test_auditions(self):
+        self.assertEqual(self.titles("auditions"), ["Audition Play"])
+
+    def test_several_kinds_can_be_ticked_and_are_merged_earliest_first(self):
+        self.assertEqual(self.titles("recent_radio", "auditions", "upcoming_stage"), ["Older Radio", "Recent Radio", "Audition Play", "Sooner Stage", "Later Stage"])
+        self.assertEqual(self.titles("recent_radio", "upcoming_radio"), ["Older Radio", "Recent Radio", "Coming Radio"])
+        self.assertEqual(self.titles(), [])
+
+    def test_the_form_keeps_the_ticked_boxes_and_defaults_to_upcoming_stage_plays(self):
+        from home.forms import BlockForm
+
+        data = {"name": "D", "block_type": "diary", "image_size": "medium", "layout": "text_left", "diary_shows": ["auditions", "recent_radio"]}
+        form = BlockForm(data)
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.save().diary_shows, ["auditions", "recent_radio"])
+        blank = BlockForm({"name": "E", "block_type": "diary", "image_size": "medium", "layout": "text_left"})
+        self.assertTrue(blank.is_valid(), blank.errors)
+        self.assertEqual(blank.save().diary_shows, ["upcoming_stage"])
 
     def test_the_event_details_are_shown_with_the_image(self):
-        html = self.shown("performances")
+        html = self.shown("upcoming_stage")
         self.assertIn("Performance at Esher Theatre", html)
-        self.assertIn("images/Show%20Play.jpg", html)
+        self.assertIn("images/Later%20Stage.jpg", html)
         self.assertIn("https://tickets.example.com/x", html)
+
+    def test_recent_plays_have_no_ticket_button(self):
+        from backstage.models import Event
+
+        Event.objects.filter(event_type="broadcast").update(ticket_site=self.site)
+        self.assertNotIn("Buy Tickets", self.shown("recent_radio"))
+        self.assertIn("Buy Tickets", self.shown("upcoming_radio"))
 
     def test_with_nothing_to_show_the_block_is_empty(self):
         from backstage.models import Event
 
         Event.objects.update(publish="not_published")
-        self.assertEqual(self.shown("both").strip(), "")
+        self.assertEqual(self.shown("auditions").strip(), "")

@@ -1,9 +1,10 @@
+{# With `rectangular`, the photo is a rectangle in the headshot's shape (4 wide by 5 high) rather than a circle. #}
 {% if person %}
 <a href="{% url 'person-detail' person.pk %}" class="flex items-center gap-3 hover:underline">
   <div class="avatar{% if not person.image %} avatar-placeholder{% endif %}">
-    <div class="w-9 rounded-full{% if not person.image %} bg-neutral text-neutral-content{% endif %}">
+    <div class="{% if rectangular %}w-9 aspect-[4/5] rounded-sm{% else %}w-9 rounded-full{% endif %}{% if not person.image %} bg-neutral text-neutral-content{% endif %}">
       {% if person.image %}
-        <img src="{{ person.image.image.url }}" alt="" />
+        <img src="{{ person.image.image.url }}" alt="" class="h-full w-full object-cover" />
       {% else %}
         <span class="text-xs">{{ person.first_name|first }}{{ person.last_name|first }}</span>
       {% endif %}

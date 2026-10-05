@@ -21,9 +21,9 @@
                     <div class="font-semibold">{{ member.character_name }}</div>
                     {% if member.characteristics %}<div class="text-sm opacity-70">{{ member.characteristics|linebreaksbr }}</div>{% endif %}
                   </td>
-                  <td>{% include "backstage/includes/person_cell.html" with person=member.actor %}</td>
+                  <td>{% include "backstage/includes/person_cell.html" with person=member.actor rectangular=True %}</td>
                   <td class="whitespace-nowrap text-right">
-                    <a href="?edit={{ member.pk }}" class="btn btn-ghost btn-xs">Edit</a>
+                    <a href="?edit={{ member.pk }}#member-form" class="btn btn-ghost btn-xs">Edit</a>
                     <form method="POST" class="inline">
                       {% csrf_token %}
                       <input type="hidden" name="action" value="remove" />
@@ -43,7 +43,7 @@
       {% endif %}
     </div>
 
-    <div class="card h-fit bg-base-200 shadow-sm">
+    <div id="member-form" class="card h-fit scroll-mt-4 bg-base-200 shadow-sm">
       <div class="card-body">
         <h2 class="card-title">{% if editing %}Edit {{ editing.character_name }}{% else %}Add character{% endif %}</h2>
         <form method="POST">
