@@ -1,0 +1,12 @@
+{# The production team: each role with the people in it (`team`: the production's team members). #}
+{% if team %}
+  <section>
+    <h2 class="mb-3 text-lg font-semibold uppercase tracking-wide opacity-70">Production team</h2>
+    <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
+      {% for member in team %}
+        <dt class="font-semibold">{{ member.role }}</dt>
+        <dd>{% if member.person.public_url %}<a href="{{ member.person.public_url }}" class="link link-hover">{{ member.person }}</a>{% else %}{{ member.person }}{% endif %}</dd>
+      {% endfor %}
+    </dl>
+  </section>
+{% endif %}

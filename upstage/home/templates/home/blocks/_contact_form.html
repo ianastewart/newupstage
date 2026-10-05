@@ -1,0 +1,28 @@
+{# The contact block's form (`form`, and `block`). #}
+<form method="POST" action="" class="max-w-xl rounded-box bg-base-100 p-4 text-base-content shadow-sm">
+  {% csrf_token %}
+  <input type="hidden" name="contact_block" value="{{ block.pk }}" />
+  {# A trap for bots: hidden from people. #}
+  <div class="absolute -left-[9999px]" aria-hidden="true">{{ form.website }}</div>
+  <div class="grid gap-x-4 sm:grid-cols-2">
+    {{ form.first_name.as_field_group }}
+    {{ form.last_name.as_field_group }}
+  </div>
+  {{ form.email.as_field_group }}
+  <fieldset class="mt-4">
+    <legend class="mb-2 font-semibold">I am interested in</legend>
+    <div class="space-y-2">
+      {% for field in form.visible_fields %}
+        {% if field.name == "newsletter" or field.name == "acting" or field.name == "backstage" %}
+          <label class="flex cursor-pointer items-center gap-3">
+            <input type="checkbox" name="{{ field.html_name }}" id="{{ field.auto_id }}_{{ block.pk }}" class="checkbox"{% if field.value %} checked{% endif %} />
+            <span>{{ field.label }}</span>
+          </label>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </fieldset>
+  <div class="mt-6 flex justify-end">
+    <button type="submit" class="btn btn-primary">Send</button>
+  </div>
+</form>

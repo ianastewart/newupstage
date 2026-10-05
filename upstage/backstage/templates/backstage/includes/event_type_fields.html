@@ -1,0 +1,20 @@
+{# Shows the ticket website only for a performance and the listen address only for a broadcast: neither for other types of event. #}
+<script>
+  (() => {
+    const type = document.getElementById('id_event_type');
+    const tickets = document.getElementById('id_ticket_url');
+    const listen = document.getElementById('id_listen_url');
+    if (!type || !tickets || !listen) return;
+    // The field's box: its fieldset, or the one-child wrapper around it in a plain form.
+    const box = (input) => {
+      const fieldset = input.closest('.fieldset');
+      return fieldset.parentElement.childElementCount === 1 ? fieldset.parentElement : fieldset;
+    };
+    const update = () => {
+      box(tickets).classList.toggle('hidden', type.value !== 'performance');
+      box(listen).classList.toggle('hidden', type.value !== 'broadcast');
+    };
+    type.addEventListener('change', update);
+    update();
+  })();
+</script>

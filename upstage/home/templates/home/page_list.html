@@ -18,6 +18,10 @@
             <p class="text-sm opacity-60">/page/{{ page.slug }}/ · {{ page.blocks.count }} block{{ page.blocks.count|pluralize }}</p>
           </div>
           <a href="{{ page.get_absolute_url }}" class="btn btn-ghost btn-sm">View</a>
+          <form method="POST" action="{% url 'page-copy' page.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost btn-sm">Copy</button>
+          </form>
           <a href="{% url 'page-edit' page.pk %}" class="btn btn-sm">Edit</a>
         </li>
       {% endfor %}

@@ -9,9 +9,10 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
-from backstage.models import Cast, Image, Person, Production, ProductionImage, ProductionTeam, Role
+from backstage.models import Cast, Image, Person, Production, ProductionImage, ProductionTeam, Role, Venue
 
 CREDIT_ROLES = ["Writer", "Director", "Editor"]
+BROADCAST_VENUE = "Brooklands Radio"  # where the radio plays are broadcast
 
 
 class Command(BaseCommand):
@@ -21,7 +22,7 @@ class Command(BaseCommand):
         parser.add_argument("--url", help="Radio plays page URL")
         parser.add_argument("--limit", type=int, help="Only import the first N plays")
         parser.add_argument("--no-images", action="store_true", help="Don't download images")
-        parser.add_argument("--overwrite", action="store_true", help="Replace existing descriptions and listen URLs")
+        parser.add_argument("--overwrite", action="store_true", help="Replace existing descriptions, listen URLs and dates")
         parser.add_argument("--dry-run", action="store_true", help="Show what would be imported without saving")
 
     def handle(self, *args, **options):
@@ -105,16 +106,20 @@ class Command(BaseCommand):
             production = Production(
                 title=play["title"],
                 type=Production.ProductionType.RADIO,
-                state=Production.ProductionState.PUBLISHED,
             )
         if description and (created or options["overwrite"] or not production.description):
             production.description = description
-        if play["listen_url"] and (created or options["overwrite"] or not production.listen_url):
-            production.listen_url = play["listen_url"]
         production.save()
         if play["broadcast_date"] and (created or options["overwrite"] or not production.broadcast_datetime):
             # The podcast file name only has the date; the production's Broadcast event gets midnight UK time.
             production.set_broadcast(timezone.make_aware(datetime.combine(play["broadcast_date"], time())))
+        if play["listen_url"]:
+            # The listen address belongs to the production's Broadcast event (made if there is none).
+            event = production.broadcast_event()
+            if created or options["overwrite"] or not event.listen_url:
+                event.listen_url = play["listen_url"]
+                event.venue = event.venue or Venue.objects.filter(name=BROADCAST_VENUE).first()
+                event.save(update_fields=["listen_url", "venue"])
 
         for person, role in team:
             ProductionTeam.objects.get_or_create(production=production, person=person, role=self.roles[role])

@@ -10,7 +10,6 @@
   </div>
 
   <form method="get" class="mb-4 flex flex-wrap items-center gap-3">
-    {% if current_state %}<input type="hidden" name="state" value="{{ current_state }}" />{% endif %}
     <label class="input w-full sm:w-72">
       <svg class="h-4 w-4 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
       <input type="search" name="q" value="{{ search }}" placeholder="Search titles" aria-label="Search titles" />
@@ -21,23 +20,22 @@
         <option value="{{ value }}"{% if current_type == value %} selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
+    <select name="published" class="select w-full sm:w-44" aria-label="Published" onchange="this.form.submit()">
+      <option value="">Any status</option>
+      {% for value, label in published_filters %}
+        <option value="{{ value }}"{% if current_published == value %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
     <select name="sort" class="select w-full sm:w-44" aria-label="Sort by" onchange="this.form.submit()">
       {% for value, label in sorts %}
         <option value="{{ value }}"{% if current_sort == value %} selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
     <button type="submit" class="btn">Search</button>
-    {% if search or current_type %}
-      <a href="{% querystring q=None type=None page=None %}" class="btn btn-ghost">Clear</a>
+    {% if search or current_type or current_published %}
+      <a href="{% querystring q=None type=None published=None page=None %}" class="btn btn-ghost">Clear</a>
     {% endif %}
   </form>
-
-  <div role="tablist" class="tabs tabs-box mb-6 w-fit flex-wrap">
-    <a role="tab" href="{% querystring state=None page=None %}" class="tab{% if not current_state %} tab-active{% endif %}">All</a>
-    {% for value, label in states %}
-      <a role="tab" href="{% querystring state=value page=None %}" class="tab{% if current_state == value %} tab-active{% endif %}">{{ label }}</a>
-    {% endfor %}
-  </div>
 
   {% if object_list %}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -55,7 +53,6 @@
             <p class="truncate font-semibold">{{ production.title }}</p>
             {% if production.strap_line %}<p class="line-clamp-2 text-xs opacity-70">{{ production.strap_line }}</p>{% endif %}
             <div class="mt-1 flex flex-wrap gap-1">
-              <span class="badge badge-sm {% if production.state == 'planned' %}badge-ghost{% elif production.state == 'audition' %}badge-info{% elif production.state == 'cast' %}badge-accent{% elif production.state == 'published' %}badge-success{% else %}badge-neutral{% endif %}">{{ production.get_state_display }}</span>
               <span class="badge badge-sm badge-secondary">{{ production.get_type_display }}</span>
             </div>
           </div>
@@ -77,7 +74,7 @@
     {% endif %}
   {% else %}
     <div class="rounded-box bg-base-200 p-12 text-center">
-      {% if search or current_type or current_state %}
+      {% if search or current_type %}
         <p class="mb-4">No productions match these filters.</p>
         <a href="?" class="btn">Show all productions</a>
       {% else %}

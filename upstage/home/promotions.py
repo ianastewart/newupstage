@@ -47,3 +47,41 @@ def next_promotion():
             site = date.event.ticket_site
             return image, (site.url if site and site.url else "")
     return None, ""
+
+
+def production_ticket_url(production):
+    """
+    Where to buy tickets for a production: the ticket site address of its soonest published (or promoted) event that
+    still has a date to come and a ticket site with an address. Empty if there is none.
+    """
+    date = (
+        EventDateTime.objects.filter(
+            event__productions=production,
+            event__publish__in=[Event.Publish.PUBLISHED, Event.Publish.PROMOTED],
+            event__ticket_site__url__gt="",
+            datetime__gte=timezone.now(),
+        )
+        .select_related("event__ticket_site")
+        .order_by("datetime", "pk")
+        .first()
+    )
+    return date.event.ticket_site.url if date else ""
+
+
+def production_venue(production):
+    """
+    The venue to show for a production: that of its soonest published (or promoted) event still to come, or failing that
+    of its latest one before now, among those whose venue has a logo. None if there is none.
+    """
+    now = timezone.now()
+    dates = list(
+        EventDateTime.objects.filter(
+            event__productions=production,
+            event__publish__in=[Event.Publish.PUBLISHED, Event.Publish.PROMOTED],
+            event__venue__logo__isnull=False,
+        ).select_related("event__venue__logo")
+    )
+    upcoming = sorted((d for d in dates if d.datetime >= now), key=lambda d: d.datetime)
+    past = sorted((d for d in dates if d.datetime < now), key=lambda d: d.datetime, reverse=True)
+    chosen = (upcoming or past or [None])[0]
+    return chosen.event.venue if chosen else None

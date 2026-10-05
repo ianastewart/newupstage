@@ -56,7 +56,7 @@ def diary_productions(shows=("upcoming_stage",)):
         return []
     dates = (
         EventDateTime.objects.filter(in_period, event__publish__in=SHOWN)
-        .select_related("event__venue", "event__ticket_site")
+        .select_related("event__venue__logo", "event__ticket_site")
         .prefetch_related("event__productions")
         .order_by("datetime", "pk")
     )

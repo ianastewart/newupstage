@@ -1,0 +1,51 @@
+{% extends "public_base.html" %}
+
+{% block title %}{% for production in productions %}{{ production.title }}{% if not forloop.last %} and {% endif %}{% endfor %} {{ event.get_event_type_display|lower }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-6 p-6">
+  {% for production in productions %}
+    <article class="card bg-base-200 shadow-sm">
+      <div class="card-body gap-6">
+        <header>
+          <p class="text-sm font-semibold uppercase tracking-wide opacity-70">{{ event.get_event_type_display }}</p>
+          <h1 class="text-3xl font-bold">{{ production.title }}</h1>
+          {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
+        </header>
+        <div class="flex flex-wrap items-start gap-6">
+          {% with cover=production.default_image %}
+            {% if cover %}
+              <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" class="h-auto max-h-[300px] w-auto max-w-full rounded-box shadow-sm" />
+            {% endif %}
+          {% endwith %}
+          <div class="min-w-0 flex-1 basis-72 space-y-4">
+            {% if production.description %}<div>{{ production.description|linebreaks }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+    </article>
+  {% endfor %}
+
+  <section class="card bg-base-200 shadow-sm">
+    <div class="card-body gap-4">
+      <h2 class="text-xl font-bold">When and where</h2>
+      <ul class="space-y-1">
+        {% for date in dates %}<li class="font-medium">{{ date.datetime|date:"l j F Y, g:i a" }}</li>{% endfor %}
+      </ul>
+      {% if event.venue %}
+        <div>
+          <p class="font-semibold">{{ event.venue.name }}</p>
+          {% if event.venue.address %}<p class="text-sm opacity-80">{{ event.venue.address|linebreaksbr }}</p>{% endif %}
+          {% if event.venue.logo.image %}
+            <img src="{{ event.venue.logo.image.url }}" alt="{{ event.venue.name }}" class="mt-2 h-auto max-h-20 w-auto max-w-full" />
+          {% endif %}
+        </div>
+      {% endif %}
+      {% if event.description %}<div>{{ event.description|linebreaks }}</div>{% endif %}
+      {% if upcoming and event.ticket_site and event.ticket_site.url %}
+        <div><a href="{{ event.ticket_site.url }}" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Buy Tickets</a></div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,15 +1,17 @@
 from django.contrib.auth.decorators import login_not_required
 from django.db.models import F, Min, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import Http404
+from django.http import Http404, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from backstage.forms import ContactForm
 from backstage.models import Event, EventDateTime, Person, Production
 from backstage.views import person_productions
 
 from .auditions import audition_view, upcoming_auditions
+from .promotions import production_ticket_url, production_venue, promotion_image
 from .forms import BlockColumnFormSet, BlockForm, WebPageForm
 from .models import Block, WebPage
 
@@ -28,12 +30,72 @@ def webpage(request, slug):
     # The page's first hero image block goes in the base template's hero area, above the content.
     hero = next((pb.block for pb in page_blocks if pb.block.block_type == Block.BlockType.HERO_IMAGE), None)
     content_blocks = [pb for pb in page_blocks if pb.block != hero]
-    return render(request, "home/webpage.html", {"page": page, "hero": hero, "page_blocks": content_blocks})
+    context = {"page": page, "hero": hero, "page_blocks": content_blocks}
+    if request.method == "POST":
+        # A contact block's form: the block it came from is posted with it.
+        block_id = request.POST.get("contact_block", "")
+        block = next((pb.block for pb in page_blocks if str(pb.block.pk) == block_id and pb.block.block_type == Block.BlockType.CONTACT), None)
+        if block is None:
+            raise Http404
+        form = ContactForm(request.POST)
+        if form.is_valid():
+            if not form.is_spam:
+                form.save()
+            return redirect(f"{request.path}?sent={block.pk}#contact-{block.pk}")
+        context.update(contact_block=block.pk, contact_form=form)
+    elif request.GET.get("sent", "").isdigit():
+        context["contact_sent"] = int(request.GET["sent"])
+    return render(request, "home/webpage.html", context)
 
 
 def public_actors():
     """The actors shown on the public site: people with the Actor role who have a photo."""
     return Person.objects.filter(roles__name="Actor", image__isnull=False).select_related("image").distinct()
+
+
+def public_team_members():
+    """The non-actors shown on the public site: people credited on a production team who have a photo or a biography."""
+    return (
+        Person.objects.filter(productionteam__isnull=False)
+        .exclude(pk__in=public_actors().values("pk"))
+        .filter(Q(image__isnull=False) | ~Q(biography=""))
+        .select_related("image")
+        .distinct()
+    )
+
+
+def return_production(request):
+    """The production a person's page was opened from (?production=<pk>), for its back link; None otherwise."""
+    pk = request.GET.get("production", "")
+    return Production.objects.filter(pk=pk).first() if pk.isdigit() else None
+
+
+def with_public_urls(people, production=None):
+    """Give each person (in `people`, any with the same person more than once) `public_url`: their public page, or ""."""
+    actors = set(public_actors().values_list("pk", flat=True))
+    team = set(public_team_members().values_list("pk", flat=True))
+    for person in people:
+        if person is None:
+            continue
+        if person.pk in actors:
+            person.public_url = reverse("public-actor", args=[person.pk])
+        elif person.pk in team:
+            person.public_url = reverse("public-team-member", args=[person.pk])
+        else:
+            person.public_url = ""
+        if person.public_url and production:
+            person.public_url += f"?production={production.pk}"  # so the person's page can go back to it
+
+
+@login_not_required
+def team_member_detail(request, pk):
+    """One production team member's public page (someone who is not a public actor): name, photo, biography and credits."""
+    person = get_object_or_404(public_team_members(), pk=pk)
+    cast_in, credits = person_productions(person)
+    return render(
+        request, "home/actor_detail.html",
+        {"person": person, "cast_in": cast_in, "credits": credits, "back_production": return_production(request)},
+    )
 
 
 @login_not_required
@@ -51,7 +113,10 @@ def actor_detail(request, pk):
     """One actor's public page: name, photo and biography only."""
     person = get_object_or_404(public_actors(), pk=pk)
     cast_in, credits = person_productions(person)
-    return render(request, "home/actor_detail.html", {"person": person, "cast_in": cast_in, "credits": credits})
+    return render(
+        request, "home/actor_detail.html",
+        {"person": person, "cast_in": cast_in, "credits": credits, "back_to_actors": True, "back_production": return_production(request)},
+    )
 
 
 def radio_plays():
@@ -84,9 +149,54 @@ def radio_play(request, pk):
 
 
 @login_not_required
+def public_production(request, pk):
+    """
+    One production's public page. With a promotion image, that image with the Buy Tickets (or Listen) button on it;
+    without, a card like the cast list block's: the production's image and cast, with the button. The production team
+    is shown either way.
+    """
+    production = get_object_or_404(
+        Production.objects.prefetch_related("images__image", "cast__actor", "team__person", "team__role"), pk=pk
+    )
+    team = sorted(
+        production.team.all(), key=lambda member: (member.role.name, member.person.last_name, member.person.first_name)
+    )
+    cast = sorted(production.cast.all(), key=lambda part: part.id)
+    # The people with a public page (see public_actors and public_team_members) are linked to it.
+    with_public_urls([member.person for member in team] + [part.actor for part in cast], production)
+    return render(request, "home/production_detail.html", {
+        "production": production,
+        "promotion_image": promotion_image(production),
+        "ticket_url": production_ticket_url(production),
+        "venue": production_venue(production),
+        "team": team,
+        "cast": cast,
+    })
+
+
+@login_not_required
 def auditions(request):
     """Every production with an audition still to come, soonest first, each in its audition view."""
     return render(request, "home/auditions.html", {"audition_views": [audition_view(p) for p in upcoming_auditions()]})
+
+
+@login_not_required
+def event_detail(request, pk):
+    """One event's public page: what it is, where, every date, who it is for and how to get tickets. Published events only."""
+    event = get_object_or_404(
+        Event.objects.filter(publish__in=[Event.Publish.PUBLISHED, Event.Publish.PROMOTED])
+        .select_related("venue__logo", "ticket_site")
+        .prefetch_related("datetimes", "productions__images__image"),
+        pk=pk,
+    )
+    now = timezone.now()
+    dates = list(event.datetimes.all())
+    return render(request, "home/event_detail.html", {
+        "event": event,
+        "dates": dates,
+        "productions": sorted(event.productions.all(), key=lambda production: production.title),
+        "upcoming": any(date.datetime >= now for date in dates),
+    })
 
 
 @login_not_required
@@ -100,6 +210,26 @@ def audition_detail(request, pk):
 
 def page_list(request):
     return render(request, "home/page_list.html", {"pages": WebPage.objects.all()})
+
+
+def page_copy(request, pk):
+    """Copy a page (POST): the copy is the page's name with (copy) added, and opens in the page editor."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    return redirect("page-edit", pk=get_object_or_404(WebPage, pk=pk).copy().pk)
+
+
+def page_replace_original(request, pk):
+    """
+    A copied page takes the place of its original (POST). `delete_page` deletes the original, and then `delete_blocks`
+    deletes its blocks too; if the original is kept, it and its blocks are renamed with (old).
+    """
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    page = get_object_or_404(WebPage, pk=pk)
+    delete_page = bool(request.POST.get("delete_page"))
+    page.replace_original(delete_page, delete_blocks=delete_page and bool(request.POST.get("delete_blocks")))
+    return redirect("page-edit", pk=page.pk)
 
 
 def page_create(request):

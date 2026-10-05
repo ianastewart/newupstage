@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Contacts · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  <div class="mb-6 flex flex-wrap items-baseline justify-between gap-4">
+    <h1 class="text-3xl font-bold">Contacts</h1>
+    <p class="text-sm opacity-70">{{ contacts|length }} contact{{ contacts|length|pluralize }}</p>
+  </div>
+
+  <form method="GET" class="mb-6 flex flex-wrap items-end gap-3">
+    <input type="search" name="q" value="{{ search }}" placeholder="Search name or email" class="input" />
+    <select name="interest" class="select" aria-label="Interested in">
+      <option value="">Any interest</option>
+      {% for key, label in interests.items %}<option value="{{ key }}"{% if key == interest %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary">Filter</button>
+    {% if search or interest %}<a href="{% url 'contact-list' %}" class="btn btn-ghost">Clear</a>{% endif %}
+  </form>
+
+  {% if contacts %}
+    <div class="overflow-x-auto rounded-box bg-base-200 shadow-sm">
+      <table class="table">
+        <thead>
+          <tr><th>Name</th><th>Email</th><th>Interested in</th><th>Date</th></tr>
+        </thead>
+        <tbody>
+          {% for contact in contacts %}
+            <tr>
+              <td class="font-semibold">{{ contact }}</td>
+              <td><a href="mailto:{{ contact.email }}" class="link">{{ contact.email }}</a></td>
+              <td>
+                {% if contact.newsletter %}<span class="badge badge-sm badge-secondary">Newsletter</span>{% endif %}
+                {% if contact.acting %}<span class="badge badge-sm badge-secondary">Acting</span>{% endif %}
+                {% if contact.backstage %}<span class="badge badge-sm badge-secondary">Backstage</span>{% endif %}
+              </td>
+              <td class="whitespace-nowrap">{{ contact.created|date:"j M Y" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p>{% if search or interest %}No contacts match.{% else %}No one has filled in a contact form yet.{% endif %}</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

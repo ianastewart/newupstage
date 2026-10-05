@@ -94,6 +94,7 @@
         {{ event_form.publish.as_field_group }}
         {{ event_form.venue.as_field_group }}
         {{ event_form.ticket_url.as_field_group }}
+        {{ event_form.listen_url.as_field_group }}
         {{ event_form.first_datetime.as_field_group }}
       </div>
       {{ event_form.description.as_field_group }}
@@ -105,6 +106,7 @@
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
+{% include "backstage/includes/event_type_fields.html" %}
 {% if show_create %}
   <script>document.getElementById('new-event').showModal();  // the form has errors to fix</script>
 {% endif %}

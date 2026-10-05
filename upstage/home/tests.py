@@ -51,11 +51,16 @@ class RadioArchiveTests(TestCase):
 
     def test_listen_now_button_only_when_there_is_a_listen_url(self):
         self.assertNotContains(self.client.get(reverse("radio-play", args=[self.new.pk])), "Listen now")
-        self.new.listen_url = "https://example.com/listen"
-        self.new.save()
+        from backstage.models import Event
+
+        event = Event.objects.create(event_type="broadcast", publish="published", listen_url="https://example.com/listen")
+        event.productions.add(self.new)
         response = self.client.get(reverse("radio-play", args=[self.new.pk]))
         self.assertContains(response, "Listen now")
         self.assertContains(response, 'href="https://example.com/listen"')
+        event.publish = "not_published"  # only a published broadcast's address is offered
+        event.save()
+        self.assertNotContains(self.client.get(reverse("radio-play", args=[self.new.pk])), "Listen now")
 
 
 class PublicNavTests(TestCase):
@@ -1347,6 +1352,33 @@ class DiaryBlockTests(TestCase):
         self.assertIn("images/Later%20Stage.jpg", html)
         self.assertIn("https://tickets.example.com/x", html)
 
+    def test_the_venues_logo_is_under_the_dates_in_a_third_column(self):
+        self.venue.logo = Image.objects.create(description="Logo", image="images/esher-logo.png", image_type="logo")
+        self.venue.save()
+        html = self.shown("upcoming_stage")
+        self.assertIn("md:grid-cols-3", html)
+        self.assertIn("images/esher-logo.png", html)
+        self.assertLess(html.index("<li>"), html.index("images/esher-logo.png"))  # after the dates
+
+    def test_the_image_and_title_link_to_the_productions_page(self):
+        from django.urls import reverse
+
+        production = Production.objects.get(title="Later Stage")
+        html = self.shown("upcoming_stage")
+        url = reverse("public-production", args=[production.pk])
+        self.assertEqual(html.count(f'href="{url}"'), 2)  # the image and the title
+        page = self.client.get(url)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Later Stage")
+        self.assertContains(page, "https://tickets.example.com/x")  # Buy Tickets
+
+    def test_an_unpublished_event_has_no_page(self):
+        from backstage.models import Event
+        from django.urls import reverse
+
+        event = Event.objects.filter(publish="not_published").first()
+        self.assertEqual(self.client.get(reverse("public-event", args=[event.pk])).status_code, 404)
+
     def test_recent_plays_have_no_ticket_button(self):
         from backstage.models import Event
 
@@ -1359,3 +1391,350 @@ class DiaryBlockTests(TestCase):
 
         Event.objects.update(publish="not_published")
         self.assertEqual(self.shown("auditions").strip(), "")
+
+
+class ContactBlockTests(TestCase):
+    """A contact block shows a form; sending it saves a Contact."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from home.models import Block, WebPage
+
+        cls.page = WebPage.objects.create(title="Contact us", slug="contact")
+        cls.block = Block.objects.create(name="Contact", block_type="contact", title="Get in touch")
+        cls.page.add_block(cls.block)
+        cls.url = cls.page.get_absolute_url()
+        cls.data = {
+            "contact_block": cls.block.pk, "first_name": "Ann", "last_name": "Actor", "email": "ann@example.com",
+            "acting": "on", "newsletter": "on",
+        }
+
+    def test_the_page_shows_the_form(self):
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("Get in touch", html)
+        self.assertIn("I am interested in", html)
+        for label in ("Occasional newsletter", "Acting", "Backstage roles"):
+            self.assertIn(label, html)
+        for name in ("first_name", "last_name", "email"):
+            self.assertIn(f'name="{name}"', html)
+
+    def test_the_model_has_its_labels(self):
+        from backstage.models import Contact
+
+        labels = {f.name: str(f.verbose_name) for f in Contact._meta.get_fields()}
+        self.assertEqual(labels["created"], "Creation date")
+        self.assertEqual(labels["newsletter"], "Occasional newsletter")
+        self.assertEqual(labels["acting"], "Acting")
+        self.assertEqual(labels["backstage"], "Backstage roles")
+
+    def test_sending_it_saves_a_contact_and_says_thanks(self):
+        from backstage.models import Contact
+
+        response = self.client.post(self.url, self.data)
+        self.assertRedirects(response, f"{self.url}?sent={self.block.pk}#contact-{self.block.pk}", fetch_redirect_response=False)
+        contact = Contact.objects.get()
+        self.assertEqual((contact.first_name, contact.last_name, contact.email), ("Ann", "Actor", "ann@example.com"))
+        self.assertEqual((contact.newsletter, contact.acting, contact.backstage), (True, True, False))
+        self.assertIsNotNone(contact.created)
+        self.assertIn("Thank you", self.client.get(f"{self.url}?sent={self.block.pk}").content.decode())
+
+    def test_a_bad_form_is_shown_again_with_what_was_typed(self):
+        from backstage.models import Contact
+
+        response = self.client.post(self.url, {**self.data, "email": "nonsense"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Contact.objects.count(), 0)
+        self.assertContains(response, 'value="Ann"')
+
+    def test_the_bot_trap_saves_nothing(self):
+        from backstage.models import Contact
+
+        response = self.client.post(self.url, {**self.data, "website": "http://spam"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Contact.objects.count(), 0)
+
+    def test_a_post_for_a_block_not_on_the_page_is_refused(self):
+        self.assertEqual(self.client.post(self.url, {**self.data, "contact_block": 9999}).status_code, 404)
+
+
+class ContactListTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from accounts.models import CustomUser
+        from backstage.models import Contact
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        Contact.objects.create(first_name="Ann", last_name="Actor", email="ann@example.com", acting=True)
+        Contact.objects.create(first_name="Bob", last_name="Builder", email="bob@example.com", newsletter=True, backstage=True)
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_it_lists_everyone_newest_first(self):
+        response = self.client.get(reverse("contact-list"))
+        self.assertEqual([str(c) for c in response.context["contacts"]], ["Bob Builder", "Ann Actor"])
+        self.assertContains(response, "bob@example.com")
+
+    def test_it_can_be_filtered_and_searched(self):
+        names = lambda query: [str(c) for c in self.client.get(reverse("contact-list") + query).context["contacts"]]
+        self.assertEqual(names("?interest=acting"), ["Ann Actor"])
+        self.assertEqual(names("?interest=newsletter"), ["Bob Builder"])
+        self.assertEqual(names("?q=builder"), ["Bob Builder"])
+        self.assertEqual(names("?q=example.com&interest=backstage"), ["Bob Builder"])
+
+    def test_it_needs_a_login(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("contact-list")).status_code, 302)
+
+
+class PageCopyTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from accounts.models import CustomUser
+        from home.models import Block, BlockColumn, WebPage
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.page = WebPage.objects.create(title="About", slug="about", background_colour="#112233")
+        cls.first = Block.objects.create(name="Intro", block_type="columns_2")
+        BlockColumn.objects.create(block=cls.first, position=0, title="One", text="<p>a</p>")
+        BlockColumn.objects.create(block=cls.first, position=1, title="Two", text="<p>b</p>")
+        cls.second = Block.objects.create(name="Outro", block_type="text", text="<p>bye</p>")
+        cls.page.add_block(cls.first)
+        cls.page.add_block(cls.second)
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_the_copy_has_the_name_with_copy_added_and_its_own_blocks(self):
+        from home.models import Block, WebPage
+
+        response = self.client.post(reverse("page-copy", args=[self.page.pk]))
+        copy = WebPage.objects.get(title="About (copy)")
+        self.assertRedirects(response, reverse("page-edit", args=[copy.pk]))
+        self.assertEqual((copy.slug, copy.background_colour), ("about-copy", "#112233"))
+        self.assertEqual(copy.copied_from_id, self.page.pk)
+        self.assertIsNone(self.page.copied_from_id)
+        blocks = [pb.block for pb in copy.page_blocks()]
+        self.assertEqual([b.name for b in blocks], ["Intro (copy)", "Outro (copy)"])
+        self.assertEqual([c.title for c in blocks[0].columns.all()], ["One", "Two"])
+        self.assertEqual(blocks[1].text, "<p>bye</p>")
+        # The original is untouched, and the copy's blocks are not shared with it.
+        self.assertEqual([pb.block for pb in self.page.page_blocks()], [self.first, self.second])
+        self.assertEqual(self.first.columns.count(), 2)
+        self.assertEqual(Block.objects.count(), 4)
+
+    def test_copying_again_finds_a_free_slug(self):
+        from home.models import WebPage
+
+        self.client.post(reverse("page-copy", args=[self.page.pk]))
+        self.client.post(reverse("page-copy", args=[self.page.pk]))
+        self.assertEqual(sorted(WebPage.objects.values_list("slug", flat=True)), ["about", "about-copy", "about-copy-2"])
+
+    def test_the_list_has_a_copy_button_and_only_posts_copy(self):
+        self.assertContains(self.client.get(reverse("page-list")), reverse("page-copy", args=[self.page.pk]))
+        self.assertEqual(self.client.get(reverse("page-copy", args=[self.page.pk])).status_code, 405)
+
+
+class ReplaceOriginalTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from accounts.models import CustomUser
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+
+    def setUp(self):
+        from home.models import Block, WebPage
+
+        self.client.force_login(self.user)
+        self.original = WebPage.objects.create(title="About", slug="about")
+        self.mine = Block.objects.create(name="Intro", block_type="text", text="<p>x</p>")
+        self.shared = Block.objects.create(name="Shared", block_type="text", text="<p>y</p>")
+        self.original.add_block(self.mine)
+        self.original.add_block(self.shared)
+        WebPage.objects.create(title="Other", slug="other").add_block(self.shared)
+        self.copy = self.original.copy()
+        self.url = reverse("page-replace-original", args=[self.copy.pk])
+
+    def names(self, page):
+        return [pb.block.name for pb in page.page_blocks()]
+
+    def test_the_button_is_only_on_a_copy(self):
+        self.assertContains(self.client.get(reverse("page-edit", args=[self.copy.pk])), "Replace original")
+        self.assertNotContains(self.client.get(reverse("page-edit", args=[self.original.pk])), "Replace original")
+
+    def test_keeping_the_original_renames_it_and_its_blocks_with_old(self):
+        self.assertRedirects(self.client.post(self.url), reverse("page-edit", args=[self.copy.pk]))
+        self.original.refresh_from_db()
+        self.copy.refresh_from_db()
+        self.assertEqual((self.original.title, self.original.slug), ("About (old)", "about-old"))
+        self.assertEqual(self.names(self.original), ["Intro (old)", "Shared (old)"])
+        self.assertEqual((self.copy.title, self.copy.slug, self.copy.copied_from_id), ("About", "about", None))
+        self.assertEqual(self.names(self.copy), ["Intro", "Shared"])
+
+    def test_deleting_the_original_can_leave_its_blocks(self):
+        from home.models import Block, WebPage
+
+        self.client.post(self.url, {"delete_page": "on"})
+        self.assertFalse(WebPage.objects.filter(pk=self.original.pk).exists())
+        self.assertTrue(Block.objects.filter(pk=self.mine.pk).exists())
+        self.copy.refresh_from_db()
+        self.assertEqual((self.copy.title, self.copy.slug), ("About", "about"))
+
+    def test_deleting_the_original_and_its_blocks_keeps_blocks_on_other_pages(self):
+        from home.models import Block, WebPage
+
+        self.client.post(self.url, {"delete_page": "on", "delete_blocks": "on"})
+        self.assertFalse(WebPage.objects.filter(pk=self.original.pk).exists())
+        self.assertFalse(Block.objects.filter(pk=self.mine.pk).exists())
+        self.assertTrue(Block.objects.filter(pk=self.shared.pk).exists())  # still on the Other page
+        self.assertEqual(self.names(self.copy), ["Intro", "Shared"])
+
+    def test_blocks_are_only_deleted_when_the_page_is(self):
+        from home.models import Block
+
+        self.client.post(self.url, {"delete_blocks": "on"})
+        self.assertEqual(self.names(self.original), ["Intro (old)", "Shared (old)"])
+        self.assertTrue(Block.objects.filter(pk=self.mine.pk).exists())
+
+    def test_it_needs_post_and_a_copy(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+        self.client.post(reverse("page-replace-original", args=[self.original.pk]))  # not a copy: nothing happens
+        self.original.refresh_from_db()
+        self.assertEqual(self.original.title, "About")
+
+
+class PublicProductionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from backstage.models import (
+            Cast, Event, EventDateTime, Person, ProductionImage, ProductionTeam, Role, TicketSite,
+        )
+
+        cls.site = TicketSite.objects.create(name="Tickets", url="https://tickets.example.com/p")
+        cls.production = Production.objects.create(title="The Play", strap_line="A strap")
+        event = Event.objects.create(event_type="performance", publish="published", ticket_site=cls.site)
+        event.productions.add(cls.production)
+        EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=5))
+        director = Role.objects.create(name="Director")
+        ProductionTeam.objects.create(production=cls.production, person=Person.objects.create(first_name="Dee", last_name="Rector"), role=director)
+        Cast.objects.create(production=cls.production, character_name="Hamlet", actor=Person.objects.create(first_name="Ann", last_name="Actor"))
+        cls.cover = Image.objects.create(description="Cover", image="images/cover.jpg", image_type="production")
+        ProductionImage.objects.create(production=cls.production, image=cls.cover, is_default=True)
+        cls.url = reverse("public-production", args=[cls.production.pk])
+
+    def test_with_a_promotion_image_it_has_the_button_on_the_image(self):
+        from backstage.models import ProductionImage
+
+        promo = Image.objects.create(description="Promo", image="images/promo.jpg", image_type="promotion")
+        ProductionImage.objects.create(production=self.production, image=promo)
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("images/promo.jpg", html)
+        self.assertIn("absolute bottom-[30px]", html)
+        self.assertIn("https://tickets.example.com/p", html)
+        self.assertNotIn("images/cover.jpg", html)
+        self.assertIn("Dee Rector", html)  # the team
+        self.assertNotIn("Hamlet", html)  # no cast list in this layout
+
+    def test_without_one_it_is_a_card_with_cast_team_and_the_button(self):
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("images/cover.jpg", html)
+        self.assertIn("Hamlet", html)
+        self.assertIn("Dee Rector", html)
+        self.assertIn("Director", html)
+        self.assertIn("https://tickets.example.com/p", html)
+        self.assertNotIn("absolute bottom-[30px]", html)
+
+    def test_it_has_a_listen_button_when_there_are_no_tickets(self):
+        from backstage.models import Event, EventDateTime
+
+        broadcast = Event.objects.create(event_type="broadcast", publish="published", listen_url="https://listen.example.com/p")
+        broadcast.productions.add(self.production)
+        EventDateTime.objects.all().delete()
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("Listen now", html)
+        self.assertNotIn("Buy Tickets", html)
+
+    def test_it_is_public_and_a_missing_production_is_not_found(self):
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.assertEqual(self.client.get(reverse("public-production", args=[9999])).status_code, 404)
+
+    def test_people_with_a_public_page_are_linked_to_it(self):
+        from backstage.models import Cast, Person, Role
+
+        actor_role = Role.objects.create(name="Actor")
+        photo = Image.objects.create(description="Face", image="images/face.jpg", image_type="headshot")
+        ann = Person.objects.get(first_name="Ann")
+        ann.roles.add(actor_role)
+        ann.image = photo
+        ann.save()
+        html = self.client.get(self.url).content.decode()
+        self.assertIn(f'href="{reverse("public-actor", args=[ann.pk])}?production={self.production.pk}"', html)
+        dee = Person.objects.get(first_name="Dee")  # not an actor: no public page, so no link
+        self.assertIn("Dee Rector", html)
+        self.assertNotIn(reverse("public-actor", args=[dee.pk]), html)
+
+    def test_team_members_who_are_not_actors_have_a_public_page(self):
+        from backstage.models import Person
+
+        dee = Person.objects.get(first_name="Dee")
+        url = reverse("public-team-member", args=[dee.pk])
+        self.assertEqual(self.client.get(url).status_code, 404)  # nothing to show yet: no photo or biography
+        self.assertNotIn(url, self.client.get(self.url).content.decode())
+        dee.biography = "<p>Directs things.</p>"
+        dee.save()
+        page = self.client.get(url)
+        self.assertContains(page, "Dee Rector")
+        self.assertContains(page, "Directs things.")
+        self.assertContains(page, "The Play")  # their credit
+        self.assertNotContains(page, "← Actors")
+        self.assertIn(f'href="{url}?production={self.production.pk}"', self.client.get(self.url).content.decode())
+
+    def test_a_public_actor_keeps_the_actor_page(self):
+        from backstage.models import Person, ProductionTeam, Role
+
+        ann = Person.objects.get(first_name="Ann")
+        ann.roles.add(Role.objects.create(name="Actor"))
+        ann.image = Image.objects.create(description="Face", image="images/face.jpg", image_type="headshot")
+        ann.save()
+        ProductionTeam.objects.create(production=self.production, person=ann, role=Role.objects.get(name="Director"))
+        self.assertEqual(self.client.get(reverse("public-team-member", args=[ann.pk])).status_code, 404)
+        self.assertIn(reverse("public-actor", args=[ann.pk]), self.client.get(self.url).content.decode())
+
+    def test_a_persons_page_goes_back_to_the_production_it_was_opened_from(self):
+        from backstage.models import Person, Role
+
+        ann = Person.objects.get(first_name="Ann")
+        ann.roles.add(Role.objects.create(name="Actor"))
+        ann.image = Image.objects.create(description="Face", image="images/face.jpg", image_type="headshot")
+        ann.save()
+        dee = Person.objects.get(first_name="Dee")
+        dee.biography = "<p>Directs.</p>"
+        dee.save()
+        html = self.client.get(self.url).content.decode()
+        back = f'href="{self.url}"'
+        for url in (reverse("public-actor", args=[ann.pk]), reverse("public-team-member", args=[dee.pk])):
+            self.assertIn(f'href="{url}?production={self.production.pk}"', html)
+            page = self.client.get(f"{url}?production={self.production.pk}")
+            self.assertContains(page, back)
+            self.assertContains(page, "← The Play")
+        self.assertContains(self.client.get(reverse("public-actor", args=[ann.pk])), "← Actors")  # no production: as before
+
+    def test_it_shows_the_venue_logo_of_the_next_event(self):
+        from backstage.models import Event, EventDateTime, Venue
+
+        def venue(name):
+            return Venue.objects.create(name=name, logo=Image.objects.create(description=name, image=f"images/{name}.png", image_type="logo"))
+
+        past = Event.objects.create(event_type="performance", publish="published", venue=venue("Pastplace"))
+        past.productions.add(self.production)
+        EventDateTime.objects.create(event=past, datetime=timezone.now() - timedelta(days=30))
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("images/Pastplace.png", html)  # no event to come with a logo: the latest past one
+        coming = self.production.events.get(event_type="performance", venue__isnull=True)
+        coming.venue = venue("Nextplace")
+        coming.save()
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("images/Nextplace.png", html)
+        self.assertNotIn("images/Pastplace.png", html)
+        Event.objects.update(publish="not_published")
+        self.assertNotIn("images/Nextplace.png", self.client.get(self.url).content.decode())

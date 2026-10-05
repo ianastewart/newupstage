@@ -42,6 +42,10 @@ class WebPage(models.Model):
         max_length=7, blank=True, validators=[hex_colour], help_text="#rrggbb; leave blank for the theme's colour."
     )
     blocks = models.ManyToManyField("Block", through="PageBlock", related_name="pages", blank=True)
+    # The page this one was copied from (set by copy(), and editable in the admin); empty if it wasn't copied, or the original has been deleted.
+    copied_from = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="copies"
+    )
 
     class Meta:
         ordering = ["title"]
@@ -64,6 +68,59 @@ class WebPage(models.Model):
         """Put a block at the end of the page."""
         last = self.pageblock_set.aggregate(last=models.Max("position"))["last"] or 0
         return PageBlock.objects.create(page=self, block=block, position=last + 1)
+
+    def copy(self):
+        """
+        A copy of the page: the title with " (copy)" added, a slug not in use, the same background colour, and its own
+        copy of each block (named with " (copy)" added too, columns included) in the same order, so that editing the
+        copy leaves this page alone.
+        """
+        with transaction.atomic():
+            slug, number = f"{self.slug}-copy"[:50], 1
+            while WebPage.objects.filter(slug=slug).exists():
+                number += 1
+                slug = f"{self.slug[:40]}-copy-{number}"
+            page = WebPage.objects.create(
+                title=f"{self.title} (copy)"[:255], slug=slug, background_colour=self.background_colour,
+                copied_from=self,
+            )
+            for page_block in self.page_blocks():
+                page.add_block(page_block.block.copy())
+        return page
+
+    def replace_original(self, delete_page, delete_blocks=False):
+        """
+        Make this copy take the place of the page it was copied from (`copied_from`): it gets that page's title and slug,
+        and its blocks lose the " (copy)" from their names. The original is then either deleted (and, with
+        `delete_blocks`, so are its blocks, except any that are also on another page) or kept, with " (old)" added to
+        its title and slug and to the names of all its blocks. Nothing is done if the page was not copied.
+        """
+        original = self.copied_from
+        if original is None:
+            return
+        with transaction.atomic():
+            title, slug = original.title, original.slug
+            original_blocks = list(original.blocks.all())
+            if delete_page:
+                original.delete()  # its place on each block goes too
+                if delete_blocks:
+                    Block.objects.filter(pk__in=[block.pk for block in original_blocks], pages__isnull=True).delete()
+            else:
+                old_slug, number = f"{slug}-old"[:50], 1
+                while WebPage.objects.filter(slug=old_slug).exists():
+                    number += 1
+                    old_slug = f"{slug[:42]}-old-{number}"
+                original.title, original.slug = f"{title} (old)"[:255], old_slug
+                original.save(update_fields=["title", "slug"])
+                for block in original_blocks:
+                    block.name = f"{block.name} (old)"[:255]
+                    block.save(update_fields=["name"])
+            for block in self.blocks.all():
+                if block.name.endswith(" (copy)"):
+                    block.name = block.name[: -len(" (copy)")]
+                    block.save(update_fields=["name"])
+            self.title, self.slug, self.copied_from = title, slug, None
+            self.save(update_fields=["title", "slug", "copied_from"])
 
     def move_block(self, page_block_id, offset):
         """Move one of the page's blocks up (offset -1) or down (+1); positions end up as 1, 2, 3..."""
@@ -104,6 +161,7 @@ class Block(models.Model):
         AUDITIONS = "auditions", "Auditions"
         PROMOTION = "promotion", "Promotion"
         DIARY = "diary", "Diary"
+        CONTACT = "contact", "Contact form"
 
     class DiaryShow(models.TextChoices):
         RECENT_RADIO = "recent_radio", "Recent radio plays"
@@ -136,6 +194,7 @@ class Block(models.Model):
         BlockType.AUDITIONS: "home/blocks/auditions.html",
         BlockType.PROMOTION: "home/blocks/promotion.html",
         BlockType.DIARY: "home/blocks/diary.html",
+        BlockType.CONTACT: "home/blocks/contact.html",
     }
 
     name = models.CharField(max_length=255, help_text="Identifies the block when adding it to pages.")
@@ -220,6 +279,13 @@ class Block(models.Model):
         from .auditions import upcoming_auditions
 
         return upcoming_auditions()
+
+    @property
+    def contact_form(self):
+        """For a contact block: a new, empty form."""
+        from backstage.forms import ContactForm
+
+        return ContactForm()
 
     def diary_productions(self):
         """For a diary block: the productions with a published event still to come (see home.diary)."""
@@ -309,6 +375,19 @@ class Block(models.Model):
         if not self.production_id:
             return []
         return self.production.cast.select_related("actor").order_by("id")
+
+    def copy(self):
+        """A copy of the block, with " (copy)" added to its name, and a copy of its columns."""
+        columns = list(self.columns.all())
+        block = Block.objects.get(pk=self.pk)
+        block.pk = None
+        block.name = f"{self.name} (copy)"[:255]
+        block.save()
+        for column in columns:
+            column.pk = None
+            column.block = block
+            column.save()
+        return block
 
     def clean(self):
         errors = {}

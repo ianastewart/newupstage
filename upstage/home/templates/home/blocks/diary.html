@@ -1,7 +1,8 @@
 {% comment %}
-A diary block: its title, subtitle and text, then every production with a published event of the kind the block's
-Show option has ticked (recent radio plays, upcoming radio plays, upcoming stage plays, auditions), earliest first. Each is a card of two columns: the production's image on the left, the details of its events on the
-right (what kind of event, where, when, and a ticket link). On phones the columns stack.
+A diary block: its title, subtitle and text, then every production with a published event of the kinds ticked in the block's
+Show option (recent radio plays, upcoming radio plays, upcoming stage plays, auditions), earliest first. Each is a card of three
+columns, as in the auditions block: the production's image, the title (with the strap line under it), and the details of its
+events: what kind and where, the dates and times, the venue's logo under them, and a ticket link. On phones the columns stack.
 With nothing to come the block shows nothing at all, not even its title.
 {% endcomment %}
 {% with productions=block.diary_productions %}
@@ -13,26 +14,34 @@ With nothing to come the block shows nothing at all, not even its title.
   {% endif %}
   <ul class="space-y-4">
     {% for production in productions %}
-      <li class="grid gap-4 rounded-box bg-base-100 p-4 text-base-content shadow-sm md:grid-cols-2">
-        {# Left: the production's image (an empty column if there is none, so the cards still line up). #}
+      <li class="grid items-center gap-4 rounded-box bg-base-100 p-4 text-base-content shadow-sm md:grid-cols-3">
+        {# Column 1: the image (an empty column if there is none, so the other columns still line up). It and the title link to the production's page. #}
         <div>
           {% with cover=production.default_image %}
             {% if cover %}
-              <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" loading="lazy" class="h-auto max-h-60 w-auto max-w-full rounded-box shadow-sm" />
+              <a href="{% url 'public-production' production.pk %}" class="inline-block" aria-label="{{ production.title }}">
+              <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" loading="lazy" class="h-auto max-h-40 w-auto max-w-full rounded-box shadow-sm transition hover:shadow-md" />
+              </a>
             {% endif %}
           {% endwith %}
         </div>
-        {# Right: the title, then each event with its venue and dates. #}
+        {# Column 2: the title, with the strap line under it. #}
         <div>
-          <h3 class="text-2xl font-bold">{{ production.title }}</h3>
-          {% if production.strap_line %}<p class="mt-1 italic opacity-80">{{ production.strap_line }}</p>{% endif %}
+          <h3 class="text-2xl font-bold md:text-3xl"><a href="{% url 'public-production' production.pk %}" class="link-hover">{{ production.title }}</a></h3>
+          {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
+        </div>
+        {# Column 3: each event: what and where, its dates and times, the venue's logo under them, then tickets. #}
+        <div class="space-y-4">
           {% for event in production.diary_events %}
-            <div class="mt-4">
+            <div>
               <p class="font-semibold">{{ event.get_event_type_display }}{% if event.venue %} at {{ event.venue.name }}{% endif %}</p>
               <ul class="mt-1 space-y-0.5">
                 {% for date in event.dates %}<li>{{ date.datetime|date:"D j M Y, g:i a" }}</li>{% endfor %}
               </ul>
-              {% if event.description %}<p class="mt-1 text-sm opacity-80">{{ event.description }}</p>{% endif %}
+              {% if event.venue.logo.image %}
+                <img src="{{ event.venue.logo.image.url }}" alt="{{ event.venue.name }}" loading="lazy" class="mt-2 h-auto max-h-16 w-auto max-w-full" />
+              {% endif %}
+              {% if event.description %}<p class="mt-2 text-sm opacity-80">{{ event.description }}</p>{% endif %}
               {% if event.upcoming and event.ticket_site and event.ticket_site.url %}
                 <a href="{{ event.ticket_site.url }}" class="btn btn-primary btn-sm mt-2" target="_blank" rel="noopener noreferrer">Buy Tickets</a>
               {% endif %}

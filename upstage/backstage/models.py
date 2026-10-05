@@ -1,5 +1,5 @@
 from django.db import models, transaction
-from django.db.models import Min, Q
+from django.db.models import F, Min, Q
 from django_enum import EnumField
 
 from backstage.fields import HeadshotImageField
@@ -133,6 +133,8 @@ class Event(models.Model):
     ticket_site = models.ForeignKey(
         TicketSite, null=True, blank=True, on_delete=models.SET_NULL
     )
+    # Where to listen to a Broadcast event (tickets are for performances).
+    listen_url = models.URLField(blank=True)
 
     def __str__(self):
         return self.get_event_type_display()
@@ -169,14 +171,6 @@ class ProductionQuerySet(models.QuerySet):
 
 
 class Production(models.Model):
-    class ProductionState(models.TextChoices):
-        """Planned, Audition, Cast, Broadcast date, Live, Archived"""
-        PLANNED = "planned", "Planned"
-        AUDITION = "audition", "Audition"
-        CAST = "cast", "Cast"
-        PUBLISHED = "published", "Published"
-        ARCHIVED = "archived", "Archived"
-
     class ProductionType(models.TextChoices):
         RADIO = "radio", "Radio play"
         STAGE = "stage", "Stage play"
@@ -186,15 +180,11 @@ class Production(models.Model):
     title = models.CharField(max_length=255)
     strap_line = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
-    state = models.CharField(
-        max_length=20, choices=ProductionState.choices, default=ProductionState.PLANNED
-    )
     type = models.CharField(
         max_length=20, choices=ProductionType.choices, default=ProductionType.RADIO
     )
     # Auditions, rehearsals, performances...; an event (e.g. an evening of plays) can include several productions.
     events = models.ManyToManyField(Event, blank=True, related_name="productions")
-    listen_url = models.URLField(null=True, blank=True)
 
     objects = ProductionQuerySet.as_manager()
 
@@ -225,6 +215,43 @@ class Production(models.Model):
         event = Event.objects.create(event_type=Event.EventType.BROADCAST)
         EventDateTime.objects.create(event=event, datetime=when)
         self.events.add(event)
+
+    def event_type_counts(self):
+        """[(type label, number of events)] for each type of event the production has, in the order of the types."""
+        counts = {}
+        for event_type in self.events.values_list("event_type", flat=True):
+            counts[event_type] = counts.get(event_type, 0) + 1
+        return [(label, counts[value]) for value, label in Event.EventType.choices if value in counts]
+
+    def broadcast_event(self):
+        """The production's first Broadcast event (earliest date first, undated last), made (undated) if it has none."""
+        event = (
+            self.events.filter(event_type=Event.EventType.BROADCAST)
+            .annotate(first_date=Min("datetimes__datetime"))
+            .order_by(F("first_date").asc(nulls_last=True), "pk")
+            .first()
+        )
+        if event is None:
+            event = Event.objects.create(event_type=Event.EventType.BROADCAST, publish=Event.Publish.PUBLISHED)
+            self.events.add(event)
+        return event
+
+    def _listen_url(self, published_only):
+        events = self.events.filter(event_type=Event.EventType.BROADCAST).exclude(listen_url="")
+        if published_only:
+            events = events.filter(publish__in=[Event.Publish.PUBLISHED, Event.Publish.PROMOTED])
+        event = events.annotate(first_date=Min("datetimes__datetime")).order_by(F("first_date").asc(nulls_last=True), "pk").first()
+        return event.listen_url if event else ""
+
+    @property
+    def listen_url(self):
+        """Where to listen: the address of the production's first Broadcast event that has one, or ""."""
+        return self._listen_url(published_only=False)
+
+    @property
+    def public_listen_url(self):
+        """As listen_url, but only from a published (or promoted) event: what the public pages offer."""
+        return self._listen_url(published_only=True)
 
     @property
     def default_image(self):
@@ -310,3 +337,21 @@ class ProductionImage(models.Model):
         images = production.images.order_by("id")
         if not images.filter(is_default=True).exists() and (first := images.first()):
             first.make_default()
+
+
+class Contact(models.Model):
+    """Someone who has filled in a contact block's form on the public site."""
+
+    created = models.DateTimeField("Creation date", auto_now_add=True)
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
+    email = models.EmailField()
+    newsletter = models.BooleanField("Occasional newsletter", default=False)
+    acting = models.BooleanField("Acting", default=False)
+    backstage = models.BooleanField("Backstage roles", default=False)
+
+    class Meta:
+        ordering = ["-created"]
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name}".strip()

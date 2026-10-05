@@ -90,19 +90,30 @@ class EventDetailsForm(forms.ModelForm):
     ticket_url = forms.URLField(
         required=False, label="Ticket website", assume_scheme="https",
         widget=forms.URLInput(attrs={"placeholder": "https://..."}),
-        help_text="Where to buy tickets. Leave blank if there is no ticket website.",
+        help_text="Where to buy tickets. Leave blank if there is no ticket website. Performances only.",
     )
-    field_order = ["event_type", "publish", "venue", "ticket_url", "description"]
+    field_order = ["event_type", "publish", "venue", "ticket_url", "listen_url", "description"]
 
     class Meta:
         model = models.Event
-        fields = ["event_type", "publish", "venue", "description"]
+        fields = ["event_type", "publish", "venue", "listen_url", "description"]
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.ticket_site_id:
             self.fields["ticket_url"].initial = self.instance.ticket_site.url
+
+    def clean(self):
+        """Only a performance has a ticket website, and only a broadcast a listen address: the others have neither."""
+        data = super().clean()
+        kind = data.get("event_type")
+        if kind != models.Event.EventType.PERFORMANCE:
+            data["ticket_url"] = ""
+        if kind != models.Event.EventType.BROADCAST:
+            data["listen_url"] = ""
+        self.instance.listen_url = data.get("listen_url", "")
+        return data
 
     def save(self, commit=True):
         url = self.cleaned_data.get("ticket_url")
@@ -124,7 +135,7 @@ class EventForm(EventDetailsForm):
         widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
         help_text="More dates can be added on the Events tab.",
     )
-    field_order = ["event_type", "publish", "venue", "ticket_url", "first_datetime", "description"]
+    field_order = ["event_type", "publish", "venue", "ticket_url", "listen_url", "first_datetime", "description"]
 
     def save(self, commit=True):
         event = super().save(commit)
@@ -181,3 +192,17 @@ class ImageForm(forms.ModelForm):
             self.cleaned_data.get("brightness", NEUTRAL_TONE[0]), self.cleaned_data.get("contrast", NEUTRAL_TONE[1])
         )
         return super().save(commit)
+
+
+class ContactForm(forms.ModelForm):
+    """The contact block's form. `website` is a trap for bots: people never see it, so a form with it filled in is dropped."""
+
+    website = forms.CharField(required=False, widget=forms.TextInput(attrs={"tabindex": "-1", "autocomplete": "off"}))
+
+    class Meta:
+        model = models.Contact
+        fields = ["first_name", "last_name", "email", "newsletter", "acting", "backstage"]
+
+    @property
+    def is_spam(self):
+        return bool(self.cleaned_data.get("website"))

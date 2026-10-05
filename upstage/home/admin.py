@@ -13,7 +13,9 @@ class PageBlockInline(admin.TabularInline):
 
 @admin.register(WebPage)
 class WebPageAdmin(admin.ModelAdmin):
-    list_display = ["title", "slug"]
+    list_display = ["title", "slug", "id", "copied_from"]
+    readonly_fields = ["id"]
+    raw_id_fields = ["copied_from"]  # typed as the page's id
     prepopulated_fields = {"slug": ["title"]}
     search_fields = ["title"]
     inlines = [PageBlockInline]

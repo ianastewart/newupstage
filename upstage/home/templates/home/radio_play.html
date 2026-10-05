@@ -21,8 +21,8 @@
           <h1 class="text-3xl font-bold">{{ play.title }}</h1>
           {% if play.strap_line %}<p class="mt-1 text-lg italic">{{ play.strap_line }}</p>{% endif %}
 
-          {% if play.listen_url %}
-            <a href="{{ play.listen_url }}" class="btn btn-primary mt-4" target="_blank" rel="noopener">Listen now</a>
+          {% if play.public_listen_url %}
+            <a href="{{ play.public_listen_url }}" class="btn btn-primary mt-4" target="_blank" rel="noopener">Listen now</a>
           {% endif %}
 
           {% if play.writers %}

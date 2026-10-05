@@ -2247,11 +2247,11 @@ class EventTicketWebsiteTests(TestCase):
 
     def test_creating_an_event_from_the_events_tab_with_an_address(self):
         response = self.client.post(reverse("production-events", args=[self.production.pk]), {
-            "action": "create", "event_type": "rehearsal", "publish": "not_published", "venue": "", "description": "",
+            "action": "create", "event_type": "performance", "publish": "not_published", "venue": "", "description": "",
             "ticket_url": "https://tickets.example.com/gala", "first_datetime": "",
         })
         self.assertEqual(response.status_code, 302)
-        gala = self.production.events.get(event_type="rehearsal")
+        gala = self.production.events.get(ticket_site__url="https://tickets.example.com/gala")
         self.assertEqual(gala.ticket_site.url, "https://tickets.example.com/gala")
 
     def test_the_tab_shows_the_ticket_link(self):
@@ -2626,3 +2626,143 @@ class EventWithoutTitleTests(TestCase):
         self.assertEqual(self.event.datetimes.count(), 2)
         self.client.post(self.tab, {"action": "remove_datetime", "datetime_id": self.when.pk})
         self.assertEqual(self.event.datetimes.count(), 1)
+
+
+class EventTypeFieldsTests(TestCase):
+    """A performance has a ticket website, a broadcast a listen address; other types neither."""
+
+    def data(self, event_type, **extra):
+        return {"event_type": event_type, "publish": "published", "ticket_url": "https://tickets.example.com/x",
+                "listen_url": "https://listen.example.com/x", **extra}
+
+    def test_a_broadcast_keeps_only_its_listen_address(self):
+        from backstage.forms import EventDetailsForm
+
+        form = EventDetailsForm(self.data("broadcast"))
+        self.assertTrue(form.is_valid(), form.errors)
+        event = form.save()
+        self.assertEqual((event.listen_url, event.ticket_site), ("https://listen.example.com/x", None))
+
+    def test_a_performance_keeps_only_its_ticket_website(self):
+        from backstage.forms import EventDetailsForm
+
+        form = EventDetailsForm(self.data("performance"))
+        self.assertTrue(form.is_valid(), form.errors)
+        event = form.save()
+        self.assertEqual((event.listen_url, event.ticket_site.url), ("", "https://tickets.example.com/x"))
+
+    def test_other_types_have_neither(self):
+        from backstage.forms import EventDetailsForm
+
+        form = EventDetailsForm(self.data("audition"))
+        self.assertTrue(form.is_valid(), form.errors)
+        event = form.save()
+        self.assertEqual((event.listen_url, event.ticket_site), ("", None))
+
+    def test_the_forms_have_the_script_that_shows_the_right_field(self):
+        from accounts.models import CustomUser
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        production = Production.objects.create(title="A Play")
+        self.assertContains(self.client.get(reverse("production-events", args=[production.pk])), "id_listen_url")
+        self.assertContains(self.client.get(reverse("event-create")), "update()")
+
+
+class ListenUrlOnBroadcastEventTests(TestCase):
+    def test_a_production_listen_url_is_that_of_its_broadcast_event(self):
+        from backstage.models import Event
+
+        production = Production.objects.create(title="A Radio Play", type="radio")
+        self.assertEqual((production.listen_url, production.public_listen_url), ("", ""))
+        event = Event.objects.create(event_type="broadcast", listen_url="https://listen.example.com/a")
+        event.productions.add(production)
+        self.assertEqual((production.listen_url, production.public_listen_url), ("https://listen.example.com/a", ""))  # not published yet
+        event.publish = "published"
+        event.save()
+        self.assertEqual(production.public_listen_url, "https://listen.example.com/a")
+
+    def test_broadcast_event_makes_one_if_there_is_none(self):
+        from backstage.models import Event
+
+        production = Production.objects.create(title="A Radio Play", type="radio")
+        event = production.broadcast_event()
+        self.assertEqual((event.event_type, event.publish), ("broadcast", "published"))
+        self.assertEqual(production.broadcast_event(), event)  # and then finds it
+        self.assertEqual(Event.objects.count(), 1)
+
+    def test_the_import_puts_the_listen_address_on_the_broadcast_event(self):
+        from datetime import date
+
+        from django.core.management import call_command
+        from unittest import mock
+
+        play = {
+            "title": "Imported Play", "description": "", "credits": [], "cast": [], "image_url": None,
+            "listen_url": "https://example.com/imported.mp3", "broadcast_date": date(2026, 6, 19),
+        }
+        with mock.patch("scraper.scrape.scrape_radio", return_value=[play]):
+            call_command("import_radio_plays", "--no-images", stdout=mock.MagicMock())
+        production = Production.objects.get(title="Imported Play")
+        self.assertEqual(production.listen_url, "https://example.com/imported.mp3")
+        self.assertEqual(production.events.filter(event_type="broadcast").count(), 1)
+
+
+class ProductionPublishedFilterTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from accounts.models import CustomUser
+        from backstage.models import Event
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+
+        def make(title, *publishes):
+            production = Production.objects.create(title=title)
+            for publish in publishes:
+                Event.objects.create(event_type="performance", publish=publish).productions.add(production)
+
+        make("Live Play", "published")
+        make("Promoted Play", "not_published", "promoted")
+        make("Draft Play", "not_published")
+        make("No Events Play")
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def titles(self, query=""):
+        response = self.client.get(reverse("production-list") + query)
+        return sorted(p.title for p in response.context["object_list"])
+
+    def test_published_means_a_published_or_promoted_event(self):
+        self.assertEqual(self.titles("?published=published"), ["Live Play", "Promoted Play"])
+
+    def test_not_published_is_the_rest(self):
+        self.assertEqual(self.titles("?published=not_published"), ["Draft Play", "No Events Play"])
+
+    def test_it_is_off_by_default_and_works_with_the_other_filters(self):
+        self.assertEqual(len(self.titles()), 4)
+        self.assertEqual(self.titles("?published=published&q=promoted"), ["Promoted Play"])
+        self.assertEqual(len(self.titles("?published=nonsense")), 4)
+        self.assertContains(self.client.get(reverse("production-list")), 'name="published"')
+
+
+class ProductionDetailEventBadgesTests(TestCase):
+    def test_the_details_tab_shows_a_badge_for_each_event_type(self):
+        from accounts.models import CustomUser
+        from backstage.models import Event, EventDateTime
+        from datetime import datetime, timezone as tz
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        production = Production.objects.create(title="A Play")
+        self.assertContains(self.client.get(reverse("production-detail", args=[production.pk])), "<dd class=\"flex flex-wrap gap-1\">—</dd>")
+        for event_type in ("performance", "performance", "broadcast", "audition"):
+            Event.objects.create(event_type=event_type).productions.add(production)
+        self.assertEqual(production.event_type_counts(), [("Audition", 1), ("Performance", 2), ("Broadcast", 1)])
+        html = self.client.get(reverse("production-detail", args=[production.pk])).content.decode()
+        for badge in ("Audition</span>", "Performance × 2</span>", "Broadcast</span>"):
+            self.assertIn(badge, html)
+        event = production.events.get(event_type="broadcast")
+        EventDateTime.objects.create(event=event, datetime=datetime(2026, 6, 19, 14, 30, tzinfo=tz.utc))
+        html = self.client.get(reverse("production-detail", args=[production.pk])).content.decode()
+        self.assertIn("19 June 2026", html)
+        self.assertNotIn("19 June 2026, ", html)  # no time
+

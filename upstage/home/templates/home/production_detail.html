@@ -1,0 +1,68 @@
+{% extends "public_base.html" %}
+
+{% block title %}{{ production.title }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-6 p-6">
+  {% if promotion_image %}
+    {# The promotion image, with the button on it (30px up from the bottom edge, centred), as in the promotion block. #}
+    <header class="text-center">
+      <h1 class="text-3xl font-bold">{{ production.title }}</h1>
+      {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
+    </header>
+    <div class="relative mx-auto w-full max-w-2xl">
+      <img src="{{ promotion_image.image.url }}" alt="{{ promotion_image.description|default:production.title }}" class="block h-auto w-full rounded-box" />
+      {% if ticket_url %}
+        <a href="{{ ticket_url }}" class="btn btn-primary btn-md absolute bottom-[30px] left-1/2 -translate-x-1/2 shadow-lg" target="_blank" rel="noopener noreferrer">Buy Tickets</a>
+      {% elif production.public_listen_url %}
+        <a href="{{ production.public_listen_url }}" class="btn btn-primary btn-md absolute bottom-[30px] left-1/2 -translate-x-1/2 shadow-lg" target="_blank" rel="noopener noreferrer">Listen now</a>
+      {% endif %}
+    </div>
+    {% if venue.logo.image %}<div class="flex justify-center">{% if venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}</div>{% endif %}
+    {% if production.description %}<div class="mx-auto max-w-2xl">{{ production.description|linebreaks }}</div>{% endif %}
+    {% include "home/_production_team.html" %}
+  {% else %}
+    {# No promotion image: a card with the production's image and its cast, the button, and the team. #}
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body gap-6">
+        <header>
+          <h1 class="text-3xl font-bold">{{ production.title }}</h1>
+          {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
+        </header>
+        <div class="grid items-start gap-6 md:grid-cols-2 md:gap-10">
+          <div class="space-y-4">
+            {% with cover=production.default_image %}
+              {% if cover %}
+                <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" class="h-auto max-h-[500px] w-auto max-w-full rounded-box shadow-sm" />
+              {% endif %}
+            {% endwith %}
+            {% if ticket_url %}
+              <a href="{{ ticket_url }}" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Buy Tickets</a>
+            {% elif production.public_listen_url %}
+              <a href="{{ production.public_listen_url }}" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Listen now</a>
+            {% endif %}
+            {% if venue.logo.image %}<div>{% if venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}</div>{% endif %}
+          </div>
+          <div class="space-y-6">
+            {% if production.description %}<div>{{ production.description|linebreaks }}</div>{% endif %}
+            <section>
+              <h2 class="mb-3 text-lg font-semibold uppercase tracking-wide opacity-70">Cast</h2>
+              {% if cast %}
+                <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
+                  {% for part in cast %}
+                    <dt class="font-semibold">{{ part.character_name }}</dt>
+                    <dd>{% if part.actor %}{% if part.actor.public_url %}<a href="{{ part.actor.public_url }}" class="link link-hover">{{ part.actor }}</a>{% else %}{{ part.actor }}{% endif %}{% else %}—{% endif %}</dd>
+                  {% endfor %}
+                </dl>
+              {% else %}
+                <p class="opacity-70">The cast hasn't been announced yet.</p>
+              {% endif %}
+            </section>
+            {% include "home/_production_team.html" %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

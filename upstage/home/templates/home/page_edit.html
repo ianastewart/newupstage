@@ -10,8 +10,53 @@
 
   <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <h1 class="text-3xl font-bold">{{ page.title }}</h1>
-    <a href="{{ page.get_absolute_url }}" class="btn" target="_blank" rel="noopener">View page</a>
+    <div class="flex flex-wrap gap-2">
+      {% if page.copied_from_id %}
+        <button type="button" class="btn btn-warning" onclick="document.getElementById('replace-original').showModal()">Replace original</button>
+      {% endif %}
+      <a href="{{ page.get_absolute_url }}" class="btn" target="_blank" rel="noopener">View page</a>
+    </div>
   </div>
+
+  {% if page.copied_from_id %}
+    <dialog id="replace-original" class="modal">
+      <div class="modal-box">
+        <h2 class="mb-2 text-xl font-bold">Replace the original page?</h2>
+        <p class="mb-4 text-sm opacity-80">
+          This page takes over the address /page/{{ page.copied_from.slug }}/ and the title “{{ page.copied_from.title }}”,
+          and its blocks take the original blocks’ names. What happens to the original?
+        </p>
+        <form method="POST" action="{% url 'page-replace-original' page.pk %}">
+          {% csrf_token %}
+          <label class="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" name="delete_page" id="replace-delete-page" class="checkbox mt-1" />
+            <span>Delete the original page<span class="block text-sm opacity-70">If not ticked, the original page and all its blocks are renamed with (old) after the name.</span></span>
+          </label>
+          <label id="replace-delete-blocks-row" class="mt-4 hidden cursor-pointer items-start gap-3">
+            <input type="checkbox" name="delete_blocks" id="replace-delete-blocks" class="checkbox mt-1" />
+            <span>Delete the original’s blocks too<span class="block text-sm opacity-70">Blocks that are also on another page are kept. If not ticked, the blocks are left in the library.</span></span>
+          </label>
+          <div class="modal-action">
+            <button type="button" class="btn btn-ghost" onclick="document.getElementById('replace-original').close()">Cancel</button>
+            <button type="submit" class="btn btn-warning">Replace original</button>
+          </div>
+        </form>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+    <script>
+      (() => {
+        const page = document.getElementById('replace-delete-page');
+        const row = document.getElementById('replace-delete-blocks-row');
+        const blocks = document.getElementById('replace-delete-blocks');
+        page.addEventListener('change', () => {
+          row.classList.toggle('hidden', !page.checked);
+          row.classList.toggle('flex', page.checked);
+          if (!page.checked) blocks.checked = false;
+        });
+      })();
+    </script>
+  {% endif %}
 
   {# Page details: title and slug. Open if there's an error to fix. #}
   <details class="collapse collapse-arrow mb-6 bg-base-200 shadow-sm"{% if form.errors %} open{% endif %}>

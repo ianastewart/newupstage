@@ -448,6 +448,22 @@ def actor_roles(request, pk):
     return render(request, "backstage/actor_wizard_roles.html", {"person": person, "form": form})
 
 
+def contact_list(request):
+    """The people who have filled in a contact form, newest first. ?interest=newsletter|acting|backstage narrows it, ?q= searches."""
+    interests = {"newsletter": "Occasional newsletter", "acting": "Acting", "backstage": "Backstage roles"}
+    contacts = models.Contact.objects.all()
+    interest = request.GET.get("interest")
+    if interest in interests:
+        contacts = contacts.filter(**{interest: True})
+    search = request.GET.get("q", "").strip()
+    for word in search.split():
+        contacts = contacts.filter(Q(first_name__icontains=word) | Q(last_name__icontains=word) | Q(email__icontains=word))
+    return render(
+        request, "backstage/contact_list.html",
+        {"contacts": contacts, "interests": interests, "interest": interest if interest in interests else "", "search": search},
+    )
+
+
 def writer_list(request):
     """Everyone with the Writer role, with the productions they wrote."""
     writers = (
@@ -537,16 +553,19 @@ class EventDateTimeView(CRUDView):
 
 class ProductionView(CRUDView):
     model = models.Production
-    fields = ["title", "strap_line", "description", "state", "type", "listen_url"]
+    fields = ["title", "strap_line", "description", "type"]
     paginate_by = 24
-
-    def get_state(self):
-        state = self.request.GET.get("state")
-        return state if state in models.Production.ProductionState.values else None
 
     def get_type(self):
         production_type = self.request.GET.get("type")
         return production_type if production_type in models.Production.ProductionType.values else None
+
+    # A production is published when it has a Published or Promoted event.
+    PUBLISHED_FILTERS = [("published", "Published"), ("not_published", "Not published")]
+
+    def get_published(self):
+        published = self.request.GET.get("published")
+        return published if published in dict(self.PUBLISHED_FILTERS) else None
 
     def get_search(self):
         return self.request.GET.get("q", "").strip()
@@ -570,20 +589,23 @@ class ProductionView(CRUDView):
             queryset = queryset.prefetch_related(
                 Prefetch("images", queryset=models.ProductionImage.objects.select_related("image").order_by("id"))
             )
-            if state := self.get_state():
-                queryset = queryset.filter(state=state)
             if production_type := self.get_type():
                 queryset = queryset.filter(type=production_type)
+            if published := self.get_published():
+                shown = models.Event.objects.filter(
+                    productions=OuterRef("pk"), publish__in=[models.Event.Publish.PUBLISHED, models.Event.Publish.PROMOTED]
+                )
+                queryset = queryset.filter(Exists(shown) if published == "published" else ~Exists(shown))
             if search := self.get_search():
                 queryset = queryset.filter(title__icontains=search)
             queryset = queryset.order_by(*self.SORTS[self.get_sort()][1])
         return queryset
 
     def get_context_data(self, **kwargs):
-        kwargs["states"] = models.Production.ProductionState.choices
-        kwargs["current_state"] = self.get_state()
         kwargs["types"] = models.Production.ProductionType.choices
         kwargs["current_type"] = self.get_type()
+        kwargs["published_filters"] = self.PUBLISHED_FILTERS
+        kwargs["current_published"] = self.get_published()
         kwargs["search"] = self.get_search()
         kwargs["sorts"] = [(value, label) for value, (label, _) in self.SORTS.items()]
         kwargs["current_sort"] = self.get_sort()
