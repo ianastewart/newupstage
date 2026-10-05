@@ -1,20 +1,20 @@
-"""The promotion block: the promotion image of the next production to be performed."""
-from django.db.models import Min, Q
+"""The promotion block: the promotion image of the production of the next promoted event."""
 from django.utils import timezone
 
-from backstage.models import Event, EventDateTime, Image, Production
+from backstage.models import Event, EventDateTime, Image
 
 
-def next_performance():
+def next_promoted_date():
     """
-    The first production with a performance still to come: the one whose next performance (an event of type performance
-    with a date in the future) is soonest. None if there isn't one. Ties go to the title.
+    The soonest date still to come of an event that is Promoted (whatever its type) and belongs to a production, with
+    the event and its ticket site. None if there isn't one.
     """
-    upcoming = Q(events__event_type=Event.EventType.PERFORMANCE, events__datetimes__datetime__gte=timezone.now())
     return (
-        Production.objects.filter(upcoming)
-        .annotate(next_performance=Min("events__datetimes__datetime", filter=upcoming))
-        .order_by("next_performance", "title", "pk")
+        EventDateTime.objects.filter(
+            event__publish=Event.Publish.PROMOTED, event__productions__isnull=False, datetime__gte=timezone.now()
+        )
+        .select_related("event__ticket_site")
+        .order_by("datetime", "pk")
         .first()
     )
 
@@ -24,8 +24,6 @@ def promotion_image(production):
     A production's image of type promotion: its default image if that is a promotion image, else the first one added.
     None if it has none.
     """
-    if production is None:
-        return None
     link = (
         production.images.filter(image__image_type=Image.ImageType.PROMOTION)
         .select_related("image")
@@ -35,27 +33,17 @@ def promotion_image(production):
     return link.image if link else None
 
 
-def ticket_url(production):
-    """
-    Where to buy tickets for the production's next performance: the web address of the ticket site of the event that
-    performance belongs to. Empty if there is no such performance, or its event has no ticket site or address.
-    """
-    if production is None:
-        return ""
-    date = (
-        EventDateTime.objects.filter(
-            event__productions=production, event__event_type=Event.EventType.PERFORMANCE, datetime__gte=timezone.now()
-        )
-        .select_related("event__ticket_site")
-        .order_by("datetime", "pk")
-        .first()
-    )
-    site = date.event.ticket_site if date else None
-    return site.url if site and site.url else ""
-
-
 def next_promotion():
-    """What the promotion block shows: (the next performance's promotion image, its ticket address), or (None, "")."""
-    production = next_performance()
-    image = promotion_image(production)
-    return (image, ticket_url(production)) if image else (None, "")
+    """
+    What the promotion block shows: (the promotion image, the address to buy tickets) of the next promoted event, or
+    (None, "") if no promoted event has a date to come, or its production has no promotion image. An event of several
+    productions uses the first (by title) that has a promotion image. The tickets are those of the event's ticket site.
+    """
+    date = next_promoted_date()
+    if date is None:
+        return None, ""
+    for production in date.event.productions.order_by("title", "pk"):
+        if image := promotion_image(production):
+            site = date.event.ticket_site
+            return image, (site.url if site and site.url else "")
+    return None, ""

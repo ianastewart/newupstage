@@ -47,7 +47,7 @@
             <h2 class="card-title">Image</h2>
             <div data-for="image text_image cast hero_image split">{{ form.image.as_field_group }}</div>
             <p class="text-xs opacity-70" data-for="cast">Leave blank to use the production's default image.</p>
-            <p class="text-xs opacity-70" data-for="promotion">The image is the promotion image of the next production with a performance still to come. If there is none, the block shows nothing.</p>
+            <p class="text-xs opacity-70" data-for="promotion">The image is the promotion image of the production of the next event marked Promoted (with a date still to come). If there is none, the block shows nothing.</p>
             <div data-for="text_image split promotion">{{ form.url.as_field_group }}</div>
             <div data-for="image text_image cast promotion">{{ form.image_size.as_field_group }}</div>
             <div data-for="text_image cast split">{{ form.layout.as_field_group }}</div>

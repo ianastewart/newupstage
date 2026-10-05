@@ -1,8 +1,9 @@
 {% comment %}
-A promotion block: the promotion image of the next production with a performance still to come, at the block's image size
-(and linking where the block's link says), under the block's title and subtitle if it has them. If that performance's event
+A promotion block: the promotion image of the production of the next promoted event (an event marked Promoted, with a date still
+to come), at the block's image size
+(and linking where the block's link says), under the block's title and subtitle if it has them. If that event
 has a ticket address there is a Buy Tickets button, medium sized, on top of the image: centred, 30px up from its bottom edge.
-If the production has no promotion image, or no production has a performance to come, the block shows nothing at all, not
+If the production has no promotion image, or no promoted event has a date to come, the block shows nothing at all, not
 even its title.
 {% endcomment %}
 {% with image=block.display_image %}

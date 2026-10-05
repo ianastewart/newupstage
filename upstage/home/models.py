@@ -251,7 +251,7 @@ class Block(models.Model):
 
     @cached_property
     def promotion(self):
-        """For a promotion block: (the promotion image of the next production with a performance to come, or None; where to buy tickets, or "")."""
+        """For a promotion block: (the promotion image of the production of the next promoted event, or None; where to buy tickets, or "")."""
         from .promotions import next_promotion
 
         return next_promotion()
@@ -262,7 +262,7 @@ class Block(models.Model):
 
     @property
     def ticket_url(self):
-        """For a promotion block: where to buy tickets for that performance (empty if its event has no ticket address)."""
+        """For a promotion block: where to buy tickets for that event (empty if it has no ticket address)."""
         return self.promotion[1]
 
     @property

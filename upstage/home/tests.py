@@ -990,7 +990,7 @@ class HeroFadeInTimeTests(TestCase):
 
 
 class PromotionBlockTests(TestCase):
-    """A promotion block shows the promotion image of the next production with a performance still to come."""
+    """A promotion block shows the promotion image of the production of the next promoted event."""
 
     @classmethod
     def setUpTestData(cls):
@@ -1001,13 +1001,13 @@ class PromotionBlockTests(TestCase):
         cls.page = WebPage.objects.create(title="Home", slug="home")
         cls.block = Block.objects.create(name="Promo", block_type="promotion")
 
-    def production(self, title, days=None, event_type="performance", images=(), hours=0):
-        """A production with an event of that type `days` from now, and images [(description, type, default)]."""
+    def production(self, title, days=None, event_type="performance", images=(), hours=0, publish="promoted"):
+        """A production with an event of that type (promoted, unless told otherwise) `days` from now, and images [(description, type, default)]."""
         from backstage.models import Event, EventDateTime, ProductionImage
 
         production = Production.objects.create(title=title)
         if days is not None:
-            event = Event.objects.create(event_type=event_type)
+            event = Event.objects.create(event_type=event_type, publish=publish)
             event.productions.add(production)
             EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=days, hours=hours))
         for description, image_type, default in images:
@@ -1025,28 +1025,64 @@ class PromotionBlockTests(TestCase):
         self.assertIn(("promotion", "Promotion"), Block.BlockType.choices)
         self.assertEqual(self.block.template, "home/blocks/promotion.html")
 
-    def test_it_shows_the_promotion_image_of_the_production_with_the_next_performance(self):
+    def test_it_shows_the_promotion_image_of_the_production_with_the_next_promoted_event(self):
         self.production("Later", days=30, images=[("later-poster", "promotion", True)])
         self.production("Sooner", days=5, images=[("sooner-poster", "promotion", True)])
         html = self.shown()
         self.assertIn("sooner-poster.jpg", html)
         self.assertNotIn("later-poster", html)
 
-    def test_past_performances_do_not_count(self):
+    def test_past_promoted_events_do_not_count(self):
         self.production("Over", days=-3, images=[("over-poster", "promotion", True)])
         self.production("Coming", days=9, images=[("coming-poster", "promotion", True)])
         html = self.shown()
         self.assertIn("coming-poster.jpg", html)
         self.assertNotIn("over-poster", html)
 
-    def test_only_performances_count_not_auditions_or_rehearsals(self):
-        self.production("Auditioning", days=2, event_type="audition", images=[("aud-poster", "promotion", True)])
-        self.production("Rehearsing", days=3, event_type="rehearsal", images=[("reh-poster", "promotion", True)])
-        self.production("Playing", days=20, images=[("play-poster", "promotion", True)])
+    def test_only_promoted_events_count(self):
+        self.production("Quiet", days=2, publish="not_published", images=[("quiet-poster", "promotion", True)])
+        self.production("Listed", days=3, publish="published", images=[("listed-poster", "promotion", True)])
+        self.production("Starring", days=20, images=[("star-poster", "promotion", True)])
         html = self.shown()
-        self.assertIn("play-poster.jpg", html)
-        self.assertNotIn("aud-poster", html)
-        self.assertNotIn("reh-poster", html)
+        self.assertIn("star-poster.jpg", html)
+        self.assertNotIn("quiet-poster", html)
+        self.assertNotIn("listed-poster", html)
+
+    def test_a_promoted_event_of_any_type_counts(self):
+        from home.models import Block
+
+        for kind in ("audition", "rehearsal", "performance", "broadcast", "other"):
+            Production.objects.all().delete()
+            self.production(f"The {kind}", days=4, event_type=kind, images=[(f"{kind}-poster", "promotion", True)])
+            fresh = Block.objects.get(pk=self.block.pk)  # a block remembers what it found, so each page load has its own
+            self.assertIn(f"{kind}-poster.jpg", self.shown(fresh), kind)
+
+    def test_nothing_is_shown_when_no_event_is_promoted(self):
+        self.production("Quiet", days=2, publish="not_published", images=[("quiet-poster", "promotion", True)])
+        self.production("Listed", days=3, publish="published", images=[("listed-poster", "promotion", True)])
+        self.assertEqual(self.shown().strip(), "")
+
+    def test_a_promoted_event_that_has_no_production_is_ignored(self):
+        from backstage.models import Event, EventDateTime
+
+        loose = Event.objects.create(event_type="performance", publish="promoted")
+        EventDateTime.objects.create(event=loose, datetime=timezone.now() + timedelta(days=1))
+        self.production("Later", days=9, images=[("later-poster", "promotion", True)])
+        self.assertIn("later-poster.jpg", self.shown())
+
+    def test_an_event_of_several_productions_uses_the_first_by_title_that_has_a_promotion_image(self):
+        from backstage.models import Event, EventDateTime, ProductionImage
+
+        bare = Production.objects.create(title="Aaa no poster")
+        second = self.production("Bbb", images=[("bbb-poster", "promotion", True)])
+        third = self.production("Ccc", images=[("ccc-poster", "promotion", True)])
+        event = Event.objects.create(event_type="performance", publish="promoted")
+        for production in (third, second, bare):
+            event.productions.add(production)
+        EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=2))
+        html = self.shown()
+        self.assertIn("bbb-poster.jpg", html)
+        self.assertNotIn("ccc-poster", html)
 
     def test_the_soonest_of_a_productions_dates_counts(self):
         from backstage.models import Event, EventDateTime
@@ -1117,7 +1153,7 @@ class PromotionBlockTests(TestCase):
         self.assertRegex(html, r'data-for="image text_image cast promotion"')
         self.assertRegex(html, r'data-for="text_image split promotion"')
         self.assertRegex(html, r'(?s)<div data-for="image text_image cast hero_image split">.*?name="image"')
-        self.assertIn("promotion image of the next production", html)
+        self.assertIn("promotion image of the production of the next event marked Promoted", html)
 
     def test_it_takes_few_queries(self):
         from django.db import connection
@@ -1189,12 +1225,12 @@ class PromotionBlockTests(TestCase):
         self.ticketed("Show", 5, url="")
         self.assertNotIn("Buy Tickets", self.shown())
 
-    def test_the_button_uses_the_event_of_the_next_performance(self):
+    def test_the_button_uses_the_event_of_the_next_promoted_date(self):
         from backstage.models import Event, EventDateTime, TicketSite
 
         show = self.ticketed("Show", 20, url="https://tickets.example.com/later")
         sooner = Event.objects.create(
-            event_type="performance", ticket_site=TicketSite.objects.create(name="Preview", url="https://tickets.example.com/preview")
+            event_type="performance", publish="promoted", ticket_site=TicketSite.objects.create(name="Preview", url="https://tickets.example.com/preview")
         )
         sooner.productions.add(show)
         EventDateTime.objects.create(event=sooner, datetime=timezone.now() + timedelta(days=3))
@@ -1202,7 +1238,7 @@ class PromotionBlockTests(TestCase):
         self.assertIn("https://tickets.example.com/preview", html)
         self.assertNotIn("/later", html)
 
-    def test_other_kinds_of_event_do_not_supply_the_button(self):
+    def test_an_event_that_is_not_promoted_does_not_supply_the_button(self):
         from backstage.models import Event, EventDateTime, TicketSite
 
         show = self.production("Show", days=10, images=[("show-promo", "promotion", True)])
@@ -1217,7 +1253,7 @@ class PromotionBlockTests(TestCase):
         from backstage.models import Event, EventDateTime, TicketSite
 
         production = Production.objects.create(title="No poster")
-        event = Event.objects.create(event_type="performance", ticket_site=TicketSite.objects.create(name="T", url="https://tickets.example.com/x"))
+        event = Event.objects.create(event_type="performance", publish="promoted", ticket_site=TicketSite.objects.create(name="T", url="https://tickets.example.com/x"))
         event.productions.add(production)
         EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=4))
         self.assertEqual(self.shown().strip(), "")
