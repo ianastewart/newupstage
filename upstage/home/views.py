@@ -219,6 +219,18 @@ def page_copy(request, pk):
     return redirect("page-edit", pk=get_object_or_404(WebPage, pk=pk).copy().pk)
 
 
+def page_delete(request, pk):
+    """Delete a page (POST). Its blocks are kept, unless `delete_blocks` is ticked (blocks on another page are always kept)."""
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    page = get_object_or_404(WebPage, pk=pk)
+    if request.POST.get("delete_blocks"):
+        page.delete_with_blocks()
+    else:
+        page.delete()
+    return redirect("page-list")
+
+
 def page_replace_original(request, pk):
     """
     A copied page takes the place of its original (POST). `delete_page` deletes the original, and then `delete_blocks`

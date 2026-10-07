@@ -88,6 +88,13 @@ class WebPage(models.Model):
                 page.add_block(page_block.block.copy())
         return page
 
+    def delete_with_blocks(self):
+        """Delete the page and its blocks, except any that are also on another page."""
+        with transaction.atomic():
+            block_pks = list(self.blocks.values_list("pk", flat=True))
+            self.delete()  # its place on each block goes too
+            Block.objects.filter(pk__in=block_pks, pages__isnull=True).delete()
+
     def replace_original(self, delete_page, delete_blocks=False):
         """
         Make this copy take the place of the page it was copied from (`copied_from`): it gets that page's title and slug,

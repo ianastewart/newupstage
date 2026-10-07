@@ -1,4 +1,5 @@
 from django.urls import path
+from neapolitan.views import Role
 
 from backstage import views
 
@@ -21,6 +22,7 @@ urlpatterns = [
     *views.EventView.get_urls(),
     *views.EventDateTimeView.get_urls(),
     *views.ProductionView.get_urls(),
+    *views.ParentProductionView.get_urls(roles=[Role.CREATE]),
     *views.CastView.get_urls(),
     *views.RoleView.get_urls(),
     *views.ProductionTeamView.get_urls(),

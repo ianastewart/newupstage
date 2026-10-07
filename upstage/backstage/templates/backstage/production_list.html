@@ -6,7 +6,10 @@
 <div class="mx-auto max-w-6xl p-6">
   <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <h1 class="text-3xl font-bold">Productions</h1>
-    <a href="{{ create_view_url }}" class="btn btn-primary">New production</a>
+    <div class="flex gap-2">
+      <a href="{% url 'parentproduction-create' %}" class="btn">New parent production</a>
+      <a href="{{ create_view_url }}" class="btn btn-primary">New production</a>
+    </div>
   </div>
 
   <form method="get" class="mb-4 flex flex-wrap items-center gap-3">
@@ -54,6 +57,7 @@
             {% if production.strap_line %}<p class="line-clamp-2 text-xs opacity-70">{{ production.strap_line }}</p>{% endif %}
             <div class="mt-1 flex flex-wrap gap-1">
               <span class="badge badge-sm badge-secondary">{{ production.get_type_display }}</span>
+              {% if production.parent %}<span class="badge badge-sm badge-outline truncate">Part of {{ production.parent }}</span>{% endif %}
             </div>
           </div>
         </a>

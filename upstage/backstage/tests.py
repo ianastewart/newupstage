@@ -2766,3 +2766,80 @@ class ProductionDetailEventBadgesTests(TestCase):
         self.assertIn("19 June 2026", html)
         self.assertNotIn("19 June 2026, ", html)  # no time
 
+
+
+class ParentProductionTests(TestCase):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p"))
+        from backstage.models import ParentProduction
+
+        self.parent = ParentProduction.objects.create(title="Evening of Plays", type=Production.ProductionType.STAGE)
+
+    def test_a_child_is_linked_and_shows_its_parent(self):
+        child = Production.objects.create(title="Mirrors", type=Production.ProductionType.STAGE, parent=self.parent)
+        html = self.client.get(reverse("production-detail", args=[child.pk])).content.decode()
+        self.assertIn("Part of Evening of Plays", html)
+        html = self.client.get(reverse("production-detail", args=[self.parent.pk])).content.decode()
+        self.assertIn("Mirrors", html)
+        self.assertIn("Parent production", html)
+
+    def test_children_must_be_the_same_type(self):
+        from django.core.exceptions import ValidationError
+
+        child = Production(title="On air", type=Production.ProductionType.RADIO, parent=self.parent)
+        with self.assertRaises(ValidationError):
+            child.full_clean()
+
+    def test_a_parent_cannot_have_a_parent(self):
+        from django.core.exceptions import ValidationError
+        from backstage.models import ParentProduction
+
+        other = ParentProduction.objects.create(title="Season", type=Production.ProductionType.STAGE)
+        self.parent.parent = other
+        with self.assertRaises(ValidationError):
+            self.parent.full_clean()
+
+    def test_creating_a_parent_goes_to_its_production_page(self):
+        response = self.client.post(
+            reverse("parentproduction-create"), {"title": "Festival", "strap_line": "", "description": "", "type": "stage"}
+        )
+        pk = Production.objects.get(title="Festival").pk
+        self.assertRedirects(response, reverse("production-detail", args=[pk]))
+        self.assertTrue(Production.objects.get(pk=pk).is_parent)
+
+    def test_deleting_a_parent_keeps_its_children(self):
+        child = Production.objects.create(title="Mirrors", type=Production.ProductionType.STAGE, parent=self.parent)
+        self.parent.delete()
+        child.refresh_from_db()
+        self.assertIsNone(child.parent)
+
+
+class DefaultImageTests(TestCase):
+    def make(self, production, kind, **kwargs):
+        from backstage.models import Image, ProductionImage
+
+        image = Image.objects.create(image="images/x.jpg", image_type=kind)
+        return ProductionImage.objects.create(production=production, image=image, **kwargs)
+
+    def test_production_image_beats_promotion_beats_gallery(self):
+        from backstage.models import Image, ProductionImage
+
+        production = Production.objects.create(title="Pictured")
+        gallery = self.make(production, Image.ImageType.GALLERY)
+        self.assertEqual(production.default_image, gallery)
+        promotion = self.make(production, Image.ImageType.PROMOTION)
+        self.assertEqual(production.default_image, promotion)
+        picture = self.make(production, Image.ImageType.PRODUCTION)
+        self.assertEqual(production.default_image, picture)
+        ProductionImage.ensure_default(production)
+        picture.refresh_from_db()
+        self.assertTrue(picture.is_default)
+
+    def test_an_image_chosen_as_default_still_wins(self):
+        from backstage.models import Image
+
+        production = Production.objects.create(title="Chosen")
+        self.make(production, Image.ImageType.PRODUCTION)
+        gallery = self.make(production, Image.ImageType.GALLERY)
+        gallery.make_default()
+        self.assertEqual(Production.objects.get(pk=production.pk).default_image, gallery)

@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import F, Min, Q
 from django_enum import EnumField
@@ -185,11 +186,30 @@ class Production(models.Model):
     )
     # Auditions, rehearsals, performances...; an event (e.g. an evening of plays) can include several productions.
     events = models.ManyToManyField(Event, blank=True, related_name="productions")
+    # The parent production this one is part of (see ParentProduction), if any.
+    parent = models.ForeignKey(
+        "ParentProduction", null=True, blank=True, on_delete=models.SET_NULL, related_name="children",
+        help_text="The parent production this is part of: it must be the same type of production",
+    )
 
     objects = ProductionQuerySet.as_manager()
 
     def __str__(self):
         return self.title
+
+    def clean(self):
+        super().clean()
+        if not self.parent_id:
+            return
+        if self.pk and ParentProduction.objects.filter(pk=self.pk).exists():
+            raise ValidationError({"parent": "A parent production cannot itself be part of another."})
+        if self.parent.type != self.type:
+            raise ValidationError({"parent": f"The parent is a {self.parent.get_type_display().lower()}, so this must be one too."})
+
+    @property
+    def is_parent(self):
+        """Whether this is a ParentProduction (one that wraps other productions)."""
+        return ParentProduction.objects.filter(pk=self.pk).exists()
 
     @property
     def broadcast_datetime(self):
@@ -257,12 +277,22 @@ class Production(models.Model):
     def default_image(self):
         """The production's default ProductionImage, or None. Uses prefetched images if there are any."""
         images = list(self.images.all())
-        return next((i for i in images if i.is_default), None) or min(images, key=lambda i: i.id, default=None)
+        return next((i for i in images if i.is_default), None) or min(images, key=ProductionImage.preference, default=None)
 
     @property
     def writers(self):
         """People in the production team with the Writer role."""
         return [member.person for member in self.team.all() if member.role.name == "Writer"]
+
+
+class ParentProduction(Production):
+    """
+    A production that wraps several others of the same type (its `children`, e.g. the plays of an evening of short plays).
+    It has everything a production has; a child production shows the parent it is linked to (Production.parent).
+    """
+
+    class Meta:
+        verbose_name = "parent production"
 
 
 class Cast(models.Model):
@@ -324,6 +354,16 @@ class ProductionImage(models.Model):
     def __str__(self):
         return f"{self.production} - {self.image}"
 
+    # Which kind of image is best as the default: a production image, else a promotion image, else a gallery image, else anything.
+    TYPE_PREFERENCE = [Image.ImageType.PRODUCTION, Image.ImageType.PROMOTION, Image.ImageType.GALLERY]
+
+    @classmethod
+    def preference(cls, production_image):
+        """A sort key: the best default image comes first (by kind of image, then the earliest)."""
+        kind = production_image.image.image_type
+        rank = cls.TYPE_PREFERENCE.index(kind) if kind in cls.TYPE_PREFERENCE else len(cls.TYPE_PREFERENCE)
+        return rank, production_image.id
+
     def make_default(self):
         """Make this the production's default image (and no other)."""
         with transaction.atomic():
@@ -333,10 +373,10 @@ class ProductionImage(models.Model):
 
     @classmethod
     def ensure_default(cls, production):
-        """If the production has images but no default, make the earliest one the default."""
-        images = production.images.order_by("id")
-        if not images.filter(is_default=True).exists() and (first := images.first()):
-            first.make_default()
+        """If the production has images but no default, make the best one the default (see `preference`)."""
+        images = production.images.select_related("image")
+        if not images.filter(is_default=True).exists() and (best := min(images, key=cls.preference, default=None)):
+            best.make_default()
 
 
 class Contact(models.Model):

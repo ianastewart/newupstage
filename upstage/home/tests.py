@@ -1534,6 +1534,28 @@ class PageCopyTests(TestCase):
         self.assertContains(self.client.get(reverse("page-list")), reverse("page-copy", args=[self.page.pk]))
         self.assertEqual(self.client.get(reverse("page-copy", args=[self.page.pk])).status_code, 405)
 
+    def test_the_list_has_a_delete_button_with_confirmation_and_only_posts_delete(self):
+        from home.models import Block, WebPage
+
+        html = self.client.get(reverse("page-list")).content.decode()
+        url = reverse("page-delete", args=[self.page.pk])
+        self.assertIn(f'data-delete-url="{url}"', html)
+        self.assertIn('id="delete-page"', html)  # the confirmation dialog, with its "delete blocks too" tick box
+        self.assertIn('name="delete_blocks"', html)
+        self.assertEqual(self.client.get(url).status_code, 405)
+        self.assertRedirects(self.client.post(url), reverse("page-list"))
+        self.assertFalse(WebPage.objects.filter(pk=self.page.pk).exists())
+        self.assertEqual(Block.objects.count(), 2)  # the blocks are kept
+
+    def test_delete_can_take_the_blocks_too_except_those_on_other_pages(self):
+        from home.models import Block, WebPage
+
+        other = WebPage.objects.create(title="Other", slug="other")
+        other.add_block(self.second)  # also on another page
+        self.client.post(reverse("page-delete", args=[self.page.pk]), {"delete_blocks": "on"})
+        self.assertFalse(WebPage.objects.filter(pk=self.page.pk).exists())
+        self.assertEqual(list(Block.objects.all()), [self.second])
+
 
 class ReplaceOriginalTests(TestCase):
     @classmethod

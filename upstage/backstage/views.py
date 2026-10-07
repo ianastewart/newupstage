@@ -553,7 +553,7 @@ class EventDateTimeView(CRUDView):
 
 class ProductionView(CRUDView):
     model = models.Production
-    fields = ["title", "strap_line", "description", "type"]
+    fields = ["title", "strap_line", "description", "type", "parent"]
     paginate_by = 24
 
     def get_type(self):
@@ -610,6 +610,16 @@ class ProductionView(CRUDView):
         kwargs["sorts"] = [(value, label) for value, (label, _) in self.SORTS.items()]
         kwargs["current_sort"] = self.get_sort()
         return super().get_context_data(**kwargs)
+
+
+class ParentProductionView(CRUDView):
+    """Making a parent production; after that it is shown and edited like any production (its pk is the production's pk)."""
+
+    model = models.ParentProduction
+    fields = ["title", "strap_line", "description", "type"]
+
+    def get_success_url(self):
+        return reverse("production-detail", args=[self.object.pk])
 
 
 class CastView(CRUDView):

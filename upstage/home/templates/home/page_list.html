@@ -22,6 +22,9 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-ghost btn-sm">Copy</button>
           </form>
+          <button type="button" class="btn btn-ghost btn-sm text-error"
+            data-delete-url="{% url 'page-delete' page.pk %}" data-title="{{ page.title }}" data-slug="{{ page.slug }}"
+            onclick="openDeletePage(this)">Delete</button>
           <a href="{% url 'page-edit' page.pk %}" class="btn btn-sm">Edit</a>
         </li>
       {% endfor %}
@@ -33,4 +36,35 @@
     </div>
   {% endif %}
 </div>
+
+<dialog id="delete-page" class="modal">
+  <div class="modal-box">
+    <h2 class="mb-2 text-xl font-bold">Delete this page?</h2>
+    <p class="mb-4 text-sm opacity-80">
+      The page “<span id="delete-page-title"></span>” and its address /page/<span id="delete-page-slug"></span>/ will be gone.
+    </p>
+    <form method="POST" id="delete-page-form">
+      {% csrf_token %}
+      <label class="flex cursor-pointer items-start gap-3">
+        <input type="checkbox" name="delete_blocks" class="checkbox mt-1" />
+        <span>Delete its blocks too<span class="block text-sm opacity-70">Blocks that are also on another page are kept. If not ticked, the blocks are left in the library.</span></span>
+      </label>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('delete-page').close()">Cancel</button>
+        <button type="submit" class="btn btn-error">Delete</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+<script>
+  function openDeletePage(button) {
+    const dialog = document.getElementById('delete-page');
+    document.getElementById('delete-page-form').action = button.dataset.deleteUrl;
+    document.getElementById('delete-page-form').querySelector('[name=delete_blocks]').checked = false;
+    document.getElementById('delete-page-title').textContent = button.dataset.title;
+    document.getElementById('delete-page-slug').textContent = button.dataset.slug;
+    dialog.showModal();
+  }
+</script>
 {% endblock %}

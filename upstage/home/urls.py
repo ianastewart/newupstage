@@ -17,6 +17,7 @@ urlpatterns = [
     path("pages/", views.page_list, name="page-list"),
     path("pages/new/", views.page_create, name="page-create"),
     path("pages/<int:pk>/copy/", views.page_copy, name="page-copy"),
+    path("pages/<int:pk>/delete/", views.page_delete, name="page-delete"),
     path("pages/<int:pk>/replace-original/", views.page_replace_original, name="page-replace-original"),
     path("pages/<int:pk>/edit/", views.page_edit, name="page-edit"),
     path("pages/<int:page_pk>/blocks/new/", views.block_create, name="block-create"),
