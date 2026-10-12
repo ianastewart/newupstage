@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.decorators import login_not_required
-from django.urls import URLPattern, include, path
+from django.urls import URLPattern, include, path, re_path
+from django.views.static import serve
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -18,6 +19,13 @@ if settings.DEBUG:
     ]
     # Serve uploaded images in development
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+else:
+    # No web server in front serving the uploads: the app does (they appear on public pages, so no login).
+    urlpatterns += [
+        re_path(
+            r"^media/(?P<path>.*)$", login_not_required(serve), {"document_root": settings.MEDIA_ROOT}, name="media"
+        )
+    ]
 
 
 def _public(patterns):
