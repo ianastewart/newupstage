@@ -1,0 +1,6 @@
+# For running locally: `docker compose up` reads this file automatically, and it publishes the app on http://localhost:8000.
+# Coolify only uses docker-compose.yml, so this does not affect the deployment.
+services:
+  web:
+    ports:
+      - "8000:8000"
