@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+import dj_database_url
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -112,17 +113,21 @@ FORM_RENDERER = 'config.renderers.DaisyFormRenderer'
 
 # PostgreSQL. The password is not stored here: set DB_PASSWORD, or leave it
 # unset to use the PostgreSQL password file (%APPDATA%\postgresql\pgpass.conf).
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'upstage'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
-    }
-}
-
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': os.environ.get('DB_NAME', 'upstage'),
+#         'USER': os.environ.get('DB_USER', 'postgres'),
+#         'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+#         'HOST': os.environ.get('DB_HOST', 'localhost'),
+#         'PORT': os.environ.get('DB_PORT', '5432'),
+#     }
+#
+DATABASES = {'default': dj_database_url.config(
+    default='postgres://postgres@localhost:5432/upstage',
+    conn_max_age=600,
+    conn_health_checks=True,
+)}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

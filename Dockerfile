@@ -13,6 +13,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+ARG DEBUG
+ARG SECRET_KEY
+ARG DATABASE_URL
+
 # Install system dependencies needed by our app
 RUN apt-get update && apt-get install -y \
     build-essential \
