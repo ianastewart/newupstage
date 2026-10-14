@@ -1,0 +1,14 @@
+.git
+.idea
+.venv
+node_modules
+**/__pycache__
+**/*.pyc
+upstage/media
+upstage/media_backups
+Dockerfile
+.dockerignore
+.env
+.env.*
+!.env.example
+staticfiles
