@@ -4,3 +4,8 @@ services:
   web:
     ports:
       - "8000:8000"
+  # The database, for running Django outside docker (DATABASE_URL=postgres://upstage:<DB_PASSWORD>@localhost:5433/upstage).
+  # 5433 so it doesn't clash with a local PostgreSQL on 5432.
+  db:
+    ports:
+      - "5433:5432"

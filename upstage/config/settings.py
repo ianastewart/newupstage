@@ -111,20 +111,20 @@ FORM_RENDERER = 'config.renderers.DaisyFormRenderer'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# PostgreSQL. The password is not stored here: set DB_PASSWORD, or leave it
-# unset to use the PostgreSQL password file (%APPDATA%\postgresql\pgpass.conf).
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.environ.get('DB_NAME', 'upstage'),
-#         'USER': os.environ.get('DB_USER', 'postgres'),
-#         'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-#         'HOST': os.environ.get('DB_HOST', 'localhost'),
-#         'PORT': os.environ.get('DB_PORT', '5432'),
-#     }
-#
+# With DEBUG on (development) the default is the PostgreSQL 17 in docker compose's db service (`docker compose up -d db`),
+# published on localhost:5433; its settings are the DB_* values in .env.example. Otherwise the default is a local PostgreSQL.
+# DATABASE_URL, if set, overrides either (Coolify and docker compose set it).
+if DEBUG:
+    _default_db = 'postgres://{user}:{password}@localhost:5433/{name}'.format(
+        user=os.environ.get('DB_USER', 'upstage'),
+        password=os.environ.get('DB_PASSWORD', 'upstagesurrey'),
+        name=os.environ.get('DB_NAME', 'upstage'),
+    )
+else:
+    _default_db = 'postgres://postgres@localhost:5432/upstage'
+
 DATABASES = {'default': dj_database_url.config(
-    default='postgres://postgres@localhost:5432/upstage',
+    default=_default_db,
     conn_max_age=600,
     conn_health_checks=True,
 )}

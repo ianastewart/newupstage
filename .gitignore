@@ -49,3 +49,6 @@ Thumbs.db
 .env
 upstage/staticfiles/
 *.dump
+
+scripts/.server.env
+backups/
