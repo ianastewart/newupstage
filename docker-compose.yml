@@ -15,29 +15,30 @@ services:
       interval: 5s
       retries: 10
 
-  web:
-    build: .
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DJANGO_DEBUG: "0"
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?Set DJANGO_ALLOWED_HOSTS in .env}
-      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
-      # The settings read the database from DATABASE_URL (a password with special characters must be URL-encoded)
-      DATABASE_URL: postgres://${DB_USER:-upstage}:${DB_PASSWORD}@db:5432/${DB_NAME:-upstage}
-      EMAIL_HOST: ${EMAIL_HOST:-}
-      EMAIL_PORT: ${EMAIL_PORT:-587}
-      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
-      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
-      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-1}
-      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-Upstage Theatre <noreply@upstage.example>}
-    expose:
-      - "8000"
-    volumes:
-      - media:/data/media
+  # The app is not started locally (run Django from PyCharm against the db above). To run it in docker, uncomment this.
+  # web:
+  #   build: .
+  #   restart: unless-stopped
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   environment:
+  #     DJANGO_DEBUG: "0"
+  #     DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
+  #     DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?Set DJANGO_ALLOWED_HOSTS in .env}
+  #     DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
+  #     # The settings read the database from DATABASE_URL (a password with special characters must be URL-encoded)
+  #     DATABASE_URL: postgres://${DB_USER:-upstage}:${DB_PASSWORD}@db:5432/${DB_NAME:-upstage}
+  #     EMAIL_HOST: ${EMAIL_HOST:-}
+  #     EMAIL_PORT: ${EMAIL_PORT:-587}
+  #     EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+  #     EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+  #     EMAIL_USE_TLS: ${EMAIL_USE_TLS:-1}
+  #     DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-Upstage Theatre <noreply@upstage.example>}
+  #   expose:
+  #     - "8000"
+  #   volumes:
+  #     - media:/data/media
 
 volumes:
   pgdata:
