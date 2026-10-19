@@ -3,14 +3,14 @@
 {% load rmeditor %}
 {% rmeditor_media  %}
 {% endblock %}
-{% block title %}New actor · Upstage Theatre{% endblock %}
+{% block title %}New {{ kind }} · Upstage Theatre{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-3xl p-6">
-  {% include "backstage/includes/actor_wizard_steps.html" with step=1 %}
-  <h1 class="mb-6 text-3xl font-bold">New actor</h1>
+  {% include "backstage/includes/wizard_steps.html" with step=1 kind=kind %}
+  <h1 class="mb-6 text-3xl font-bold">New {{ kind }}</h1>
 
-  <form method="POST" action="{% url 'actor-new' %}">
+  <form method="POST" action="{{ new_url }}">
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div role="alert" class="alert alert-error alert-soft mb-4">{{ form.non_field_errors|join:" " }}</div>
@@ -30,7 +30,7 @@
       </div>
     </div>
     <div class="mt-6 flex justify-end gap-2">
-      <a href="{% url 'actor-list' %}" class="btn btn-ghost">Cancel</a>
+      <a href="{{ list_url }}" class="btn btn-ghost">Cancel</a>
       <button type="submit" class="btn btn-primary">Save and add a photo</button>
     </div>
   </form>

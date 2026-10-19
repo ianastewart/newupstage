@@ -181,7 +181,7 @@ class ImageView(CRUDView):
 
     def get_form(self, data=None, files=None, **kwargs):
         if wizard_person := (self.get_upload_wizard_person() if self.role == Role.CREATE else None):
-            # The new actor wizard's photo step: the description and type are settled, so they are not asked for.
+            # The new actor / writer wizard's photo step: the description and type are settled, so they are not asked for.
             if data is not None:
                 data = data.copy()
                 data["image_type"] = models.Image.ImageType.HEADSHOT
@@ -215,11 +215,15 @@ class ImageView(CRUDView):
         return super().get_form(data, files, **kwargs)
 
     def get_upload_wizard_person(self):
-        """When uploading as step 2 of the new actor wizard (?wizard=1 with ?for_person=<pk>), that person."""
-        if self.request.POST.get("wizard") or self.request.GET.get("wizard") == "1":
+        """When uploading as step 2 of the new actor / writer wizard (?wizard=1 or writer, with ?for_person=<pk>), that person."""
+        if self.request.POST.get("wizard") or self.request.GET.get("wizard") in ("1", "writer"):
             target = self.get_upload_person_target()
             return target if isinstance(target, models.Person) else None
         return None
+
+    def get_wizard_kind(self):
+        """Which wizard the upload is part of: "writer" (?wizard=writer), otherwise "actor" (?wizard=1)."""
+        return "writer" if (self.request.POST.get("wizard") or self.request.GET.get("wizard")) == "writer" else "actor"
 
     def get_upload_person_target(self):
         """
@@ -275,8 +279,11 @@ class ImageView(CRUDView):
             kwargs["production"] = self.get_upload_production()
             target = self.get_upload_person_target()
             if wizard_person := self.get_upload_wizard_person():
+                kind = self.get_wizard_kind()
                 kwargs["wizard_person"] = wizard_person
-                kwargs["wizard_skip_url"] = reverse("actor-roles", args=[wizard_person.pk])
+                kwargs["wizard_kind"] = kind
+                kwargs["wizard_param"] = WIZARDS[kind]["param"]
+                kwargs["wizard_skip_url"] = reverse(WIZARDS[kind]["roles"], args=[wizard_person.pk])
             if target:
                 kwargs["for_person"] = "new" if target == "new" else target.pk
                 kwargs["person_form_url"] = self.person_form_url()
@@ -310,14 +317,14 @@ class ImageView(CRUDView):
             models.ProductionImage.objects.create(production=production, image=self.object)
             models.ProductionImage.ensure_default(production)
         if self.role == Role.CREATE and (person := self.get_upload_wizard_person()):
-            # The new actor wizard: the uploaded photo is the person's photo.
+            # The new actor / writer wizard: the uploaded photo is the person's photo.
             person.image = self.object
             person.save(update_fields=["image"])
         return response
 
     def get_success_url(self):
         if self.role == Role.CREATE and (person := self.get_upload_wizard_person()):
-            return reverse("actor-roles", args=[person.pk])  # on to step 3
+            return reverse(WIZARDS[self.get_wizard_kind()]["roles"], args=[person.pk])  # on to step 3
         if self.role == Role.CREATE and self.get_upload_person_target():
             # Back to the person's form, with the new image chosen as their photo.
             return self.person_form_url(self.object)
@@ -375,6 +382,7 @@ class PersonView(CRUDView):
         "actors": ("actor-list", "", "Actors"),
         "actors-details": ("actor-list", "?view=details", "Actors"),
         "writers": ("writer-list", "", "Writers"),
+        "writers-details": ("writer-list", "?view=details", "Writers"),
     }
 
     def get_form(self, data=None, files=None, **kwargs):
@@ -425,27 +433,55 @@ class PersonView(CRUDView):
         return super().get_context_data(**kwargs)
 
 
-def actor_new(request):
-    """New actor wizard, step 1 of 3: names, contact details and biography. Saved, then on to the photo."""
+# The new actor and new writer wizards are the same three steps. They differ in the role the person starts with, the
+# pages they come from and go back to, and the value of ?wizard= on the photo step (1 for actors, as it always was).
+WIZARDS = {
+    "actor": {"role": "Actor", "list": "actor-list", "new": "actor-new", "roles": "actor-roles", "from": "actors", "param": "1"},
+    "writer": {"role": "Writer", "list": "writer-list", "new": "writer-new", "roles": "writer-roles", "from": "writers", "param": "writer"},
+}
+
+
+def wizard_details(request, kind):
+    """New actor / writer wizard, step 1 of 3: names, contact details and biography. Saved, then on to the photo."""
+    wizard = WIZARDS[kind]
     form = forms.PersonDetailsForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         person = form.save()
-        query = urlencode({"type": "headshot", "for_person": person.pk, "wizard": 1})
+        query = urlencode({"type": "headshot", "for_person": person.pk, "wizard": wizard["param"]})
         return redirect(f"{reverse('image-create')}?{query}")
-    return render(request, "backstage/actor_wizard_details.html", {"form": form})
+    context = {"form": form, "kind": kind, "new_url": reverse(wizard["new"]), "list_url": reverse(wizard["list"])}
+    return render(request, "backstage/wizard_details.html", context)
 
 
-def actor_roles(request, pk):
-    """New actor wizard, step 3 of 3: the person as they will appear, and their roles."""
+def wizard_roles(request, pk, kind):
+    """New actor / writer wizard, step 3 of 3: the person as they will appear, and their roles."""
+    wizard = WIZARDS[kind]
     person = get_object_or_404(models.Person.objects.select_related("image"), pk=pk)
     initial = {}
     if request.method != "POST" and not person.roles.exists():
-        initial["roles"] = models.Role.objects.filter(name="Actor")  # they are being added as an actor
+        initial["roles"] = models.Role.objects.filter(name=wizard["role"])  # they are being added as an actor / a writer
     form = forms.PersonRolesForm(request.POST or None, instance=person, initial=initial)
     if request.method == "POST" and form.is_valid():
         form.save()
-        return redirect(f"{reverse('person-detail', args=[person.pk])}?from=actors")
-    return render(request, "backstage/actor_wizard_roles.html", {"person": person, "form": form})
+        return redirect(f"{reverse('person-detail', args=[person.pk])}?from={wizard['from']}")
+    context = {"person": person, "form": form, "kind": kind, "roles_url": reverse(wizard["roles"], args=[person.pk])}
+    return render(request, "backstage/wizard_roles.html", context)
+
+
+def actor_new(request):
+    return wizard_details(request, "actor")
+
+
+def actor_roles(request, pk):
+    return wizard_roles(request, pk, "actor")
+
+
+def writer_new(request):
+    return wizard_details(request, "writer")
+
+
+def writer_roles(request, pk):
+    return wizard_roles(request, pk, "writer")
 
 
 def contact_list(request):
@@ -464,12 +500,24 @@ def contact_list(request):
     )
 
 
+def people_ordering(sort):
+    """Order for a list of people: by surname then first name, or by first name then surname (sort == "first")."""
+    if sort == "first":
+        return (Lower("first_name"), Lower("last_name"))
+    # People known by one name ("Divya") sort by that name.
+    return (Coalesce(NullIf(Lower("last_name"), Value("")), Lower("first_name")), Lower("first_name"))
+
+
 def writer_list(request):
-    """Everyone with the Writer role, with the productions they wrote."""
-    writers = (
-        models.Person.objects.filter(roles__name="Writer")
-        .select_related("image")
-        .prefetch_related(
+    """
+    Everyone with the Writer role: photos and names, or with details (and the productions they wrote). Alphabetical
+    by surname, or by first name (?sort=first).
+    """
+    details = request.GET.get("view") == "details"
+    sort = "first" if request.GET.get("sort") == "first" else "last"
+    writers = models.Person.objects.filter(roles__name="Writer").select_related("image").order_by(*people_ordering(sort)).distinct()
+    if details:
+        writers = writers.prefetch_related(
             Prefetch(
                 "productionteam_set",
                 queryset=models.ProductionTeam.objects.filter(role__name="Writer")
@@ -479,11 +527,7 @@ def writer_list(request):
                 to_attr="writing_credits",
             )
         )
-        # Alphabetical by surname, then first name.
-        .order_by(Lower("last_name"), Lower("first_name"))
-        .distinct()
-    )
-    return render(request, "backstage/writer_list.html", {"writers": writers})
+    return render(request, "backstage/writer_list.html", {"writers": writers, "details": details, "sort": sort})
 
 
 def actor_list(request):
@@ -493,12 +537,7 @@ def actor_list(request):
     """
     details = request.GET.get("view") == "details"
     sort = "first" if request.GET.get("sort") == "first" else "last"
-    if sort == "first":
-        order = (Lower("first_name"), Lower("last_name"))
-    else:
-        # People known by one name ("Divya") sort by that name.
-        order = (Coalesce(NullIf(Lower("last_name"), Value("")), Lower("first_name")), Lower("first_name"))
-    actors = models.Person.objects.filter(roles__name="Actor").select_related("image").order_by(*order).distinct()
+    actors = models.Person.objects.filter(roles__name="Actor").select_related("image").order_by(*people_ordering(sort)).distinct()
     if details:
         actors = actors.prefetch_related(
             Prefetch(

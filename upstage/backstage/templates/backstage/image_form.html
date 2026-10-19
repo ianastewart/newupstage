@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-4xl p-6">
-  {% if wizard_person %}{% include "backstage/includes/actor_wizard_steps.html" with step=2 %}{% endif %}
+  {% if wizard_person %}{% include "backstage/includes/wizard_steps.html" with step=2 kind=wizard_kind %}{% endif %}
   <h1 class="mb-6 text-3xl font-bold">{% if wizard_person %}Photo for {{ wizard_person }}{% elif object %}Edit image{% elif production %}Add image to {{ production }}{% else %}Upload image{% endif %}</h1>
   {% if wizard_person %}<p class="mb-4 opacity-70">Upload a photo of {{ wizard_person.first_name }}, or skip this step and add one later.</p>{% endif %}
 
@@ -15,7 +15,7 @@
         {% csrf_token %}
         {% if production %}<input type="hidden" name="production" value="{{ production.pk }}" />{% endif %}
         {% if for_person %}<input type="hidden" name="for_person" value="{{ for_person }}" />{% endif %}
-        {% if wizard_person %}<input type="hidden" name="wizard" value="1" />{% endif %}
+        {% if wizard_person %}<input type="hidden" name="wizard" value="{{ wizard_param }}" />{% endif %}
         <div class="grid gap-6 md:grid-cols-2">
           <div>
             {# Drop a picture anywhere on the page (this box is where): it is chosen as if it had been picked from the file chooser. #}

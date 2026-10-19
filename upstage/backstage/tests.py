@@ -345,6 +345,77 @@ class ActorListTests(TestCase):
         self.assertIn('class="flex h-full w-full items-center justify-center bg-neutral', no_photo)
 
 
+class WriterListTests(TestCase):
+    """The writers list works like the actors list: sort, photos or details, a new button."""
+
+    PASSWORD = "a-Long-pa55word!"
+
+    @classmethod
+    def setUpTestData(cls):
+        from backstage.models import Production, ProductionTeam
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", cls.PASSWORD)
+        cls.writer = Role.objects.get_or_create(name="Writer")[0]
+        # Surname order: Abbott, Brown, Divya (one name), Zane. First name order: Alice, Bea, Divya, Zack.
+        for first, last in (("Zack", "Abbott"), ("Alice", "Zane"), ("Bea", "Brown"), ("Divya", "")):
+            Person.objects.create(first_name=first, last_name=last).roles.add(cls.writer)
+        Person.objects.create(first_name="Not", last_name="Awriter")  # no Writer role: never listed
+        play = Production.objects.create(title="Wordplay", type="stage")
+        ProductionTeam.objects.create(production=play, person=Person.objects.get(first_name="Bea"), role=cls.writer)
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def names(self, query=""):
+        response = self.client.get(reverse("writer-list") + query)
+        self.assertEqual(response.status_code, 200)
+        return [person.first_name for person in response.context["writers"]]
+
+    def test_sorted_by_last_name_by_default(self):
+        self.assertEqual(self.names(), ["Zack", "Bea", "Divya", "Alice"])
+
+    def test_sorted_by_first_name(self):
+        self.assertEqual(self.names("?sort=first"), ["Alice", "Bea", "Divya", "Zack"])
+
+    def test_the_sort_works_in_the_details_view_too(self):
+        self.assertEqual(self.names("?view=details&sort=first"), ["Alice", "Bea", "Divya", "Zack"])
+        self.assertEqual(self.names("?view=details"), ["Zack", "Bea", "Divya", "Alice"])
+
+    def test_an_unknown_sort_means_last_name(self):
+        self.assertEqual(self.client.get(reverse("writer-list") + "?sort=nonsense").context["sort"], "last")
+
+    def test_the_sort_choices_keep_the_view_and_the_views_keep_the_sort(self):
+        html = self.client.get(reverse("writer-list") + "?sort=first&view=details").content.decode()
+        self.assertIn('href="?sort=first&amp;view=details"', html)
+        self.assertIn('href="?view=details"', html)
+        self.assertIn('href="?sort=first"', html)
+        photos = self.client.get(reverse("writer-list") + "?sort=first").content.decode()
+        self.assertIn('href="?view=details&amp;sort=first"', photos)
+
+    def test_photos_view_is_a_grid_of_cards_that_link_back_to_the_photos(self):
+        html = self.client.get(reverse("writer-list")).content.decode()
+        self.assertEqual(html.count("?from=writers\""), 4)
+        self.assertNotIn("Wordplay", html)  # credits are only in the details view
+
+    def test_details_view_shows_what_each_writer_wrote_and_links_back_to_details(self):
+        html = self.client.get(reverse("writer-list") + "?view=details").content.decode()
+        self.assertIn("Wordplay", html)
+        self.assertEqual(html.count("?from=writers-details"), 4)
+        self.assertIn("No productions credited yet.", html)
+
+    def test_there_is_a_new_writer_button_that_starts_the_wizard(self):
+        html = self.client.get(reverse("writer-list")).content.decode()
+        self.assertIn(f'href="{reverse("writer-new")}"', html)  # the three step wizard
+        self.assertIn("New writer", html)
+
+    def test_a_person_page_goes_back_to_the_writers_view_it_came_from(self):
+        person = Person.objects.get(first_name="Bea")
+        for query, back in (("writers", reverse("writer-list")), ("writers-details", reverse("writer-list") + "?view=details")):
+            response = self.client.get(reverse("person-detail", args=[person.pk]) + f"?from={query}")
+            self.assertEqual(response.context["back_url"], back)
+            self.assertEqual(response.context["back_label"], "Writers")
+
+
 class ImageLibraryOrderTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -1932,6 +2003,103 @@ class NewActorWizardTests(TestCase):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("actor-new")).status_code, 302)
         self.assertEqual(self.client.get(reverse("actor-roles", args=[1])).status_code, 302)
+
+
+class NewWriterWizardTests(TestCase):
+    """New writer: the same three steps as a new actor, starting with the Writer role."""
+
+    def setUp(self):
+        import tempfile
+
+        from django.test import override_settings
+
+        self.media = tempfile.TemporaryDirectory()
+        self.addCleanup(self.media.cleanup)
+        override = override_settings(MEDIA_ROOT=self.media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        self.client.force_login(self.user)
+        self.writer = Role.objects.get_or_create(name="Writer")[0]
+        self.actor = Role.objects.get_or_create(name="Actor")[0]
+
+    def photo(self):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image as PILImage
+
+        buffer = BytesIO()
+        PILImage.new("RGB", (600, 750), (40, 40, 200)).save(buffer, "PNG")
+        return SimpleUploadedFile("wilma.png", buffer.getvalue(), content_type="image/png")
+
+    def test_step_one_is_for_a_new_writer_and_goes_back_to_the_writers(self):
+        html = self.client.get(reverse("writer-new")).content.decode()
+        self.assertIn("step 1 of 3", html)
+        self.assertIn("New writer", html)
+        self.assertIn(f'action="{reverse("writer-new")}"', html)
+        self.assertIn(f'href="{reverse("writer-list")}" class="btn btn-ghost">Cancel', html)
+
+    def test_step_one_saves_the_person_and_goes_to_a_writer_photo_step(self):
+        response = self.client.post(reverse("writer-new"), {"first_name": "Wilma", "last_name": "Wordsmith", "biography": "<p>Writes.</p>"})
+        person = Person.objects.get(first_name="Wilma")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f"for_person={person.pk}", response.url)
+        self.assertIn("wizard=writer", response.url)
+
+    def test_step_one_needs_a_name(self):
+        response = self.client.post(reverse("writer-new"), {"first_name": "", "last_name": ""})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Person.objects.exists())
+
+    def test_the_photo_step_can_be_skipped_to_the_writer_roles(self):
+        person = Person.objects.create(first_name="Wilma", last_name="Wordsmith")
+        html = self.client.get(f"{reverse('image-create')}?type=headshot&for_person={person.pk}&wizard=writer").content.decode()
+        self.assertIn("step 2 of 3", html)
+        self.assertIn("New writer: step 2 of 3", html)
+        self.assertIn('name="wizard" value="writer"', html)
+        self.assertIn(f'href="{reverse("writer-roles", args=[person.pk])}" class="btn btn-ghost">Skip photo', html)
+
+    def test_the_actor_photo_step_still_goes_to_the_actor_roles(self):
+        person = Person.objects.create(first_name="Wendy", last_name="Wizard")
+        html = self.client.get(f"{reverse('image-create')}?type=headshot&for_person={person.pk}&wizard=1").content.decode()
+        self.assertIn("New actor: step 2 of 3", html)
+        self.assertIn('name="wizard" value="1"', html)
+        self.assertIn(f'href="{reverse("actor-roles", args=[person.pk])}" class="btn btn-ghost">Skip photo', html)
+
+    def test_uploading_sets_the_photo_and_goes_to_the_writer_roles(self):
+        person = Person.objects.create(first_name="Wilma", last_name="Wordsmith")
+        response = self.client.post(reverse("image-create"), {"image": self.photo(), "for_person": person.pk, "wizard": "writer"})
+        self.assertRedirects(response, reverse("writer-roles", args=[person.pk]))
+        person.refresh_from_db()
+        self.assertEqual(person.image.image_type, "headshot")
+
+    def test_step_three_has_the_writer_role_ticked_and_saves_the_roles(self):
+        import re
+
+        person = Person.objects.create(first_name="Wilma", last_name="Wordsmith", biography="<p>Writes.</p>")
+        html = self.client.get(reverse("writer-roles", args=[person.pk])).content.decode()
+        self.assertIn("New writer: step 3 of 3", html)
+        self.assertRegex(html, rf'value="{self.writer.pk}"[^>]*checked')
+        self.assertNotRegex(html, rf'value="{self.actor.pk}"[^>]*checked')
+        response = self.client.post(reverse("writer-roles", args=[person.pk]), {"roles": [self.writer.pk]})
+        self.assertRedirects(response, f"{reverse('person-detail', args=[person.pk])}?from=writers", fetch_redirect_response=False)
+        self.assertEqual(list(person.roles.all()), [self.writer])
+        self.assertIn(person, self.client.get(reverse("writer-list")).context["writers"])
+
+    def test_the_whole_wizard(self):
+        self.client.post(reverse("writer-new"), {"first_name": "Wilma", "last_name": "Wordsmith"})
+        person = Person.objects.get()
+        self.client.post(reverse("image-create"), {"image": self.photo(), "for_person": person.pk, "wizard": "writer"})
+        self.client.post(reverse("writer-roles", args=[person.pk]), {"roles": [self.writer.pk]})
+        person.refresh_from_db()
+        self.assertIsNotNone(person.image)
+        self.assertEqual(list(person.roles.all()), [self.writer])
+
+    def test_the_wizard_needs_a_login(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("writer-new")).status_code, 302)
+        self.assertEqual(self.client.get(reverse("writer-roles", args=[1])).status_code, 302)
 
 
 class DeletePersonPhotoTests(TestCase):

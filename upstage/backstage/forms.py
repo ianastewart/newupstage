@@ -32,7 +32,7 @@ class PersonForm(forms.ModelForm):
 
 
 class PersonDetailsForm(forms.ModelForm):
-    """Step 1 of the new actor wizard: who they are (names, contact details, biography)."""
+    """Step 1 of the new actor / writer wizard: who they are (names, contact details, biography)."""
 
     class Meta:
         model = models.Person
@@ -45,7 +45,7 @@ class PersonDetailsForm(forms.ModelForm):
 
 
 class PersonRolesForm(forms.ModelForm):
-    """Step 3 of the new actor wizard: their roles."""
+    """Step 3 of the new actor / writer wizard: their roles."""
 
     class Meta:
         model = models.Person
