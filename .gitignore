@@ -52,3 +52,4 @@ upstage/staticfiles/
 
 scripts/.server.env
 backups/
+media.tgz

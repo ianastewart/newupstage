@@ -12,3 +12,4 @@ Dockerfile
 .env.*
 !.env.example
 staticfiles
+**/media.tgz
