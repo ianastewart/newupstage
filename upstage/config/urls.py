@@ -1,12 +1,18 @@
 from django.contrib import admin
 from django.contrib.auth.decorators import login_not_required
+from django.contrib.sitemaps.views import sitemap
 from django.urls import URLPattern, include, path, re_path
 from django.views.static import serve
 from django.conf import settings
 from django.conf.urls.static import static
 
+from home.sitemaps import SITEMAPS
+from home.views import robots_txt
+
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("sitemap.xml", login_not_required(sitemap), {"sitemaps": SITEMAPS}, name="sitemap"),
+    path("robots.txt", robots_txt, name="robots"),
     path("accounts/", include("accounts.urls")),
     path("", include("home.urls")),
     path("backstage/", include("backstage.urls")),

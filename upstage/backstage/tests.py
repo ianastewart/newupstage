@@ -2005,6 +2005,161 @@ class NewActorWizardTests(TestCase):
         self.assertEqual(self.client.get(reverse("actor-roles", args=[1])).status_code, 302)
 
 
+class OtherRolesListTests(TestCase):
+    """The Other roles list: everyone except those whose only roles are Actor and/or Writer."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from backstage.models import Production, ProductionTeam
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.actor, cls.writer, cls.director = (Role.objects.get_or_create(name=n)[0] for n in ("Actor", "Writer", "Director"))
+        make = lambda first, last, *roles: Person.objects.create(first_name=first, last_name=last).roles.add(*roles)
+        make("Only", "Actor", cls.actor)
+        make("Only", "Writer", cls.writer)
+        make("Both", "Actorwriter", cls.actor, cls.writer)  # in both of the other lists, so not here
+        make("Dee", "Director", cls.director)
+        make("Ann", "Actordirector", cls.actor, cls.director)  # has a role besides actor/writer
+        make("No", "Role")  # no role at all: not in the actors or writers lists, so here
+        play = Production.objects.create(title="Wordplay", type="stage")
+        ProductionTeam.objects.create(production=play, person=Person.objects.get(first_name="Dee"), role=cls.director)
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def names(self, query=""):
+        response = self.client.get(reverse("other-list") + query)
+        self.assertEqual(response.status_code, 200)
+        return [f"{p.first_name} {p.last_name}" for p in response.context["people"]]
+
+    def test_lists_everyone_except_those_with_only_actor_and_or_writer_roles(self):
+        self.assertEqual(self.names(), ["Ann Actordirector", "Dee Director", "No Role"])
+
+    def test_sorted_by_first_name(self):
+        self.assertEqual(self.names("?sort=first"), ["Ann Actordirector", "Dee Director", "No Role"])
+        Person.objects.filter(first_name="No").update(first_name="Aaron")
+        self.assertEqual(self.names("?sort=first")[0], "Aaron Role")
+
+    def test_a_person_with_two_other_roles_is_listed_once(self):
+        Person.objects.get(first_name="Dee").roles.add(Role.objects.get_or_create(name="Producer")[0])
+        self.assertEqual(self.names().count("Dee Director"), 1)
+
+    def test_details_view_shows_roles_and_credits(self):
+        html = self.client.get(reverse("other-list") + "?view=details").content.decode()
+        self.assertIn("Wordplay", html)
+        self.assertIn("Director", html)
+        self.assertEqual(html.count("?from=others-details"), 3)
+        self.assertIn("No productions credited yet.", html)
+
+    def test_photos_view_links_back_to_the_photos_and_has_a_new_person_button(self):
+        html = self.client.get(reverse("other-list")).content.decode()
+        self.assertEqual(html.count("?from=others\""), 3)
+        self.assertIn(f'href="{reverse("other-new")}"', html)
+        self.assertIn("New person", html)
+
+    def test_a_person_page_goes_back_to_the_list_it_came_from(self):
+        person = Person.objects.get(first_name="Dee")
+        for query, back in (("others", reverse("other-list")), ("others-details", reverse("other-list") + "?view=details")):
+            response = self.client.get(reverse("person-detail", args=[person.pk]) + f"?from={query}")
+            self.assertEqual(response.context["back_url"], back)
+            self.assertEqual(response.context["back_label"], "Other roles")
+
+    def test_the_wizard_for_a_new_person_ticks_no_role(self):
+        person = Person.objects.create(first_name="Newbie", last_name="Person")
+        html = self.client.get(f"{reverse('image-create')}?type=headshot&for_person={person.pk}&wizard=other").content.decode()
+        self.assertIn("New person: step 2 of 3", html)
+        self.assertIn(f'href="{reverse("other-roles", args=[person.pk])}" class="btn btn-ghost">Skip photo', html)
+        html = self.client.get(reverse("other-roles", args=[person.pk])).content.decode()
+        self.assertIn("New person: step 3 of 3", html)
+        self.assertNotRegex(html, r'name="roles"[^>]*checked')
+        response = self.client.post(reverse("other-roles", args=[person.pk]), {"roles": [self.director.pk]})
+        self.assertRedirects(response, f"{reverse('person-detail', args=[person.pk])}?from=others", fetch_redirect_response=False)
+        self.assertIn(person, self.client.get(reverse("other-list")).context["people"])
+        self.assertEqual(self.client.post(reverse("other-new"), {"first_name": "", "last_name": ""}).status_code, 200)
+
+
+class RolePagesTests(TestCase):
+    """The roles pages use the site's themed styles (not the neapolitan defaults) and show how each role is used."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from backstage.models import Production, ProductionTeam
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.writer = Role.objects.create(name="writer")  # lower case: sorts with the others, ignoring case
+        cls.actor = Role.objects.create(name="Actor")
+        cls.unused = Role.objects.create(name="Unused")
+        ann = Person.objects.create(first_name="Ann", last_name="Smith")
+        ann.roles.add(cls.writer, cls.actor)
+        Person.objects.create(first_name="Bob", last_name="Jones").roles.add(cls.actor)
+        play = Production.objects.create(title="Wordplay", type="stage")
+        ProductionTeam.objects.create(production=play, person=ann, role=cls.writer)
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_the_list_shows_each_role_with_its_people_and_credits_in_alphabetical_order(self):
+        import re
+
+        response = self.client.get(reverse("role-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([r.name for r in response.context["object_list"]], ["Actor", "Unused", "writer"])
+        rows = re.findall(r'class="link link-hover">([^<]*)</a></td>\s*<td class="text-right">(\d+)</td>\s*<td class="text-right">(\d+)</td>', response.content.decode())
+        self.assertEqual(rows, [("Actor", "2", "0"), ("Unused", "0", "0"), ("writer", "1", "1")])
+
+    def test_the_pages_use_the_theme_not_the_fixed_default_colours(self):
+        for url in (reverse("role-list"), reverse("role-detail", args=[self.actor.pk]), reverse("role-delete", args=[self.actor.pk])):
+            html = self.client.get(url).content.decode()
+            self.assertNotIn("indigo", html)
+            self.assertNotIn("text-gray-900", html)
+        self.assertIn("btn btn-primary", self.client.get(reverse("role-list")).content.decode())
+
+    def test_a_role_in_use_cannot_be_deleted_from_the_pages(self):
+        listing = self.client.get(reverse("role-list")).content.decode()
+        self.assertIn(reverse("role-delete", args=[self.unused.pk]), listing)
+        self.assertNotIn(reverse("role-delete", args=[self.writer.pk]), listing)
+        self.assertNotIn("<button type=\"submit\" class=\"btn btn-error\">", self.client.get(reverse("role-delete", args=[self.writer.pk])).content.decode())
+        self.assertIn("can't be deleted", self.client.get(reverse("role-delete", args=[self.writer.pk])).content.decode())
+
+    def test_deleting_an_unused_role(self):
+        html = self.client.get(reverse("role-delete", args=[self.unused.pk])).content.decode()
+        self.assertIn('<button type="submit" class="btn btn-error">Delete</button>', html)
+        response = self.client.post(reverse("role-delete", args=[self.unused.pk]))
+        self.assertRedirects(response, reverse("role-list"))
+        self.assertFalse(Role.objects.filter(pk=self.unused.pk).exists())
+
+    def test_the_detail_page_lists_the_people(self):
+        html = self.client.get(reverse("role-detail", args=[self.actor.pk])).content.decode()
+        self.assertIn("Ann Smith", html)
+        self.assertIn("Bob Jones", html)
+        self.assertIn("Credited on 0 productions.", html)
+
+    def test_new_and_edit_still_work(self):
+        response = self.client.post(reverse("role-create"), {"name": "Lighting"})
+        role = Role.objects.get(name="Lighting")
+        self.assertRedirects(response, reverse("role-detail", args=[role.pk]))  # on to the (themed) detail page
+        self.client.post(reverse("role-update", args=[role.pk]), {"name": "Lights"})
+        self.assertTrue(Role.objects.filter(name="Lights").exists())
+
+    def test_the_pages_need_a_login(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("role-list")).status_code, 302)
+
+
+class BackstageMenuTests(TestCase):
+    def test_people_dropdown_replaces_the_actors_and_writers_links(self):
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        html = self.client.get(reverse("actor-list")).content.decode()
+        self.assertIn("<summary>People</summary>", html)
+        menu = html.split("<summary>People</summary>")[1].split("</details>")[0]
+        for url_name, label in (("actor-list", "Actors"), ("writer-list", "Writers"), ("other-list", "Other roles")):
+            self.assertIn(f'<a href="{reverse(url_name)}">{label}</a>', menu)
+        # Only inside the dropdown now: not a top level entry (each menu is on the page twice: wide and phone screens)
+        self.assertEqual(html.count(f'<li><a href="{reverse("actor-list")}">Actors</a></li>'), 2)
+        self.assertEqual(html.count("<summary>People</summary>"), 2)
+        self.assertNotIn('<li><a href="/backstage/person/">People</a></li>', html)
+
+
 class NewWriterWizardTests(TestCase):
     """New writer: the same three steps as a new actor, starting with the Writer role."""
 

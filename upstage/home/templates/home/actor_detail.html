@@ -35,7 +35,7 @@
               <h2 class="mb-2 text-lg font-semibold">Cast in</h2>
               <ul class="space-y-1">
                 {% for production, characters in cast_in %}
-                  <li><span class="font-semibold">{{ production.title }}</span> <span class="opacity-70">· {{ characters|join:", " }}</span></li>
+                  <li><a href="{% if production.type == 'radio' %}{% url 'radio-play' production.pk %}{% else %}{% url 'public-production' production.pk %}{% endif %}" class="link link-hover font-semibold text-violet-400">{{ production.title }}</a> <span class="opacity-70">· {{ characters|join:", " }}</span></li>
                 {% endfor %}
               </ul>
             </section>
@@ -44,7 +44,7 @@
             <section>
               <h2 class="mb-2 text-lg font-semibold">{{ heading }}</h2>
               <ul class="space-y-1">
-                {% for production in productions %}<li>{{ production.title }}</li>{% endfor %}
+                {% for production in productions %}<li><a href="{% if production.type == 'radio' %}{% url 'radio-play' production.pk %}{% else %}{% url 'public-production' production.pk %}{% endif %}" class="link link-hover text-violet-400">{{ production.title }}</a></li>{% endfor %}
               </ul>
             </section>
           {% endfor %}

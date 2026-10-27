@@ -3,6 +3,7 @@
 {% block title %}{{ page.title }} · Upstage Theatre{% endblock %}
 
 {% block head %}
+  {{ block.super }}
   {% if page.background_colour %}<style>body { background-color: {{ page.background_colour }}; }</style>{% endif %}
 {% endblock %}
 

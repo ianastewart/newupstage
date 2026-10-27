@@ -1760,3 +1760,151 @@ class PublicProductionTests(TestCase):
         self.assertNotIn("images/Pastplace.png", html)
         Event.objects.update(publish="not_published")
         self.assertNotIn("images/Nextplace.png", self.client.get(self.url).content.decode())
+
+
+class SeoTests(TestCase):
+    """Search tags on the public pages, the sitemap and robots.txt."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from accounts.models import CustomUser
+        from backstage.models import Event, EventDateTime, Venue
+
+        from .models import Block, PageBlock, WebPage
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.photo = Image.objects.create(description="Ann", image="images/ann.jpg", image_type="headshot")
+        cls.poster = Image.objects.create(description="Poster", image="images/poster.jpg", image_type="promotion")
+        cls.actor = Person.objects.create(first_name="Ann", last_name="Actor", image=cls.photo, biography="<p>Ann loves <b>panto</b>.</p><p>And tea.</p>")
+        cls.actor.roles.add(Role.objects.get_or_create(name="Actor")[0])
+        cls.nobody = Person.objects.create(first_name="No", last_name="Photo")  # an actor with no photo: no public page
+        cls.nobody.roles.add(Role.objects.get(name="Actor"))
+        cls.stage = Production.objects.create(title="A Stage Play", type="stage", description="<p>A funny play, with \"quotes\" & more.</p>")
+        ProductionImage.objects.create(production=cls.stage, image=cls.poster, is_default=True)
+        cls.radio = Production.objects.create(title="A Radio Play", type="radio", description="Listen to this.")
+        cls.published = Event.objects.create(event_type="performance", publish="published")
+        EventDateTime.objects.create(event=cls.published, datetime=timezone.now() + timedelta(days=10))
+        cls.published.productions.add(cls.stage)
+        cls.hidden = Event.objects.create(event_type="performance", publish="not_published")
+        cls.home = WebPage.objects.create(title="Home", slug="home")
+        cls.about = WebPage.objects.create(title="About us", slug="about")
+        cls.draft = WebPage.objects.create(title="About us (copy)", slug="about-copy", copied_from=cls.about)
+        text = Block.objects.create(name="About text", block_type="text", text="<p>We make <i>theatre</i> in Surrey.</p>")
+        PageBlock.objects.create(page=cls.about, block=text, position=1)
+
+    def tags(self, url):
+        import re
+
+        html = self.client.get(url).content.decode()
+        return html, {
+            "canonical": (re.search(r'<link rel="canonical" href="([^"]*)"', html) or [None, None])[1],
+            "description": (re.search(r'<meta name="description" content="([^"]*)"', html) or [None, None])[1],
+            "og_title": (re.search(r'<meta property="og:title" content="([^"]*)"', html) or [None, None])[1],
+            "og_image": (re.search(r'<meta property="og:image" content="([^"]*)"', html) or [None, None])[1],
+            "og_type": (re.search(r'<meta property="og:type" content="([^"]*)"', html) or [None, None])[1],
+            "robots": (re.search(r'<meta name="robots" content="([^"]*)"', html) or [None, None])[1],
+        }
+
+    # ---- plain text descriptions
+    def test_plain_text_removes_tags_keeps_the_words_apart_and_cuts_at_a_word(self):
+        from .seo import plain_text
+
+        self.assertEqual(plain_text("<p>One</p><p>Two &amp; three</p>"), "One Two & three")
+        self.assertEqual(plain_text(""), "")
+        cut = plain_text("word " * 100, 20)
+        self.assertLessEqual(len(cut), 20)
+        self.assertTrue(cut.endswith("word\u2026"))
+
+    # ---- tags on the public pages
+    def test_a_production_page_has_its_description_poster_and_canonical_address(self):
+        _, tags = self.tags(reverse("public-production", args=[self.stage.pk]) + "?utm_source=x")
+        self.assertEqual(tags["canonical"], f"http://testserver/productions/{self.stage.pk}/")  # no query
+        self.assertEqual(tags["description"], "A funny play, with &quot;quotes&quot; &amp; more.")
+        self.assertEqual(tags["og_title"], "A Stage Play")
+        self.assertEqual(tags["og_image"], "http://testserver/media/images/poster.jpg")
+        self.assertIsNone(tags["robots"])  # public pages are for the search engines
+
+    def test_a_radio_play_has_one_address_whichever_page_it_was_reached_by(self):
+        radio_url = f"http://testserver{reverse('radio-play', args=[self.radio.pk])}"
+        self.assertEqual(self.tags(reverse("public-production", args=[self.radio.pk]))[1]["canonical"], radio_url)
+        self.assertEqual(self.tags(reverse("radio-play", args=[self.radio.pk]))[1]["canonical"], radio_url)
+
+    def test_a_person_page_uses_the_biography_and_photo(self):
+        _, tags = self.tags(reverse("public-actor", args=[self.actor.pk]) + f"?production={self.stage.pk}")
+        self.assertEqual(tags["canonical"], f"http://testserver/actors/{self.actor.pk}/")
+        self.assertEqual(tags["description"], "Ann loves panto. And tea.")
+        self.assertEqual(tags["og_type"], "profile")
+        self.assertEqual(tags["og_image"], "http://testserver/media/images/ann.jpg")
+
+    def test_a_page_from_the_editor_describes_itself_from_its_text(self):
+        _, tags = self.tags(reverse("webpage", args=["about"]))
+        self.assertEqual(tags["og_title"], "About us")
+        self.assertEqual(tags["description"], "We make theatre in Surrey.")
+        self.assertIsNone(tags["robots"])
+
+    def test_a_copy_being_worked_on_is_not_for_the_search_engines(self):
+        self.assertEqual(self.tags(reverse("webpage", args=["about-copy"]))[1]["robots"], "noindex, nofollow")
+
+    def test_the_home_page_is_the_root_whichever_address_it_was_reached_by(self):
+        self.assertEqual(self.tags("/")[1]["canonical"], "http://testserver/")
+        self.assertEqual(self.tags(reverse("webpage", args=["home"]))[1]["canonical"], "http://testserver/")
+        self.assertEqual(self.tags("/")[1]["og_title"], "Upstage Theatre")
+
+    def test_pages_without_a_description_get_the_sites(self):
+        from django.conf import settings
+
+        _, tags = self.tags(reverse("webpage", args=["home"]))
+        self.assertEqual(tags["description"], settings.SITE_DESCRIPTION)
+
+    def test_the_other_public_pages_have_tags(self):
+        for name in ("public-actors", "radio-archive", "auditions"):
+            html, tags = self.tags(reverse(name))
+            self.assertTrue(tags["canonical"].endswith(reverse(name)), name)
+            self.assertTrue(tags["description"], name)
+            self.assertIsNone(tags["robots"], name)
+        self.assertIn(self.stage.title, self.tags(reverse("public-event", args=[self.published.pk]))[1]["og_title"])
+
+    # ---- keeping the rest out
+    def test_backstage_and_account_pages_are_not_for_the_search_engines(self):
+        self.client.force_login(self.user)
+        for url in (reverse("actor-list"), reverse("production-list"), reverse("page-list"), reverse("password_change")):
+            html, tags = self.tags(url)
+            self.assertEqual(tags["robots"], "noindex, nofollow", url)
+            self.assertIsNone(tags["canonical"], url)
+        self.client.logout()
+        self.assertEqual(self.tags(reverse("login"))[1]["robots"], "noindex, nofollow")
+
+    # ---- robots.txt and the sitemap
+    def test_robots_txt_is_public_keeps_the_crawlers_out_of_backstage_and_names_the_sitemap(self):
+        response = self.client.get("/robots.txt")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/plain")
+        text = response.content.decode()
+        for path in ("/backstage/", "/admin/", "/accounts/", "/pages/"):
+            self.assertIn(f"Disallow: {path}", text)
+        self.assertNotIn("Disallow: /\n", text)
+        self.assertIn("Sitemap: http://testserver/sitemap.xml", text)
+
+    def test_the_sitemap_lists_the_public_pages_and_only_those(self):
+        import re
+
+        response = self.client.get("/sitemap.xml")
+        self.assertEqual(response.status_code, 200)
+        urls = set(re.findall(r"<loc>([^<]*)</loc>", response.content.decode()))
+        base = "http://testserver"
+        for expected in (
+            f"{base}/", f"{base}/actors/", f"{base}/radio-archive/", f"{base}/auditions/",
+            f"{base}/page/about/",
+            f"{base}/productions/{self.stage.pk}/",
+            f"{base}/radio-archive/{self.radio.pk}/",  # a radio play is listed by its radio archive page
+            f"{base}/events/{self.published.pk}/",
+            f"{base}/actors/{self.actor.pk}/",
+        ):
+            self.assertIn(expected, urls)
+        self.assertNotIn(f"{base}/productions/{self.radio.pk}/", urls)
+        self.assertNotIn(f"{base}/page/home/", urls)  # the home page is the root
+        self.assertNotIn(f"{base}/page/about-copy/", urls)  # a copy still being worked on
+        self.assertNotIn(f"{base}/events/{self.hidden.pk}/", urls)  # not published
+        self.assertNotIn(f"{base}/actors/{self.nobody.pk}/", urls)  # no photo, so no page
+        self.assertFalse([u for u in urls if "/backstage/" in u or "/admin/" in u])
+        self.assertEqual(len(urls), len(re.findall(r"<loc>", response.content.decode())))  # none twice

@@ -51,7 +51,7 @@
                 <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
                   {% for part in cast %}
                     <dt class="font-semibold">{{ part.character_name }}</dt>
-                    <dd>{% if part.actor %}{% if part.actor.public_url %}<a href="{{ part.actor.public_url }}" class="link link-hover">{{ part.actor }}</a>{% else %}{{ part.actor }}{% endif %}{% else %}—{% endif %}</dd>
+                    <dd>{% if part.actor %}{% if part.actor.public_url %}<a href="{{ part.actor.public_url }}" class="link link-hover text-violet-400">{{ part.actor }}</a>{% else %}{{ part.actor }}{% endif %}{% else %}—{% endif %}</dd>
                   {% endfor %}
                 </dl>
               {% else %}

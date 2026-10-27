@@ -1,17 +1,18 @@
 from django.contrib.auth.decorators import login_not_required
 from django.db.models import F, Min, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import Http404, HttpResponseNotAllowed
+from django.http import Http404, HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from backstage.forms import ContactForm
-from backstage.models import Event, EventDateTime, Person, Production
+from backstage.models import Event, EventDateTime, Person, Production, Role
 from backstage.views import person_productions
 
 from .auditions import audition_view, upcoming_auditions
 from .promotions import production_ticket_url, production_venue, promotion_image
+from .seo import seo
 from .forms import BlockColumnFormSet, BlockForm, WebPageForm
 from .models import Block, WebPage
 
@@ -19,6 +20,36 @@ from .models import Block, WebPage
 @login_not_required
 def home(request):
     return webpage(request, "home")
+
+
+# The blocks whose text can describe the page.
+SEO_TEXT_BLOCKS = (Block.BlockType.TEXT, Block.BlockType.TEXT_IMAGE, Block.BlockType.SPLIT, Block.BlockType.HERO_IMAGE)
+
+
+@login_not_required
+def robots_txt(request):
+    """What search engines may crawl: the public pages, not the backstage ones; and where the sitemap is."""
+    lines = [
+        "User-agent: *",
+        "Disallow: /backstage/",
+        "Disallow: /admin/",
+        "Disallow: /accounts/",
+        "Disallow: /pages/",  # the page editor
+        "",
+        f"Sitemap: {request.build_absolute_uri(reverse('sitemap'))}",
+    ]
+    return HttpResponse("\n".join(lines) + "\n", content_type="text/plain")
+
+
+def person_seo(request, person):
+    """The tags for a person's public page: their biography is the description, their photo the image."""
+    return seo(request, title=str(person).strip(), description=person.biography, image=person.image, og_type="profile")
+
+
+def production_image(production):
+    """The image that stands for a production in link previews: its promotion image, else its default image."""
+    link = production.default_image
+    return promotion_image(production) or (link.image if link else None)
 
 
 @login_not_required
@@ -31,6 +62,16 @@ def webpage(request, slug):
     hero = next((pb.block for pb in page_blocks if pb.block.block_type == Block.BlockType.HERO_IMAGE), None)
     content_blocks = [pb for pb in page_blocks if pb.block != hero]
     context = {"page": page, "hero": hero, "page_blocks": content_blocks}
+    text_block = next((pb.block for pb in page_blocks if pb.block.text and pb.block.block_type in SEO_TEXT_BLOCKS), None)
+    image_block = hero or next((pb.block for pb in page_blocks if pb.block.image_id), None)
+    context["seo"] = seo(
+        request,
+        title="" if page.slug == "home" else page.title,
+        description=text_block.text if text_block else "",
+        image=image_block.image if image_block else None,
+        noindex=page.copied_from_id is not None,  # a copy still being worked on
+        canonical_path=reverse("home") if page.slug == "home" else None,  # the home page is the site's root
+    )
     if request.method == "POST":
         # A contact block's form: the block it came from is posted with it.
         block_id = request.POST.get("contact_block", "")
@@ -94,8 +135,63 @@ def team_member_detail(request, pk):
     cast_in, credits = person_productions(person)
     return render(
         request, "home/actor_detail.html",
-        {"person": person, "cast_in": cast_in, "credits": credits, "back_production": return_production(request)},
+        {"person": person, "cast_in": cast_in, "credits": credits, "back_production": return_production(request),
+         "seo": person_seo(request, person)},
     )
+
+
+def public_people_ordering():
+    # People known by one name ("Divya") sort by that name.
+    return Coalesce(NullIf(Lower("last_name"), Value("")), Lower("first_name")), Lower("first_name")
+
+
+def public_people_page(request, people, title, description, empty):
+    """A grid of people's photos and names (initials for those with no photo), each linked to their public page."""
+    people = list(people)
+    with_public_urls(people)
+    return render(request, "home/people_list.html", {
+        "people": people, "title": title, "empty": empty,
+        "seo": seo(request, title=title, description=description),
+    })
+
+
+@login_not_required
+def writer_list(request):
+    """The public writers page: everyone with the Writer role who has a public page (a photo or a biography)."""
+    writers = (
+        Person.objects.filter(roles__name="Writer").filter(Q(image__isnull=False) | ~Q(biography=""))
+        .select_related("image").distinct().order_by(*public_people_ordering())
+    )
+    return public_people_page(request, writers, "Writers", "The writers of Upstage Surrey.", "No writers to show yet.")
+
+
+@login_not_required
+def crew_list(request):
+    """The public crew page: everyone with a role other than Actor or Writer (linked to their page where they have one)."""
+    crew = (
+        Person.objects.filter(roles__in=Role.objects.exclude(name__in=["Actor", "Writer"]))
+        .select_related("image").distinct().order_by(*public_people_ordering())
+    )
+    return public_people_page(request, crew, "Crew", "The crew of Upstage Surrey.", "No crew to show yet.")
+
+
+def production_type_list(request, production_type, title, empty):
+    """The public page for one type of production: each one's image and title, linked to its page."""
+    productions = Production.objects.filter(type=production_type).prefetch_related("images__image").order_by("title")
+    return render(request, "home/production_grid.html", {
+        "productions": productions, "title": title, "empty": empty,
+        "seo": seo(request, title=title, description=f"{title} from Upstage Surrey."),
+    })
+
+
+@login_not_required
+def stage_shows(request):
+    return production_type_list(request, Production.ProductionType.STAGE, "Stage shows", "No stage shows to show yet.")
+
+
+@login_not_required
+def films(request):
+    return production_type_list(request, Production.ProductionType.FILM, "Films", "No films to show yet.")
 
 
 @login_not_required
@@ -105,7 +201,10 @@ def actor_list(request):
     actors = public_actors().order_by(
         Coalesce(NullIf(Lower("last_name"), Value("")), Lower("first_name")), Lower("first_name")
     )
-    return render(request, "home/actor_list.html", {"actors": actors})
+    return render(request, "home/actor_list.html", {
+        "actors": actors,
+        "seo": seo(request, title="Actors", description="The actors of Upstage Surrey."),
+    })
 
 
 @login_not_required
@@ -115,7 +214,8 @@ def actor_detail(request, pk):
     cast_in, credits = person_productions(person)
     return render(
         request, "home/actor_detail.html",
-        {"person": person, "cast_in": cast_in, "credits": credits, "back_to_actors": True, "back_production": return_production(request)},
+        {"person": person, "cast_in": cast_in, "credits": credits, "back_to_actors": True,
+         "back_production": return_production(request), "seo": person_seo(request, person)},
     )
 
 
@@ -132,7 +232,10 @@ def radio_plays():
 @login_not_required
 def radio_archive(request):
     """The public radio archive: each radio play's image and title, latest first."""
-    return render(request, "home/radio_archive.html", {"plays": radio_plays()})
+    return render(request, "home/radio_archive.html", {
+        "plays": radio_plays(),
+        "seo": seo(request, title="Radio archive", description="Listen to the radio plays from Upstage Surrey."),
+    })
 
 
 @login_not_required
@@ -145,7 +248,12 @@ def radio_play(request, pk):
         key=lambda member: (member.role.name, member.person.last_name, member.person.first_name),
     )
     cast = sorted(play.cast.all(), key=lambda part: part.id)
-    return render(request, "home/radio_play.html", {"play": play, "team": team, "cast": cast})
+    writers = [member.person for member in play.team.all() if member.role.name == "Writer"]
+    with_public_urls([member.person for member in team] + writers + [part.actor for part in cast], play)
+    return render(request, "home/radio_play.html", {
+        "play": play, "team": team, "cast": cast, "writers": writers,
+        "seo": seo(request, title=play.title, description=play.description, image=production_image(play)),
+    })
 
 
 @login_not_required
@@ -171,13 +279,21 @@ def public_production(request, pk):
         "venue": production_venue(production),
         "team": team,
         "cast": cast,
+        "seo": seo(
+            request, title=production.title, description=production.description, image=production_image(production),
+            # A radio play is also at /productions/<pk>/, but its page in the radio archive is the one to show in searches.
+            canonical_path=reverse("radio-play", args=[pk]) if production.type == Production.ProductionType.RADIO else None,
+        ),
     })
 
 
 @login_not_required
 def auditions(request):
     """Every production with an audition still to come, soonest first, each in its audition view."""
-    return render(request, "home/auditions.html", {"audition_views": [audition_view(p) for p in upcoming_auditions()]})
+    return render(request, "home/auditions.html", {
+        "audition_views": [audition_view(p) for p in upcoming_auditions()],
+        "seo": seo(request, title="Auditions", description="Auditions coming up with Upstage Surrey."),
+    })
 
 
 @login_not_required
@@ -191,11 +307,19 @@ def event_detail(request, pk):
     )
     now = timezone.now()
     dates = list(event.datetimes.all())
+    productions = sorted(event.productions.all(), key=lambda production: production.title)
+    first = productions[0] if productions else None
     return render(request, "home/event_detail.html", {
         "event": event,
         "dates": dates,
-        "productions": sorted(event.productions.all(), key=lambda production: production.title),
+        "productions": productions,
         "upcoming": any(date.datetime >= now for date in dates),
+        "seo": seo(
+            request,
+            title=" and ".join(production.title for production in productions) or event.get_event_type_display(),
+            description=event.description or (first.description if first else ""),
+            image=production_image(first) if first else None,
+        ),
     })
 
 
@@ -205,7 +329,14 @@ def audition_detail(request, pk):
     productions = upcoming_auditions(pk)
     if not productions:
         raise Http404("This production has no audition coming up.")
-    return render(request, "home/audition_detail.html", {"view": audition_view(productions[0])})
+    production = productions[0]
+    return render(request, "home/audition_detail.html", {
+        "view": audition_view(production),
+        "seo": seo(
+            request, title=f"{production.title} auditions", description=production.description,
+            image=production_image(production),
+        ),
+    })
 
 
 def page_list(request):

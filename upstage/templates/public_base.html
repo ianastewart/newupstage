@@ -13,3 +13,25 @@
 {% endblock %}
 
 {% block nav %}{% include "includes/public_nav.html" %}{% endblock %}
+
+{# The navbar's wrapper (base.html's #nav) is what sticks to the top, as it is a direct child of the tall body. #}
+{% block head %}<style>#nav { position: sticky; top: 0; z-index: 50; }</style>{% endblock %}
+
+{# What search engines and link previews (Facebook, WhatsApp...) read: see home/seo.py. `seo` comes from the view, or the site's defaults. #}
+{% block seo %}
+  {% if seo.noindex %}<meta name="robots" content="noindex, nofollow">{% endif %}
+  <link rel="canonical" href="{{ seo.canonical }}">
+  <meta name="description" content="{{ seo.description }}">
+  <meta property="og:site_name" content="{{ seo.site_name }}">
+  <meta property="og:type" content="{{ seo.type }}">
+  <meta property="og:title" content="{{ seo.title }}">
+  <meta property="og:description" content="{{ seo.description }}">
+  <meta property="og:url" content="{{ seo.canonical }}">
+  <meta name="twitter:card" content="{% if seo.image %}summary_large_image{% else %}summary{% endif %}">
+  <meta name="twitter:title" content="{{ seo.title }}">
+  <meta name="twitter:description" content="{{ seo.description }}">
+  {% if seo.image %}
+    <meta property="og:image" content="{{ seo.image }}">
+    <meta name="twitter:image" content="{{ seo.image }}">
+  {% endif %}
+{% endblock %}

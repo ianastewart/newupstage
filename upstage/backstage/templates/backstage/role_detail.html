@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}{{ object }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl p-6">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-3xl font-bold">{{ object }}</h1>
+    <div class="flex gap-2">
+      <a href="{% url 'role-list' %}" class="btn btn-ghost">All roles</a>
+      <a href="{% url 'role-update' object.pk %}" class="btn btn-primary">Edit</a>
+      {% if not object.credit_count %}<a href="{% url 'role-delete' object.pk %}" class="btn btn-error btn-outline">Delete</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="card bg-base-200 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title">People <span class="badge badge-neutral">{{ object.people_count }}</span></h2>
+      {% if object.people.all %}
+        <div class="flex flex-wrap gap-1">
+          {% for person in object.people.all %}
+            <a href="{% url 'person-detail' person.pk %}" class="badge badge-secondary badge-outline hover:bg-secondary hover:text-secondary-content">{{ person }}</a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-sm opacity-70">No one has this role.</p>
+      {% endif %}
+      <p class="text-sm opacity-70">Credited on {{ object.credit_count }} production{{ object.credit_count|pluralize }}.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

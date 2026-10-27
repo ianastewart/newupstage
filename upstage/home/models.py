@@ -241,6 +241,10 @@ class Block(models.Model):
         "Images the same height", default=False,
         help_text="Columns blocks: every image is as tall as the shortest one; the taller images are cropped to match.",
     )
+    title_above = models.BooleanField(
+        "Title above", default=True,
+        help_text="Columns blocks: each column's title is above its image; if off, it is under the image.",
+    )
     equal_height = models.BooleanField(
         "Equal height columns", default=False,
         help_text="Columns blocks: make all the columns as tall as the tallest one (they are drawn in boxes, unless separate).",
@@ -381,7 +385,11 @@ class Block(models.Model):
         """For a cast list: the production's characters and actors, in the order they were added."""
         if not self.production_id:
             return []
-        return self.production.cast.select_related("actor").order_by("id")
+        from .views import with_public_urls  # Imported here: the views import this module.
+
+        members = list(self.production.cast.select_related("actor").order_by("id"))
+        with_public_urls([member.actor for member in members], self.production)
+        return members
 
     def copy(self):
         """A copy of the block, with " (copy)" added to its name, and a copy of its columns."""

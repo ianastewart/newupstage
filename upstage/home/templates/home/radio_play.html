@@ -25,10 +25,10 @@
             <a href="{{ play.public_listen_url }}" class="btn btn-primary mt-4" target="_blank" rel="noopener">Listen now</a>
           {% endif %}
 
-          {% if play.writers %}
+          {% if writers %}
             <section class="mt-4">
-              <h2 class="mb-1 text-lg font-semibold">Writer{{ play.writers|pluralize }}</h2>
-              <p>{{ play.writers|join:", " }}</p>
+              <h2 class="mb-1 text-lg font-semibold">Writer{{ writers|pluralize }}</h2>
+              <p>{% for writer in writers %}{% if writer.public_url %}<a href="{{ writer.public_url }}" class="link link-hover text-violet-400">{{ writer }}</a>{% else %}{{ writer }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
             </section>
           {% endif %}
 
@@ -38,7 +38,7 @@
               <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
                 {% for member in team %}
                   <dt class="font-semibold">{{ member.role }}</dt>
-                  <dd>{{ member.person }}</dd>
+                  <dd>{% if member.person.public_url %}<a href="{{ member.person.public_url }}" class="link link-hover text-violet-400">{{ member.person }}</a>{% else %}{{ member.person }}{% endif %}</dd>
                 {% endfor %}
               </dl>
             </section>
@@ -50,7 +50,7 @@
               <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
                 {% for part in cast %}
                   <dt class="font-semibold">{{ part.character_name }}</dt>
-                  <dd>{% if part.actor %}{{ part.actor }}{% else %}—{% endif %}</dd>
+                  <dd>{% if part.actor %}{% if part.actor.public_url %}<a href="{{ part.actor.public_url }}" class="link link-hover text-violet-400">{{ part.actor }}</a>{% else %}{{ part.actor }}{% endif %}{% else %}—{% endif %}</dd>
                 {% endfor %}
               </dl>
             </section>

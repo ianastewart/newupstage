@@ -5,7 +5,7 @@
     <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
       {% for member in members %}
         <dt class="font-semibold">{{ member.character_name }}</dt>
-        <dd>{% if member.actor %}{{ member.actor }}{% else %}—{% endif %}</dd>
+        <dd>{% if member.actor %}{% if member.actor.public_url %}<a href="{{ member.actor.public_url }}" class="link link-hover text-violet-400">{{ member.actor }}</a>{% else %}{{ member.actor }}{% endif %}{% else %}—{% endif %}</dd>
       {% endfor %}
     </dl>
   {% else %}

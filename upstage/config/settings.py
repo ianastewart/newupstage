@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sitemaps',
     'django.forms',
 ]
 
@@ -98,6 +99,7 @@ TEMPLATES = [
                 'backstage.context_processors.navbar_logo',
                 'backstage.context_processors.css_version',
                 'backstage.context_processors.themes',
+                'home.seo.default_seo',
             ],
         },
     },
@@ -194,12 +196,21 @@ LOGOUT_REDIRECT_URL = 'home'
 
 # Emails (such as password reset links) are printed to the console unless EMAIL_HOST is set in the environment.
 if os.environ.get('EMAIL_HOST'):
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = os.environ['EMAIL_HOST']
-    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
-    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-    EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', '1') == '1'
+    MAILERS = {
+        'default': {
+            'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+            'OPTIONS': {
+                'host': os.environ['EMAIL_HOST'],
+                'port': int(os.environ.get('EMAIL_PORT', '587')),
+                'username': os.environ.get('EMAIL_HOST_USER', ''),
+                'password': os.environ.get('EMAIL_HOST_PASSWORD', ''),
+                'use_tls': os.environ.get('EMAIL_USE_TLS', '1') == '1',
+            },
+        },
+    }
 else:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    MAILERS = {'default': {'BACKEND': 'django.core.mail.backends.console.EmailBackend'}}
+# The description search engines and link previews show for pages that don't have their own.
+SITE_DESCRIPTION = os.environ.get('SITE_DESCRIPTION', 'Upstage Surrey: stage plays and radio plays.')
+
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Upstage Theatre <noreply@upstage.example>')

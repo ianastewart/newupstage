@@ -4,15 +4,16 @@ Normally the columns share the block's card. With separate_columns each column i
 With equal_height the columns are as tall as the tallest: drawn in outlined boxes if they share the card, or just stretched if they are separate cards.
 With flush_images the image of a card or box runs to its edges and only the text is padded (the card's padding moves to the text).
 With match_image_heights every image has the aspect ratio of the shortest one, so they are all the same height (the taller ones are cropped).
+With title_above off, each column's title is under its image instead of above it.
 {% endcomment %}
-{% with columns=block.visible_columns count=block.column_count flush=block.flush_images ratio=block.image_ratio %}
+{% with columns=block.visible_columns count=block.column_count flush=block.flush_images ratio=block.image_ratio above=block.title_above %}
 {% if block.separate_columns %}
 <section>
   {% include "home/blocks/_heading.html" %}
   <div class="grid gap-4 md:gap-6 {% if count == 2 %}md:grid-cols-2{% elif count == 3 %}md:grid-cols-3{% else %}md:grid-cols-2 lg:grid-cols-4{% endif %}{% if not block.equal_height %} items-start{% endif %}">
     {% for column in columns %}
       <div class="flex min-w-0 flex-col rounded-box{% if flush %} gap-0 overflow-hidden{% else %} gap-4 p-6{% endif %}{% if not block.background_colour %} bg-base-200{% endif %}{% if block.equal_height %} h-full{% endif %}" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
-        {% include "home/blocks/_column.html" with flush=flush roomy=True ratio=ratio %}
+        {% include "home/blocks/_column.html" with flush=flush roomy=True ratio=ratio above=above %}
       </div>
     {% endfor %}
   </div>
@@ -24,11 +25,11 @@ With match_image_heights every image has the aspect ratio of the shortest one, s
     {% for column in columns %}
       {% if block.equal_height %}
         <div class="flex h-full min-w-0 flex-col rounded-box border border-current/25{% if flush %} gap-0 overflow-hidden{% else %} gap-4 p-4{% endif %}">
-          {% include "home/blocks/_column.html" with flush=flush roomy=False ratio=ratio %}
+          {% include "home/blocks/_column.html" with flush=flush roomy=False ratio=ratio above=above %}
         </div>
       {% else %}
         <div class="flex min-w-0 flex-col gap-4">
-          {% include "home/blocks/_column.html" with flush=False roomy=False ratio=ratio %}
+          {% include "home/blocks/_column.html" with flush=False roomy=False ratio=ratio above=above %}
         </div>
       {% endif %}
     {% endfor %}
