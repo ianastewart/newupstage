@@ -119,6 +119,10 @@
   --tw-prose-quote-borders: var(--color-base-300);
   --tw-prose-links: var(--color-primary);
 }
+/* Links in text blocks that are light purple, as the links to people and productions are (after .prose-themed, so it wins). */
+.prose-links-violet {
+  --tw-prose-links: var(--color-violet-400);
+}
 
 /* The hero image fades in slowly after the page loads; the text is visible straight away. The time is the block's
    (--hero-fade, set on the block in hero_image.html); 5 seconds if it isn't set. */

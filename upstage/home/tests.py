@@ -1318,8 +1318,8 @@ class DiaryBlockTests(TestCase):
         self.assertIn('type="checkbox" name="diary_shows"', str(BlockForm()["diary_shows"]))
         self.assertIn("What&#x27;s on", self.shown("auditions"))
 
-    def test_recent_radio_plays_are_the_last_6_months_oldest_first(self):
-        self.assertEqual(self.titles("recent_radio"), ["Older Radio", "Recent Radio"])
+    def test_recent_radio_plays_are_the_last_6_months_most_recent_first(self):
+        self.assertEqual(self.titles("recent_radio"), ["Recent Radio", "Older Radio"])
 
     def test_upcoming_radio_plays(self):
         self.assertEqual(self.titles("upcoming_radio"), ["Coming Radio"])
@@ -1331,8 +1331,8 @@ class DiaryBlockTests(TestCase):
         self.assertEqual(self.titles("auditions"), ["Audition Play"])
 
     def test_several_kinds_can_be_ticked_and_are_merged_earliest_first(self):
-        self.assertEqual(self.titles("recent_radio", "auditions", "upcoming_stage"), ["Older Radio", "Recent Radio", "Audition Play", "Sooner Stage", "Later Stage"])
-        self.assertEqual(self.titles("recent_radio", "upcoming_radio"), ["Older Radio", "Recent Radio", "Coming Radio"])
+        self.assertEqual(self.titles("recent_radio", "auditions", "upcoming_stage"), ["Recent Radio", "Older Radio", "Audition Play", "Sooner Stage", "Later Stage"])
+        self.assertEqual(self.titles("recent_radio", "upcoming_radio"), ["Recent Radio", "Older Radio", "Coming Radio"])
         self.assertEqual(self.titles(), [])
 
     def test_the_form_keeps_the_ticked_boxes_and_defaults_to_upcoming_stage_plays(self):

@@ -41,7 +41,8 @@ def periods(shows, now):
 
 def diary_productions(shows=("upcoming_stage",)):
     """
-    The productions that have a published (or promoted) event of any of the chosen kinds, earliest first: recent radio
+    The productions that have a published (or promoted) event of any of the chosen kinds (those already past, most recent
+    first, then those still to come, soonest first): recent radio
     plays (broadcast in the last 6 months), upcoming radio plays, upcoming stage plays (performances) and auditions (the
     last three still to come). Each production has `diary_events`: its events of those kinds, earliest first, each with
     `dates` (its dates in the period, earliest first, as EventDateTimes), `upcoming` (it has a date still to come), and
@@ -73,10 +74,12 @@ def diary_productions(shows=("upcoming_stage",)):
         for production in event.productions.all():
             by_production.setdefault(production.pk, (production, []))[1].append(event)
     result = []
-    images = Production.objects.filter(pk__in=by_production).prefetch_related("images__image")
+    images = Production.objects.filter(pk__in=by_production).prefetch_related("images__image", "team__person", "team__role")
     for production in images:
         production.diary_events = by_production[production.pk][1]
         production.first_date = production.diary_events[0].dates[0].datetime
         result.append(production)
-    result.sort(key=lambda production: (production.first_date, production.title))
-    return result
+    # Productions already past (recent radio plays) come first, the most recent first; then those still to come, soonest first.
+    past = sorted((p for p in result if p.first_date < now), key=lambda p: (-p.first_date.timestamp(), p.title))
+    coming = sorted((p for p in result if p.first_date >= now), key=lambda p: (p.first_date, p.title))
+    return past + coming

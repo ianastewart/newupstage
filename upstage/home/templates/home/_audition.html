@@ -1,63 +1,81 @@
 {# One production's audition view: used by the auditions page and by each audition's own page. #}
 {% with production=view.production %}
-<article class="card bg-base-200 shadow-sm">
-  <div class="card-body gap-6">
-    <header>
-      <h2 class="text-3xl font-bold">{{ production.title }}</h2>
-      {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
-    </header>
-
-    <div class="flex flex-wrap items-start gap-6">
-      {% with cover=production.default_image %}
-        {% if cover %}
-          <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" class="h-auto max-h-[300px] w-auto max-w-full rounded-box shadow-sm" />
-        {% endif %}
-      {% endwith %}
-      <div class="min-w-0 flex-1 basis-72 space-y-4">
-        {% if production.description %}<div>{{ production.description|linebreaks }}</div>{% endif %}
-
-        <div>
-          <h3 class="mb-2 font-semibold">Auditions</h3>
-          <ul class="space-y-1">
-            {% for date in view.dates %}
-              <li>
-                <span class="font-medium">{{ date.datetime|date:"l j F Y, g:i a" }}</span>
-                {% if date.event.venue %}<span class="opacity-80">· {{ date.event.venue }}</span>{% endif %}
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
-
+  <article class="card bg-base-200 shadow-sm">
+    <div class="card-body gap-6">
+      <header>
+        <h2 class="text-3xl font-bold">{{ production.title }}</h2>
         {% if view.writers or view.directors %}
-          <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-            {% if view.writers %}<dt class="font-semibold">Written by</dt><dd>{{ view.writers|join:", " }}</dd>{% endif %}
-            {% if view.directors %}<dt class="font-semibold">Directed by</dt><dd>{{ view.directors|join:", " }}</dd>{% endif %}
+          <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm mt-2">
+            {% if view.writers and view.directors and view.writers == view.directors %}
+              <span class="font-semibold">Written and directed by {{ view.writers|join:", " }}</span>
+            {% else %}
+              {% if view.writers %}
+                <dt class="font-semibold">Written by</dt>
+                <dd>{{ view.writers|join:", " }}</dd>{% endif %}
+              {% if view.directors %}
+                <dt class="font-semibold">Directed by</dt>
+                <dd>{{ view.directors|join:", " }}</dd>{% endif %}
+            {% endif %}
           </dl>
         {% endif %}
+      </header>
+
+      <div class="flex flex-wrap items-start gap-6">
+        {% with cover=production.default_image %}
+          {% if cover %}
+            <img src="{{ cover.image.image.url }}" alt="{{ production.title }}"
+                 class="h-auto max-h-[300px] w-auto max-w-full rounded-box shadow-sm"/>
+          {% endif %}
+        {% endwith %}
+        <div class="min-w-0 flex-1 basis-72 space-y-4">
+          {% if production.strap_line %}
+          <p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>
+          {% endif %}
+          {% if production.description %}
+            <div>{{ production.description|linebreaks }}</div>
+          {% endif %}
+          <div>
+            <h3 class="mt-2 text-2xl font-semibold">Auditions</h3>
+            <ul class="space-y-1">
+              {% for date in view.dates %}
+                <li>
+                  <span class="text-xl font-medium">{{ date.datetime|date:"l j F Y, g:i a" }}</span>
+                  {% if date.event.venue %}<span class="opacity-80">· {{ date.event.venue }}</span>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {# Opens the visitor's email program with the message ready to send. #}
+          <div>
+            {% with subject="Audition - "|add:production.title body="I am interested in auditioning for a part in this production" %}
+              <a href="mailto:info@upstagesurrey.co.uk?subject={{ subject|urlencode:'' }}&body={{ body|urlencode:'' }}" class="btn btn-primary">Register your interest</a>
+            {% endwith %}
+          </div>
+
+        </div>
       </div>
+
+      {% if view.block.text %}
+        {# Just the Audition block's text (no title or box), larger, leading into the characters. #}
+        <div class="text-xl">
+          {% include "home/blocks/_text.html" with block=view.block %}
+        </div>
+      {% endif %}
+
+      {% if view.characters %}
+        <div>
+
+          {# Boxes in columns; in each box the name and characteristics share a line. #}
+          <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {% for character in view.characters %}
+              <div class="rounded-box bg-base-100 px-4 py-3">
+                <dt class="inline font-semibold">{{ character.character_name }}</dt>{% if character.characteristics %}
+                <dd class="inline opacity-80">– {{ character.characteristics }}</dd>{% endif %}
+              </div>
+            {% endfor %}
+          </dl>
+        </div>
+      {% endif %}
     </div>
-
-    {% if view.block.text %}
-      {# Just the Audition block's text (no title or box), larger, leading into the characters. #}
-      <div class="text-xl">
-        {% include "home/blocks/_text.html" with block=view.block %}
-      </div>
-    {% endif %}
-
-    {% if view.characters %}
-      <div>
-        <h3 class="mb-3 text-xl font-semibold">Characters</h3>
-        {# Boxes in columns; in each box the name and characteristics share a line. #}
-        <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {% for character in view.characters %}
-            <div class="rounded-box bg-base-100 px-4 py-3">
-              <dt class="inline font-semibold">{{ character.character_name }}</dt>{% if character.characteristics %}
-              <dd class="inline opacity-80">– {{ character.characteristics }}</dd>{% endif %}
-            </div>
-          {% endfor %}
-        </dl>
-      </div>
-    {% endif %}
-  </div>
-</article>
+  </article>
 {% endwith %}

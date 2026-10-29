@@ -28,16 +28,22 @@ With nothing to come the block shows nothing at all, not even its title.
         {# Column 2: the title, with the strap line under it. #}
         <div>
           <h3 class="text-2xl font-bold md:text-3xl"><a href="{% url 'public-production' production.pk %}" class="link-hover">{{ production.title }}</a></h3>
+          {% with writers=production.writers %}{% if writers %}<p class="mt-1 text-lg">By {{ writers|join:", " }}</p>{% endif %}{% endwith %}
           {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
         </div>
         {# Column 3: each event: what and where, its dates and times, the venue's logo under them, then tickets. #}
         <div class="space-y-4">
           {% for event in production.diary_events %}
             <div>
-              <p class="font-semibold">{{ event.get_event_type_display }}{% if event.venue %} at {{ event.venue.name }}{% endif %}</p>
-              <ul class="mt-1 space-y-0.5">
-                {% for date in event.dates %}<li>{{ date.datetime|date:"D j M Y, g:i a" }}</li>{% endfor %}
-              </ul>
+              {% if event.event_type == 'broadcast' %}
+                {# A broadcast (a radio play) is "Broadcast on <date>", with no venue or time: the podcast file only has a date. #}
+                <p class="font-semibold">Broadcast on {% for date in event.dates %}{{ date.datetime|date:"l j M Y" }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+              {% else %}
+                <p class="font-semibold">{{ event.get_event_type_display }}{% if event.venue %} at {{ event.venue.name }}{% endif %}</p>
+                <ul class="mt-1 space-y-0.5">
+                  {% for date in event.dates %}<li>{{ date.datetime|date:"l j M Y, g:i a" }}</li>{% endfor %}
+                </ul>
+              {% endif %}
               {% if event.venue.logo.image %}
                 <img src="{{ event.venue.logo.image.url }}" alt="{{ event.venue.name }}" loading="lazy" class="mt-2 h-auto max-h-16 w-auto max-w-full" />
               {% endif %}

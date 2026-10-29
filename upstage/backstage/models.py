@@ -232,7 +232,7 @@ class Production(models.Model):
             date.datetime = when
             date.save(update_fields=["datetime"])
             return
-        event = Event.objects.create(event_type=Event.EventType.BROADCAST)
+        event = Event.objects.create(event_type=Event.EventType.BROADCAST, publish=Event.Publish.PUBLISHED)
         EventDateTime.objects.create(event=event, datetime=when)
         self.events.add(event)
 
