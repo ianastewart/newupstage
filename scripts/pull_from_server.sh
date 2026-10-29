@@ -5,6 +5,7 @@
 #
 # Settings (environment variables, or put them in scripts/.server.env, which is git-ignored):
 #   SERVER       ssh target                         default root@coolify.iskt.co.uk
+#   SERVER_DB    the database the app uses on the server (Coolify's postgres container has POSTGRES_DB=postgres)  default $POSTGRES_DB
 #   WEB_FILTER   docker name filter for the web container (Coolify uuid, e.g. web-<uuid>)  REQUIRED
 #   DB_FILTER    docker name filter for the database container (e.g. db-<uuid>)            REQUIRED
 #   OUT_DIR      where to save the files            default ./backups
@@ -37,7 +38,7 @@ pull_db() {
   c=$(find_container "$DB_FILTER")
   echo "Dumping database from $c ..."
   # Credentials come from the container's own environment, so nothing is stored here
-  ssh "$SERVER" "docker exec $c sh -c 'pg_dump -Fc -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\"'" > "$out"
+  ssh "$SERVER" "docker exec $c sh -c 'pg_dump -Fc -U \"\$POSTGRES_USER\" -d \"${SERVER_DB:-\$POSTGRES_DB}\"'" > "$out"
   echo "Saved $out ($(du -h "$out" | cut -f1))"
 }
 

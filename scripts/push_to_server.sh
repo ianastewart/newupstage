@@ -89,7 +89,7 @@ if [ "$what" != media ]; then
   # Always start the app again, even if the restore fails
   trap 'echo "Starting $web ..."; ssh "$SERVER" "docker start $web" >/dev/null' EXIT
   echo "Restoring the database ..."
-  ssh "$SERVER" "docker exec -i $db sh -c 'pg_restore --single-transaction --exit-on-error --clean --if-exists --no-owner --no-privileges -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\"'" < "$dump"
+  ssh "$SERVER" "docker exec -i $db sh -c 'pg_restore --single-transaction --exit-on-error --clean --if-exists --no-owner --no-privileges -U \"\$POSTGRES_USER\" -d \"${SERVER_DB:-\$POSTGRES_DB}\"'" < "$dump"
   echo "Database replaced."
   trap - EXIT
   echo "Starting $web ..."
