@@ -1,22 +1,31 @@
 {# The navbar for the public pages. Add public links in public_nav_links.html. #}
-<div class="navbar h-[80px] bg-base-100 shadow-sm">
-  <div class="flex-1">
-    {% if navbar_logo %}
-      <a class="btn btn-ghost h-auto px-2 py-1" href="{% url 'home' %}" aria-label="Home">
-        <img src="{{ navbar_logo.image.url }}" alt="Upstage Surrey" class="h-14 w-auto" />
-      </a>
-    {% else %}
-      <a class="btn btn-ghost text-xl" href="{% url 'home' %}" aria-label="Home">🏠</a>
-    {% endif %}
-  </div>
-  <div class="flex-none">
+{# The bar is full width, but its contents line up with the blocks below (max-w-6xl and 1.5rem of padding, as in webpage.html). #}
+<div class="bg-base-100 shadow-sm">
+  <div class="navbar mx-auto h-[80px] max-w-6xl px-6">
+    {# The logo on the left, the links centred, and on the right Backstage (for logged in users) and, on phones, the menu button. #}
+    <div class="navbar-start">
+      {% if navbar_logo %}
+        <a class="btn btn-ghost h-auto px-0 py-1" href="{% url 'home' %}" aria-label="Home">
+          <img src="{{ navbar_logo.image.url }}" alt="Upstage Surrey" class="h-14 w-auto" />
+        </a>
+      {% else %}
+        <a class="btn btn-ghost px-0 text-xl" href="{% url 'home' %}" aria-label="Home">🏠</a>
+      {% endif %}
+    </div>
     {# Links in a row from small screens up; a menu on phones. #}
-    <ul class="menu menu-horizontal hidden gap-1 sm:flex">{% include "includes/public_nav_links.html" %}</ul>
-    <div class="dropdown dropdown-end sm:hidden">
-      <div tabindex="0" role="button" class="btn btn-ghost" aria-label="Menu">
-        <svg class="size-5 fill-none stroke-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    <div class="navbar-center hidden sm:flex">
+      <ul class="menu menu-horizontal gap-1">{% include "includes/public_nav_links.html" with in_row=True %}</ul>
+    </div>
+    <div class="navbar-end">
+      {% if user.is_authenticated %}
+        <a href="{% url 'production-list' %}" class="btn btn-ghost hidden sm:inline-flex">Backstage</a>
+      {% endif %}
+      <div class="dropdown dropdown-end sm:hidden">
+        <div tabindex="0" role="button" class="btn btn-ghost" aria-label="Menu">
+          <svg class="size-5 fill-none stroke-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </div>
+        <ul tabindex="0" class="dropdown-content menu z-10 w-48 rounded-box bg-base-200 p-2 shadow-lg">{% include "includes/public_nav_links.html" %}</ul>
       </div>
-      <ul tabindex="0" class="dropdown-content menu z-10 w-48 rounded-box bg-base-200 p-2 shadow-lg">{% include "includes/public_nav_links.html" %}</ul>
     </div>
   </div>
 </div>

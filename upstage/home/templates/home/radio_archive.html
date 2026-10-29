@@ -6,9 +6,15 @@
 <div class="mx-auto max-w-6xl p-6">
   <h1 class="mb-6 text-3xl font-bold">Radio archive</h1>
 
+  <form method="get" role="search" class="mb-6 flex gap-2">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search by title, writer or cast" aria-label="Search the radio archive" class="input input-bordered w-full max-w-md" />
+    <button type="submit" class="btn btn-primary">Search</button>
+    {% if query %}<a href="{% url 'radio-archive' %}" class="btn btn-ghost">Clear</a>{% endif %}
+  </form>
+
   {% if not plays %}
     <div class="rounded-box bg-base-200 p-12 text-center">
-      <p>No radio plays to show yet.</p>
+      <p>{% if query %}No radio plays match "{{ query }}".{% else %}No radio plays to show yet.{% endif %}</p>
     </div>
   {% else %}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">

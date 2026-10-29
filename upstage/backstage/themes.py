@@ -1,4 +1,4 @@
-"""The themes the site offers: the two Upstage themes, then all of daisyUI's."""
+"""The themes the site offers: the three Upstage themes, then all of daisyUI's."""
 
 BUILT_IN = (
     "abyss acid aqua autumn black bumblebee business caramellatte cmyk coffee corporate cupcake cyberpunk dark dim "
@@ -6,7 +6,7 @@ BUILT_IN = (
     "synthwave valentine winter wireframe"
 ).split()
 
-THEMES = [("upstage", "Upstage"), ("upstage-dark", "Upstage dark")] + [(name, name.capitalize()) for name in BUILT_IN]
+THEMES = [("upstage", "Upstage"), ("upstage-dark", "Upstage dark"), ("upstage-spotlight", "Upstage spotlight")] + [(name, name.capitalize()) for name in BUILT_IN]
 
 THEME_NAMES = {value for value, _ in THEMES}
 

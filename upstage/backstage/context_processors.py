@@ -8,6 +8,8 @@ from backstage.themes import THEMES, is_theme
 
 # The image library entry shown on the left of the navbar.
 NAVBAR_LOGO_DESCRIPTION = "Upstage Surrey Logo"
+# The backstage navbar shows this one instead on light themes.
+NAVBAR_LOGO_LIGHT_DESCRIPTION = "Upstage big bw"
 
 
 def navbar_logo(request):
@@ -21,7 +23,10 @@ def navbar_logo(request):
             .first()
         )
 
-    return {"navbar_logo": SimpleLazyObject(find_logo)}
+    def find_light_logo():
+        return Image.objects.filter(description__iexact=NAVBAR_LOGO_LIGHT_DESCRIPTION).exclude(image="").order_by("-id").first()
+
+    return {"navbar_logo": SimpleLazyObject(find_logo), "navbar_logo_light": SimpleLazyObject(find_light_logo)}
 
 
 def css_version(request):

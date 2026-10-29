@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ object }} · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl p-6">
+  <h1 class="mb-6 text-3xl font-bold">Delete {{ object }}?</h1>
+
+  <form method="POST" action="{{ delete_view_url }}">
+    {% csrf_token %}
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body">
+        <p>This deletes the venue {{ object }}.</p>
+        {% if object.event_count %}
+          <div role="alert" class="alert alert-warning alert-soft">
+            <span>{{ object.event_count }} event{{ object.event_count|pluralize }} use{{ object.event_count|pluralize:"s," }} this venue. {{ object.event_count|pluralize:"It,They" }} will stay, with no venue.</span>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="mt-6 flex justify-end gap-2">
+      <a href="{% url 'venue-list' %}" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-error">Delete</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

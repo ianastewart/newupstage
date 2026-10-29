@@ -1,35 +1,31 @@
 {# One production's audition view: used by the auditions page and by each audition's own page. #}
 {% with production=view.production %}
-  <article class="card bg-base-200 shadow-sm">
+  <article class="card border border-violet-400/40 bg-violet-500/20 shadow-sm">
     <div class="card-body gap-6">
-      <header>
-        <h2 class="text-3xl font-bold">{{ production.title }}</h2>
-        {% if view.writers or view.directors %}
-          <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm mt-2">
-            {% if view.writers and view.directors and view.writers == view.directors %}
-              <span class="font-semibold">Written and directed by {{ view.writers|join:", " }}</span>
-            {% else %}
-              {% if view.writers %}
-                <dt class="font-semibold">Written by</dt>
-                <dd>{{ view.writers|join:", " }}</dd>{% endif %}
-              {% if view.directors %}
-                <dt class="font-semibold">Directed by</dt>
-                <dd>{{ view.directors|join:", " }}</dd>{% endif %}
-            {% endif %}
-          </dl>
-        {% endif %}
-      </header>
-
-      <div class="flex flex-wrap items-start gap-6">
+      {# The picture on the left; on the right, centred, the title and everything else but the characters. On phones they stack. #}
+      <div class="grid items-center gap-6 md:grid-cols-[auto_1fr]">
         {% with cover=production.default_image %}
           {% if cover %}
             <img src="{{ cover.image.image.url }}" alt="{{ production.title }}"
-                 class="h-auto max-h-[300px] w-auto max-w-full rounded-box shadow-sm"/>
+                 class="mx-auto h-auto max-h-[300px] w-auto max-w-full rounded-box shadow-sm"/>
           {% endif %}
         {% endwith %}
-        <div class="min-w-0 flex-1 basis-72 space-y-4">
+        <div class="min-w-0 space-y-4 text-center md:col-start-2">
+          <header>
+            <h2 class="text-3xl font-bold">{{ production.title }}</h2>
+            {% if view.writers or view.directors %}
+              <p class="mt-2 text-sm">
+                {% if view.writers and view.directors and view.writers == view.directors %}
+                  <span class="font-semibold">Written and directed by {{ view.writers|join:", " }}</span>
+                {% else %}
+                  {% if view.writers %}<span class="block"><span class="font-semibold">Written by</span> {{ view.writers|join:", " }}</span>{% endif %}
+                  {% if view.directors %}<span class="block"><span class="font-semibold">Directed by</span> {{ view.directors|join:", " }}</span>{% endif %}
+                {% endif %}
+              </p>
+            {% endif %}
+          </header>
           {% if production.strap_line %}
-          <p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>
+          <p class="text-lg italic opacity-80">{{ production.strap_line }}</p>
           {% endif %}
           {% if production.description %}
             <div>{{ production.description|linebreaks }}</div>
@@ -40,18 +36,37 @@
               {% for date in view.dates %}
                 <li>
                   <span class="text-xl font-medium">{{ date.datetime|date:"l j F Y, g:i a" }}</span>
-                  {% if date.event.venue %}<span class="opacity-80">· {{ date.event.venue }}</span>{% endif %}
+                  {% with venue=date.event.venue %}
+                    {% if venue.address %}
+                      {# The venue's name opens a popup with its full address. #}
+                      <span class="opacity-80"> <br> <button type="button" class="text-xl link link-hover text-violet-400" onclick="document.getElementById('venue-{{ production.pk }}-{{ forloop.counter }}').showModal()">{{ venue }}</button></span>
+                      <dialog id="venue-{{ production.pk }}-{{ forloop.counter }}" class="modal">
+                        <div class="modal-box">
+                          <h3 class="text-lg font-bold">{{ venue }}</h3>
+                          <address class="mt-2 not-italic">{{ venue.address|linebreaksbr }}</address>
+                          <div class="modal-action"><form method="dialog"><button class="btn">Close</button></form></div>
+                        </div>
+                        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                      </dialog>
+                    {% elif venue %}
+                      <span class="opacity-80">· {{ venue }}</span>
+                    {% endif %}
+                  {% endwith %}
                 </li>
               {% endfor %}
             </ul>
           </div>
-          {# Opens the visitor's email program with the message ready to send. #}
           <div>
-            {% with subject="Audition - "|add:production.title body="I am interested in auditioning for a part in this production" %}
-              <a href="mailto:info@upstagesurrey.co.uk?subject={{ subject|urlencode:'' }}&body={{ body|urlencode:'' }}" class="btn btn-primary">Register your interest</a>
-            {% endwith %}
+            {% if backstage %}
+              {# On the backstage auditions page: Edit goes to the production's detail page. #}
+              <a href="{% url 'production-detail' production.pk %}" class="btn btn-primary">Edit</a>
+            {% else %}
+              {# Opens the visitor's email program with the message ready to send. #}
+              {% with subject="Audition - "|add:production.title body="I am interested in auditioning for a part in this production" %}
+                <a href="mailto:info@upstagesurrey.co.uk?subject={{ subject|urlencode:'' }}&body={{ body|urlencode:'' }}" class="btn btn-primary">Register your interest</a>
+              {% endwith %}
+            {% endif %}
           </div>
-
         </div>
       </div>
 

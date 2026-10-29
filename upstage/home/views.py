@@ -219,6 +219,18 @@ def actor_detail(request, pk):
     )
 
 
+def cast_by_actor_name(cast):
+    """A cast list sorted by the actors' first names, then surnames; parts with no actor go last, in the order they were added."""
+    return sorted(
+        cast,
+        key=lambda part: (
+            part.actor is None,
+            (part.actor.first_name.lower(), part.actor.last_name.lower()) if part.actor else ("", ""),
+            part.id,
+        ),
+    )
+
+
 def radio_plays():
     """Every production that is a radio play, latest broadcast first (those with no date last)."""
     return (
@@ -232,8 +244,20 @@ def radio_plays():
 @login_not_required
 def radio_archive(request):
     """The public radio archive: each radio play's image and title, latest first."""
+    plays = radio_plays()
+    query = request.GET.get("q", "").strip()
+    if query:
+        # Every word must match the title, strap line or the name of someone in the cast or team.
+        for word in query.split():
+            plays = plays.filter(
+                Q(title__icontains=word) | Q(strap_line__icontains=word)
+                | Q(cast__actor__first_name__icontains=word) | Q(cast__actor__last_name__icontains=word)
+                | Q(team__person__first_name__icontains=word) | Q(team__person__last_name__icontains=word)
+            )
+        plays = plays.distinct()
     return render(request, "home/radio_archive.html", {
-        "plays": radio_plays(),
+        "plays": plays,
+        "query": query,
         "seo": seo(request, title="Radio archive", description="Listen to the radio plays from Upstage Surrey."),
     })
 
@@ -247,7 +271,7 @@ def radio_play(request, pk):
         (member for member in play.team.all() if member.role.name != "Writer"),
         key=lambda member: (member.role.name, member.person.last_name, member.person.first_name),
     )
-    cast = sorted(play.cast.all(), key=lambda part: part.id)
+    cast = cast_by_actor_name(play.cast.all())
     writers = [member.person for member in play.team.all() if member.role.name == "Writer"]
     with_public_urls([member.person for member in team] + writers + [part.actor for part in cast], play)
     return render(request, "home/radio_play.html", {
@@ -269,7 +293,7 @@ def public_production(request, pk):
     team = sorted(
         production.team.all(), key=lambda member: (member.role.name, member.person.last_name, member.person.first_name)
     )
-    cast = sorted(production.cast.all(), key=lambda part: part.id)
+    cast = cast_by_actor_name(production.cast.all())
     # The people with a public page (see public_actors and public_team_members) are linked to it.
     with_public_urls([member.person for member in team] + [part.actor for part in cast], production)
     return render(request, "home/production_detail.html", {

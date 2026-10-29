@@ -13,12 +13,13 @@ The cards use the theme's card colours, so they stand out on any background colo
   {% endif %}
   <ul class="space-y-4">
     {% for production in productions %}
-      <li class="grid items-center gap-4 rounded-box bg-base-100 p-4 text-base-content shadow-sm md:grid-cols-3">
+      {# The whole card is a link to the audition's page: the title's link is stretched over it, and the links inside (image, writers, days) sit above it. #}
+      <li class="relative grid items-center gap-4 rounded-box bg-base-100 p-4 text-base-content shadow-sm transition hover:shadow-md md:grid-cols-3">
         {# Column 1: the image (an empty column if there is none, so the other columns still line up). #}
         <div>
           {% with cover=production.default_image %}
             {% if cover %}
-              <a href="{% url 'audition-detail' production.pk %}" class="inline-block" aria-label="{{ production.title }} auditions">
+              <a href="{% url 'audition-detail' production.pk %}" class="relative z-10 inline-block" aria-label="{{ production.title }} auditions">
                 <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" loading="lazy" class="h-auto max-h-40 w-auto max-w-full rounded-box shadow-sm transition hover:shadow-md" />
               </a>
             {% endif %}
@@ -26,15 +27,21 @@ The cards use the theme's card colours, so they stand out on any background colo
         </div>
         {# Column 2: the title, with the strap line under it. #}
         <div>
-          <h3 class="text-2xl font-bold md:text-3xl">{{ production.title }}</h3>
+          <h3 class="text-2xl font-bold md:text-3xl"><a href="{% url 'audition-detail' production.pk %}" class="after:absolute after:inset-0">{{ production.title }}</a></h3>
+          {% if production.writers %}
+            <p class="mt-1">Written by {% for writer in production.writers %}{% if writer.public_url %}<a href="{{ writer.public_url }}" class="relative z-10 link link-hover text-violet-400">{{ writer }}</a>{% else %}{{ writer }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+          {% endif %}
           {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
         </div>
         {# Column 3: the audition days (just the date, not the time). #}
+        <div>
+        <div class="text-xl">Auditions</div>
         <ul class="space-y-1">
           {% for day in production.audition_days %}
-            <li><a href="{% url 'audition-detail' production.pk %}" class="link link-hover">{{ day|date:"D j M Y" }}</a></li>
+            <li><a href="{% url 'audition-detail' production.pk %}" class="relative z-10 link link-hover">{{ day|date:"D j M Y" }}</a></li>
           {% endfor %}
         </ul>
+        </div>
       </li>
     {% endfor %}
   </ul>

@@ -24,7 +24,6 @@ def periods(shows, now):
         "recent_radio": (Event.EventType.BROADCAST, months_ago(now, RECENT_MONTHS), now),
         "upcoming_radio": (Event.EventType.BROADCAST, now, None),
         "upcoming_stage": (Event.EventType.PERFORMANCE, now, None),
-        "auditions": (Event.EventType.AUDITION, now, None),
     }
     result = {}
     for show in shows:
@@ -42,9 +41,9 @@ def periods(shows, now):
 def diary_productions(shows=("upcoming_stage",)):
     """
     The productions that have a published (or promoted) event of any of the chosen kinds (those already past, most recent
-    first, then those still to come, soonest first): recent radio
-    plays (broadcast in the last 6 months), upcoming radio plays, upcoming stage plays (performances) and auditions (the
-    last three still to come). Each production has `diary_events`: its events of those kinds, earliest first, each with
+    first, then those still to come, soonest first): recent radio plays (broadcast in the last 6 months), upcoming radio
+    plays and upcoming stage plays (performances). Each production has `diary_events`: its events of those kinds,
+    earliest first, each with
     `dates` (its dates in the period, earliest first, as EventDateTimes), `upcoming` (it has a date still to come), and
     its venue and ticket site.
     """

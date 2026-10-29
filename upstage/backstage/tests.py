@@ -170,7 +170,7 @@ class SeparateThemesTests(TestCase):
         self.assertEqual(names[:2], ["upstage", "upstage-dark"])
         self.assertTrue(is_theme("abyss") and is_theme("dark") and is_theme("upstage"))
         self.assertFalse(is_theme("") or is_theme("nonsense") or is_theme("abyss; x"))
-        self.assertEqual(len(names), 37)
+        self.assertEqual(len(names), 38)
 
     def test_the_public_pages_start_on_automatic(self):
         html = self.public_page()
@@ -234,8 +234,8 @@ class SeparateThemesTests(TestCase):
         html = self.client.get(reverse("production-list")).content.decode()
         self.assertIn("The theme of these backstage pages", html)
         self.assertIn("The theme visitors see on the public pages", html)
-        self.assertEqual(html.count('class="theme-controller'), 37)  # the backstage list
-        self.assertEqual(html.count('name="public_theme"'), 38)  # the public list: automatic, then every theme
+        self.assertEqual(html.count('class="theme-controller'), 38)  # the backstage list
+        self.assertEqual(html.count('name="public_theme"'), 39)  # the public list: automatic, then every theme
         self.assertIn(f'action="{reverse("public-theme")}"', html)
         # The public choice is ticked, and its radios must not be theme-controllers (that would restyle the backstage).
         self.assertRegex(html, r'name="public_theme" value="dracula"[^>]*checked')
@@ -3166,3 +3166,101 @@ class DefaultImageTests(TestCase):
         gallery = self.make(production, Image.ImageType.GALLERY)
         gallery.make_default()
         self.assertEqual(Production.objects.get(pk=production.pk).default_image, gallery)
+
+
+class VenueCrudTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from accounts.models import CustomUser
+        from backstage.models import Event, Venue
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.hall = Venue.objects.create(name="village Hall", address="1 High St\nEsher")
+        cls.barn = Venue.objects.create(name="Barn")
+        cls.event = Event.objects.create(event_type="performance", venue=cls.hall)
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_the_list_is_alphabetical_with_event_counts_and_is_linked_from_the_nav(self):
+        response = self.client.get(reverse("venue-list"))
+        self.assertEqual([(v.name, v.event_count) for v in response.context["object_list"]], [("Barn", 0), ("village Hall", 1)])
+        self.assertContains(response, reverse("venue-create"))
+        self.assertContains(response, f'<a href="{reverse("venue-list")}">Venues</a>')
+
+    def test_create_and_edit(self):
+        response = self.client.post(reverse("venue-create"), {"name": "Studio", "address": "", "logo": ""})
+        self.assertEqual(response.status_code, 302)
+        studio = self.hall.__class__.objects.get(name="Studio")
+        self.client.post(reverse("venue-update", args=[studio.pk]), {"name": "Studio B", "address": "Here", "logo": ""})
+        studio.refresh_from_db()
+        self.assertEqual((studio.name, studio.address), ("Studio B", "Here"))
+        self.assertContains(self.client.get(reverse("venue-detail", args=[studio.pk])), "Studio B")
+
+    def test_deleting_a_venue_in_use_keeps_its_events(self):
+        html = self.client.get(reverse("venue-delete", args=[self.hall.pk])).content.decode()
+        self.assertIn("1 event uses this venue", html)
+        response = self.client.post(reverse("venue-delete", args=[self.hall.pk]))
+        self.assertRedirects(response, reverse("venue-list"))
+        self.event.refresh_from_db()
+        self.assertIsNone(self.event.venue)
+        self.assertFalse(self.hall.__class__.objects.filter(pk=self.hall.pk).exists())
+
+
+class BackstageAuditionsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from accounts.models import CustomUser
+        from backstage.models import Event, EventDateTime
+
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+
+        def production(title, days):
+            play = Production.objects.create(title=title)
+            event = Event.objects.create(event_type=Event.EventType.AUDITION)  # not published: still listed backstage
+            event.productions.add(play)
+            EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=days))
+            return play
+
+        cls.soon = production("Soon Play", 5)
+        cls.past = production("Past Play", -5)
+
+    def test_it_needs_a_login(self):
+        self.assertEqual(self.client.get(reverse("backstage-auditions")).status_code, 302)
+
+    def test_it_lists_productions_with_a_future_audition_each_with_an_edit_button(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("backstage-auditions"))
+        self.assertContains(response, "Soon Play")
+        self.assertNotContains(response, "Past Play")
+        self.assertContains(response, f'<a href="{reverse("production-detail", args=[self.soon.pk])}" class="btn btn-primary">Edit</a>')
+        self.assertNotContains(response, "Register your interest")
+
+    def test_the_menu_links_to_it(self):
+        self.client.force_login(self.user)
+        self.assertContains(self.client.get(reverse("backstage-auditions")), f'<a href="{reverse("backstage-auditions")}">Auditions</a>')
+
+
+class NavbarLightLogoTests(TestCase):
+    def test_the_backstage_navbar_has_the_light_logo_ready_for_light_themes(self):
+        from accounts.models import CustomUser
+        from backstage.models import Image
+
+        Image.objects.create(description="Upstage Surrey Logo", image="images/dark-logo.png", image_type="logo")
+        Image.objects.create(description="Upstage big bw", image="images/big-bw.png")
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        html = self.client.get(reverse("production-list")).content.decode()
+        self.assertIn('src="/media/images/dark-logo.png" alt="Upstage Surrey" class="h-14 w-auto" data-logo="default"', html)
+        self.assertIn('src="/media/images/big-bw.png" alt="Upstage Surrey" class="hidden h-14 w-auto" data-logo="light"', html)
+
+    def test_without_that_image_only_the_usual_logo_is_there(self):
+        from accounts.models import CustomUser
+        from backstage.models import Image
+
+        Image.objects.create(description="Upstage Surrey Logo", image="images/dark-logo.png", image_type="logo")
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.assertNotContains(self.client.get(reverse("production-list")), 'data-logo="light"')

@@ -174,7 +174,6 @@ class Block(models.Model):
         RECENT_RADIO = "recent_radio", "Recent radio plays"
         UPCOMING_RADIO = "upcoming_radio", "Upcoming radio plays"
         UPCOMING_STAGE = "upcoming_stage", "Upcoming stage plays"
-        AUDITIONS = "auditions", "Auditions"
 
     class ImageSize(models.TextChoices):
         SMALL = "small", "Small"
@@ -288,8 +287,12 @@ class Block(models.Model):
     def upcoming_auditions(self):
         """For an auditions block: the productions with an audition still to come (see home.auditions)."""
         from .auditions import upcoming_auditions
+        from .views import with_public_urls  # Imported here: the views import this module.
 
-        return upcoming_auditions()
+        productions = upcoming_auditions()
+        for production in productions:
+            with_public_urls(production.writers, production)
+        return productions
 
     @property
     def contact_form(self):

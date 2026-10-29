@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Venues · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl p-6">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-baseline gap-4">
+      <h1 class="text-3xl font-bold">Venues</h1>
+      <p class="text-sm opacity-70">{{ object_list|length }} venue{{ object_list|length|pluralize }}</p>
+    </div>
+    <a href="{% url 'venue-create' %}" class="btn btn-primary">New venue</a>
+  </div>
+
+  {% if object_list %}
+    <div class="overflow-x-auto rounded-box bg-base-200 shadow-sm">
+      <table class="table">
+        <thead>
+          <tr><th>Venue</th><th>Address</th><th class="text-right">Events</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for venue in object_list %}
+            <tr>
+              <td class="font-semibold"><a href="{% url 'venue-detail' venue.pk %}" class="link link-hover">{{ venue.name }}</a></td>
+              <td class="opacity-80">{{ venue.address|linebreaksbr }}</td>
+              <td class="text-right">{{ venue.event_count }}</td>
+              <td class="whitespace-nowrap text-right">
+                <a href="{% url 'venue-update' venue.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+                <a href="{% url 'venue-delete' venue.pk %}" class="btn btn-ghost btn-sm text-error">Delete</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p>There are no venues yet.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

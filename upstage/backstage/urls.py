@@ -8,6 +8,7 @@ urlpatterns = [
     path("actors/", views.actor_list, name="actor-list"),
     path("actors/new/", views.actor_new, name="actor-new"),
     path("actors/<int:pk>/roles/", views.actor_roles, name="actor-roles"),
+    path("auditions/", views.audition_list, name="backstage-auditions"),
     path("contacts/", views.contact_list, name="contact-list"),
     path("writers/", views.writer_list, name="writer-list"),
     path("writers/new/", views.writer_new, name="writer-new"),

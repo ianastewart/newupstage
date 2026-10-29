@@ -35,6 +35,18 @@ class RadioArchiveTests(TestCase):
         self.assertEqual(titles, ["New Play", "Old Play", "Undated Play"])
         self.assertContains(response, "images/test-cover.jpg")
 
+    def test_search_matches_title_strap_line_and_names(self):
+        def found(q):
+            return [play.title for play in self.client.get(reverse("radio-archive"), {"q": q}).context["plays"]]
+
+        self.assertEqual(found("new"), ["New Play"])
+        self.assertEqual(found("wendy writer"), ["New Play"])  # every word must match, here the writer
+        self.assertEqual(found("hamlet"), [])  # character names aren't searched, actors' names are
+        self.assertEqual(found("ann"), ["New Play"])
+        self.assertEqual(found("zzz"), [])
+        self.assertContains(self.client.get(reverse("radio-archive"), {"q": "zzz"}), 'No radio plays match "zzz"')
+        self.assertEqual(len(found("")), 3)
+
     def test_detail_shows_image_writer_team_and_cast(self):
         response = self.client.get(reverse("radio-play", args=[self.new.pk]))
         self.assertEqual(response.status_code, 200)
@@ -42,6 +54,20 @@ class RadioArchiveTests(TestCase):
             self.assertContains(response, text)
         # The writer has their own heading, so isn't repeated as a team role.
         self.assertEqual([member.role.name for member in response.context["team"]], ["Director"])
+
+    def test_a_play_with_no_broadcast_date_hides_its_cast_and_awaits_a_date(self):
+        Cast.objects.create(production=self.undated, character_name="Ophelia", actor=Person.objects.create(first_name="Bea", last_name="Actor"))
+        response = self.client.get(reverse("radio-play", args=[self.undated.pk]))
+        self.assertContains(response, "Awaiting broadcast date")
+        self.assertNotContains(response, "Ophelia")
+        self.assertNotContains(self.client.get(reverse("radio-play", args=[self.new.pk])), "Awaiting broadcast date")
+
+    def test_the_cast_is_sorted_by_actor_first_name_with_unplayed_parts_last(self):
+        Cast.objects.create(production=self.new, character_name="Unfilled", actor=None)
+        Cast.objects.create(production=self.new, character_name="Ghost", actor=Person.objects.create(first_name="Zed", last_name="Aaa"))
+        Cast.objects.create(production=self.new, character_name="Maid", actor=Person.objects.create(first_name="bea", last_name="Zzz"))
+        response = self.client.get(reverse("radio-play", args=[self.new.pk]))
+        self.assertEqual([part.character_name for part in response.context["cast"]], ["Hamlet", "Maid", "Ghost", "Unfilled"])
 
     def test_detail_404_for_other_types(self):
         self.assertEqual(self.client.get(reverse("radio-play", args=[self.stage.pk])).status_code, 404)
@@ -97,7 +123,9 @@ class PublicNavTests(TestCase):
         self.assertNotContains(self.client.get(reverse("home")), ">Backstage<")
         self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
         response = self.client.get(reverse("home"))
-        self.assertContains(response, f'<a href="{reverse("production-list")}">Backstage</a>', count=2)
+        # At the right of the bar on wide screens, and in the phone menu.
+        self.assertContains(response, f'<a href="{reverse("production-list")}" class="btn btn-ghost hidden sm:inline-flex">Backstage</a>', count=1)
+        self.assertContains(response, f'<a href="{reverse("production-list")}">Backstage</a>', count=1)
 
     def test_radio_plays_link_is_highlighted_on_the_archive(self):
         response = self.client.get(reverse("radio-archive"))
@@ -434,7 +462,7 @@ class ColumnsBlockTests(TestCase):
         self.assertEqual(html.count("gap-0 overflow-hidden"), 3)
         self.assertNotIn("gap-4 p-6", html)
         # ...the text carries the padding instead, and the images are square-cornered.
-        self.assertEqual(html.count("prose prose-themed max-w-none p-6"), 3)
+        self.assertEqual(html.count("prose prose-themed prose-links-violet max-w-none p-6"), 3)
         self.assertEqual(html.count("<img"), 3)
         self.assertEqual(self.rounded_images(html), 0)
 
@@ -449,7 +477,7 @@ class ColumnsBlockTests(TestCase):
         self.assertEqual(html.count("border-current/25"), 3)
         self.assertEqual(html.count("gap-0 overflow-hidden"), 3)
         self.assertNotIn("gap-4 p-4", html)  # the box has no padding of its own...
-        self.assertEqual(html.count("prose prose-themed max-w-none p-4"), 3)  # ...the boxes' smaller padding is on the text
+        self.assertEqual(html.count("prose prose-themed prose-links-violet max-w-none p-4"), 3)  # ...the boxes' smaller padding is on the text
         self.assertEqual(self.rounded_images(html), 0)
 
     def test_flush_has_no_effect_when_the_columns_share_the_block_card(self):
@@ -656,33 +684,33 @@ class AuditionsBlockTests(TestCase):
 
     def test_each_has_a_small_image_then_the_title_then_the_dates_which_link_to_its_page(self):
         html = render_to_string(self.block.template, {"block": self.block})
-        item = html[html.index("Soon Play</h3>") - 600:html.index("Past And Future")]
-        self.assertLess(item.index("<img"), item.index("Soon Play</h3>"))
+        item = html[html.index("Soon Play</a></h3>") - 600:html.index("Past And Future")]
+        self.assertLess(item.index("<img"), item.index("Soon Play</a></h3>"))
         self.assertLess(item.index('href="'), item.index("<img"))  # the image sits inside its own link
-        self.assertLess(item.index("Soon Play</h3>"), item.rindex('href="'))  # the date links come after the title
-        self.assertEqual(html.count(f'href="/auditions/{self.soon.pk}/"'), 3)  # its image, and one for each of its two dates
-        self.assertEqual(html.count(f'href="/auditions/{self.later.pk}/"'), 2)  # its image and its date
+        self.assertLess(item.index("Soon Play</a></h3>"), item.rindex('href="'))  # the date links come after the title
+        self.assertEqual(html.count(f'href="/auditions/{self.soon.pk}/"'), 4)  # its image, its title, and one for each of its two dates
+        self.assertEqual(html.count(f'href="/auditions/{self.later.pk}/"'), 3)  # its image, its title and its date
         self.assertIn("max-h-40", html)  # a reduced size image
 
     def test_each_audition_is_a_card_of_three_columns(self):
         import re
 
         html = render_to_string(self.block.template, {"block": self.block})
-        cards = re.findall(r'<li class="grid[^"]*">', html)
+        cards = re.findall(r'<li class="relative grid[^"]*">', html)
         self.assertEqual(len(cards), 4)  # one card for each production
         for card in cards:
             self.assertIn("md:grid-cols-3", card)  # three columns side by side...
             self.assertIn("bg-base-100", card)  # ...in a card...
             self.assertNotRegex(card, r"(?<![:\w-])grid-cols-\d")  # ...which stack on a phone
         # Column 1 is the image, column 2 the title, column 3 the dates.
-        card = html[html.index("<li class=\"grid"):html.index("Past And Future")]
-        self.assertLess(card.index("<img"), card.index("Soon Play</h3>"))
-        self.assertLess(card.index("Soon Play</h3>"), card.index("<ul"))
+        card = html[html.index("<li class=\"relative grid"):html.index("Past And Future")]
+        self.assertLess(card.index("<img"), card.index("Soon Play</a></h3>"))
+        self.assertLess(card.index("Soon Play</a></h3>"), card.index("<ul"))
         self.assertEqual(card.count("<h3"), 1)
 
     def test_a_card_with_no_image_keeps_its_first_column(self):
         html = render_to_string(self.block.template, {"block": self.block})
-        card = html[html.index("No Image Play</h3>") - 400:html.index("No Image Play</h3>")]
+        card = html[html.index("No Image Play</a></h3>") - 400:html.index("No Image Play</a></h3>")]
         self.assertNotIn("<img", card)
         self.assertIn("<div>", card)  # an empty first column, so the title stays in the middle
 
@@ -725,6 +753,20 @@ class AuditionsBlockTests(TestCase):
         self.assertNotContains(response, "Later Play")  # just this production
         self.assertContains(response, "All auditions")
 
+    def test_a_venue_with_an_address_is_a_link_to_a_popup_with_it(self):
+        from backstage.models import Venue
+
+        Venue.objects.filter(name="Esher Theatre").update(address="High Street\nEsher")
+        html = self.client.get(reverse("audition-detail", args=[self.soon.pk])).content.decode()
+        self.assertEqual(html.count("<dialog"), 2)  # one for each of its two dates
+        self.assertIn("High Street<br>Esher", html)
+        self.assertIn(f"getElementById('venue-{self.soon.pk}-1').showModal()", html)
+
+    def test_a_venue_with_no_address_is_just_its_name(self):
+        html = self.client.get(reverse("audition-detail", args=[self.soon.pk])).content.decode()
+        self.assertNotIn("<dialog", html)
+        self.assertIn("Esher Theatre", html)
+
     def test_audition_detail_is_404_when_there_is_no_audition_to_come(self):
         for production in (self.past, self.performance, Production.objects.create(title="Nothing")):
             self.assertEqual(self.client.get(reverse("audition-detail", args=[production.pk])).status_code, 404)
@@ -754,15 +796,15 @@ class AuditionsBlockTests(TestCase):
             link = re.search(rf'<a href="/auditions/{production.pk}/"[^>]*>\s*<img[^>]*alt="{production.title}"', html)
             self.assertIsNotNone(link, production.title)  # the image is inside a link to its own audition page
         # A production with no image has no image link, only date links.
-        self.assertEqual(html.count(f'href="/auditions/{self.no_image.pk}/"'), 1)
+        self.assertEqual(html.count(f'href="/auditions/{self.no_image.pk}/"'), 2)
 
     def test_the_title_is_big_and_the_strap_line_is_under_it(self):
         self.soon.strap_line = "A tale of two halves"
         self.soon.save()
         html = render_to_string(self.block.template, {"block": self.block})
         self.assertIn("text-2xl font-bold md:text-3xl", html)  # bigger than before (it was text-xl)
-        self.assertLess(html.index("Soon Play</h3>"), html.index("A tale of two halves"))
-        self.assertLess(html.index("A tale of two halves"), html.index("Past And Future</h3>"))
+        self.assertLess(html.index("Soon Play</a></h3>"), html.index("A tale of two halves"))
+        self.assertLess(html.index("A tale of two halves"), html.index("Past And Future</a></h3>"))
         self.assertEqual(html.count("<p class=\"mt-1 text-lg italic"), 1)  # only productions that have one
 
     def test_only_the_date_is_shown_not_the_time(self):
@@ -771,7 +813,7 @@ class AuditionsBlockTests(TestCase):
         from home.auditions import upcoming_auditions
 
         html = render_to_string(self.block.template, {"block": self.block})
-        links = re.findall(r'<a href="/auditions/\d+/" class="link link-hover">([^<]+)</a>', html)
+        links = re.findall(r'<a href="/auditions/\d+/" class="relative z-10 link link-hover">([^<]+)</a>', html)
         # One link for each day: Soon Play has two, and Past And Future, No Image and Later have one each.
         self.assertEqual(len(links), 5)
         for text in links:
@@ -795,7 +837,7 @@ class AuditionsBlockTests(TestCase):
         self.assertEqual(len(found.audition_dates), 2)
         self.assertEqual(len(found.audition_days), 1)
         html = render_to_string(self.block.template, {"block": self.block})
-        self.assertEqual(html.count(f'href="/auditions/{production.pk}/"'), 1)  # one date link (it has no image)
+        self.assertEqual(html.count(f'href="/auditions/{production.pk}/"'), 2)  # its title and one date link (it has no image)
 
 
 class EmptyTextTests(TestCase):
@@ -1265,7 +1307,7 @@ class PromotionBlockTests(TestCase):
 
 
 class DiaryBlockTests(TestCase):
-    """A diary block lists productions with published events of one kind: recent or upcoming radio plays, upcoming stage plays or auditions."""
+    """A diary block lists productions with published events of one kind: recent or upcoming radio plays, or upcoming stage plays."""
 
     @classmethod
     def setUpTestData(cls):
@@ -1313,10 +1355,10 @@ class DiaryBlockTests(TestCase):
         self.assertIn(("diary", "Diary"), self.Block.BlockType.choices)
         self.assertEqual(
             [c[1] for c in self.Block.DiaryShow.choices],
-            ["Recent radio plays", "Upcoming radio plays", "Upcoming stage plays", "Auditions"],
+            ["Recent radio plays", "Upcoming radio plays", "Upcoming stage plays"],
         )
         self.assertIn('type="checkbox" name="diary_shows"', str(BlockForm()["diary_shows"]))
-        self.assertIn("What&#x27;s on", self.shown("auditions"))
+        self.assertIn("What&#x27;s on", self.shown("recent_radio"))
 
     def test_recent_radio_plays_are_the_last_6_months_most_recent_first(self):
         self.assertEqual(self.titles("recent_radio"), ["Recent Radio", "Older Radio"])
@@ -1327,21 +1369,18 @@ class DiaryBlockTests(TestCase):
     def test_upcoming_stage_plays_are_earliest_first(self):
         self.assertEqual(self.titles("upcoming_stage"), ["Sooner Stage", "Later Stage"])
 
-    def test_auditions(self):
-        self.assertEqual(self.titles("auditions"), ["Audition Play"])
-
     def test_several_kinds_can_be_ticked_and_are_merged_earliest_first(self):
-        self.assertEqual(self.titles("recent_radio", "auditions", "upcoming_stage"), ["Recent Radio", "Older Radio", "Audition Play", "Sooner Stage", "Later Stage"])
+        self.assertEqual(self.titles("recent_radio", "upcoming_stage"), ["Recent Radio", "Older Radio", "Sooner Stage", "Later Stage"])
         self.assertEqual(self.titles("recent_radio", "upcoming_radio"), ["Recent Radio", "Older Radio", "Coming Radio"])
         self.assertEqual(self.titles(), [])
 
     def test_the_form_keeps_the_ticked_boxes_and_defaults_to_upcoming_stage_plays(self):
         from home.forms import BlockForm
 
-        data = {"name": "D", "block_type": "diary", "image_size": "medium", "layout": "text_left", "diary_shows": ["auditions", "recent_radio"]}
+        data = {"name": "D", "block_type": "diary", "image_size": "medium", "layout": "text_left", "diary_shows": ["upcoming_stage", "recent_radio"]}
         form = BlockForm(data)
         self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.save().diary_shows, ["auditions", "recent_radio"])
+        self.assertEqual(form.save().diary_shows, ["upcoming_stage", "recent_radio"])
         blank = BlockForm({"name": "E", "block_type": "diary", "image_size": "medium", "layout": "text_left"})
         self.assertTrue(blank.is_valid(), blank.errors)
         self.assertEqual(blank.save().diary_shows, ["upcoming_stage"])
@@ -1390,7 +1429,7 @@ class DiaryBlockTests(TestCase):
         from backstage.models import Event
 
         Event.objects.update(publish="not_published")
-        self.assertEqual(self.shown("auditions").strip(), "")
+        self.assertEqual(self.shown("upcoming_stage").strip(), "")
 
 
 class ContactBlockTests(TestCase):

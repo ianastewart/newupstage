@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Auditions · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-8 p-6">
+  <h1 class="text-4xl font-bold">Auditions</h1>
+
+  {# The same view of each audition as the public page, with an Edit button where the public one has Register your interest. #}
+  {% for view in audition_views %}
+    {% include "home/_audition.html" with view=view backstage=True %}
+  {% empty %}
+    <div class="rounded-box bg-base-200 p-12 text-center">
+      <p class="text-lg">No productions have an audition coming up.</p>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,17 +1,23 @@
-<div class="navbar h-[80px] bg-base-100 shadow-sm">
-    <div class="flex-1">
+{# The bar is full width, but its contents line up with the blocks below (max-w-6xl and 1.5rem of padding). #}
+<div class="bg-base-100 shadow-sm">
+  <div class="navbar mx-auto h-[80px] max-w-6xl px-6">
+    <div class="navbar-start">
     {% if navbar_logo %}
-      <a class="btn btn-ghost h-auto px-2 py-1" href="/" aria-label="Home">
-        <img src="{{ navbar_logo.image.url }}" alt="Upstage Surrey" class="h-14 w-auto" />
+      <a class="btn btn-ghost h-auto px-0 py-1" href="/" aria-label="Home">
+        {# On a light theme the "Upstage big bw" image is shown instead (the script below switches them). #}
+        <img src="{{ navbar_logo.image.url }}" alt="Upstage Surrey" class="h-14 w-auto" data-logo="default" />
+        {% if navbar_logo_light %}<img src="{{ navbar_logo_light.image.url }}" alt="Upstage Surrey" class="hidden h-14 w-auto" data-logo="light" />{% endif %}
       </a>
     {% else %}
-      <a class="btn btn-ghost text-xl" href="/" aria-label="Home">🏠</a>
+      <a class="btn btn-ghost px-0 text-xl" href="/" aria-label="Home">🏠</a>
     {% endif %}
       <span class="ml-2 text-lg font-bold uppercase tracking-widest text-primary">Backstage</span>
     </div>
-    <div class="flex-none">
-      {# Full links on wide screens; a menu on phones, where they would be wider than the screen. #}
-      <ul class="menu menu-horizontal hidden gap-1 lg:flex">{% include "includes/nav_links.html" %}</ul>
+    {# Full links, centred, on wide screens; a menu on phones, where they would be wider than the screen. #}
+    <div class="navbar-center hidden lg:flex">
+      <ul class="menu menu-horizontal gap-1">{% include "includes/nav_links.html" %}</ul>
+    </div>
+    <div class="navbar-end">
       <div class="dropdown dropdown-end lg:hidden">
         <div tabindex="0" role="button" class="btn btn-ghost" aria-label="Menu">
           <svg class="size-5 fill-none stroke-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -43,13 +49,24 @@
       </div>
     </div>
   </div>
+  </div>
 
   <script>
+    // Show the light logo on light themes: the theme's colour-scheme says which it is.
+    function showLogoForTheme() {
+      const light = getComputedStyle(document.documentElement).colorScheme.includes('light');
+      document.querySelectorAll('[data-logo]').forEach((img) => {
+        const wanted = light ? 'light' : 'default';
+        img.classList.toggle('hidden', img.dataset.logo !== wanted);
+      });
+    }
+    showLogoForTheme();
     // Tick the saved theme and remember new choices (initial theme is applied in base.html <head>).
     document.querySelectorAll('input.theme-controller[name="theme"]').forEach((radio) => {
       radio.checked = radio.value === document.documentElement.dataset.theme;
       radio.addEventListener('change', () => {
         document.documentElement.dataset.theme = radio.value;
+        showLogoForTheme();
         try { localStorage.setItem('theme', radio.value); } catch (e) {}
       });
     });

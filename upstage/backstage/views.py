@@ -573,6 +573,13 @@ def other_list(request):
     return render(request, "backstage/other_list.html", {"people": people, "details": details, "sort": sort})
 
 
+def audition_list(request):
+    """Every production with an audition still to come, as the public auditions page shows it but with an Edit button."""
+    from home.auditions import audition_view, upcoming_auditions  # Imported here: home imports this module.
+
+    return render(request, "backstage/auditions.html", {"audition_views": [audition_view(p) for p in upcoming_auditions()]})
+
+
 def actor_list(request):
     """
     Everyone with the Actor role: photos and names, or with details. Alphabetical by surname, or by first name
@@ -602,6 +609,10 @@ class TicketSiteView(CRUDView):
 class VenueView(CRUDView):
     model = models.Venue
     fields = ["name", "address", "logo"]
+
+    def get_queryset(self):
+        # The pages show how many events are at each venue (deleting a venue leaves them with none).
+        return super().get_queryset().annotate(event_count=Count("event")).order_by(Lower("name"))
 
 
 class EventView(CRUDView):
