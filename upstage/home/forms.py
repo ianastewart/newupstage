@@ -19,22 +19,27 @@ class BlockForm(forms.ModelForm):
         model = Block
         fields = [
             "name", "block_type", "title", "subtitle", "text", "diary_shows", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights", "title_above", "fade_in_seconds",
-            "background_colour", "text_colour",
+            "background_colour", "background_colour_2", "gradient_direction", "text_colour",
         ]
         widgets = {
-            "text": RichTextWidget(attrs={"rows": 10}),
+            "text": RichTextWidget(attrs={"rows": 10, "data-tools": "bold underline italic bullist numlist indent outdent alignleft aligncenter alignright justify link unlink undo redo"}),
             # Plain text rather than a colour picker, which can't be left blank (blank = theme colour); swatches fill it in.
             "background_colour": forms.TextInput(attrs={"placeholder": "#rrggbb", "data-swatches": ""}),
             "url": forms.TextInput(attrs={"placeholder": "https://... or /page/about/"}),
             "fade_in_seconds": forms.NumberInput(attrs={"min": 0, "max": 30, "step": "0.5"}),
+            "background_colour_2": forms.TextInput(attrs={"placeholder": "#rrggbb", "data-swatches": ""}),
             "text_colour": forms.TextInput(attrs={"placeholder": "#rrggbb", "data-swatches": ""}),
         }
+
+    def clean_gradient_direction(self):
+        return self.cleaned_data["gradient_direction"] or Block.GradientDirection.TO_BOTTOM
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["image"].queryset = Image.objects.order_by("description")
         self.fields["production"].queryset = Production.objects.order_by("title")
         self.fields["fade_in_seconds"].required = False  # left blank, it is the usual 5 seconds
+        self.fields["gradient_direction"].required = False  # left out, it is top to bottom
         self.fields["diary_shows"] = forms.MultipleChoiceField(
             label="Show", required=False, choices=Block.DiaryShow.choices, widget=forms.CheckboxSelectMultiple,
             initial=self.instance.diary_shows or default_diary_shows(),

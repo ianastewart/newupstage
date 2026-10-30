@@ -198,3 +198,22 @@
 .menu-horizontal > li > details > ul {
   margin-top: 0.25rem;
 }
+
+/* The rich text editor follows the daisyUI theme (light or dark) instead of rmeditor's fixed light/dark palettes.
+   Unlayered, like rmeditor.css, and doubled up (.rmeditor-wrap.rmeditor-wrap) because rmeditor.css loads after this
+   file and would win a tie on specificity. */
+.rmeditor-wrap.rmeditor-wrap {
+  --rme-border: var(--color-base-300);
+  --rme-bg: var(--color-base-100);
+  --rme-bar: var(--color-base-200);
+  --rme-fg: var(--color-base-content);
+  --rme-muted: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+  --rme-accent: var(--color-primary);
+}
+.rmeditor-wrap .rme-btn:hover { background: var(--color-base-300); }
+.rmeditor-wrap .rme-select,
+.rmeditor-wrap .rme-palette { background: var(--color-base-200); color: var(--color-base-content); }
+
+/* Tailwind's reset removes list markers; put bullets and numbers back inside the editor. */
+.rmeditor-wrap .rme-area ul { list-style: disc; padding-left: 1.5rem; }
+.rmeditor-wrap .rme-area ol { list-style: decimal; padding-left: 1.5rem; }

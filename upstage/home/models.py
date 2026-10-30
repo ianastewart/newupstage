@@ -170,6 +170,12 @@ class Block(models.Model):
         DIARY = "diary", "Diary"
         CONTACT = "contact", "Contact form"
 
+    class GradientDirection(models.TextChoices):
+        TO_BOTTOM = "to bottom", "Top to bottom"
+        TO_RIGHT = "to right", "Left to right"
+        TO_BOTTOM_RIGHT = "to bottom right", "Diagonal, top left to bottom right"
+        TO_BOTTOM_LEFT = "to bottom left", "Diagonal, top right to bottom left"
+
     class DiaryShow(models.TextChoices):
         RECENT_RADIO = "recent_radio", "Recent radio plays"
         UPCOMING_RADIO = "upcoming_radio", "Upcoming radio plays"
@@ -210,6 +216,14 @@ class Block(models.Model):
     text = models.TextField(blank=True, help_text="HTML. Used by text, text and image, hero image (optional) and auditions (optional) blocks.")
     background_colour = models.CharField(
         max_length=7, blank=True, validators=[hex_colour], help_text="#rrggbb; leave blank for the theme's colour."
+    )
+    background_colour_2 = models.CharField(
+        "Gradient colour", max_length=7, blank=True, validators=[hex_colour],
+        help_text="#rrggbb; to fade the background colour into this one. Leave blank for a plain background.",
+    )
+    gradient_direction = models.CharField(
+        max_length=20, choices=GradientDirection.choices, default=GradientDirection.TO_BOTTOM,
+        help_text="Which way the background colour fades into the gradient colour.",
     )
     text_colour = models.CharField(
         max_length=7, blank=True, validators=[hex_colour], help_text="#rrggbb; leave blank for the theme's colour."
@@ -332,6 +346,19 @@ class Block(models.Model):
     def has_visible_text(self):
         """Whether the block's text shows anything (an empty paragraph from the editor does not count)."""
         return html_has_content(self.text)
+
+    @property
+    def background_css(self):
+        """The block's background as CSS: its colour, or a gradient from it to the gradient colour (it needs the first)."""
+        if not self.background_colour:
+            return ""
+        if not self.background_colour_2:
+            return f"background-color: {self.background_colour};"
+        direction = self.GradientDirection(self.gradient_direction).value  # only a known direction ever reaches the CSS
+        return (
+            f"background-color: {self.background_colour}; "
+            f"background-image: linear-gradient({direction}, {self.background_colour}, {self.background_colour_2});"
+        )
 
     @property
     def has_text(self):

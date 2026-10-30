@@ -7,7 +7,7 @@ With nothing to come the block shows nothing at all, not even its title.
 {% endcomment %}
 {% with productions=block.diary_productions %}
 {% if productions %}
-<section class="rounded-box p-6 md:p-10" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+<section class="rounded-box p-6 md:p-10" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
   {% include "home/blocks/_heading.html" %}
   {% if block.has_visible_text %}
     <div class="mb-8">{% include "home/blocks/_text.html" %}</div>

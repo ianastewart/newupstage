@@ -143,7 +143,7 @@ class ColourSwatchTests(TestCase):
         for url, fields in (
             (reverse("page-create"), 1),
             (reverse("page-edit", args=[page.pk]), 1),
-            (reverse("block-create", args=[page.pk]), 2),
+            (reverse("block-create", args=[page.pk]), 3),  # background, gradient and text colours
         ):
             response = self.client.get(url)
             # One attribute per colour field, plus the script's own selector.
@@ -1732,7 +1732,8 @@ class PublicProductionTests(TestCase):
         self.assertIn(f'href="{reverse("public-actor", args=[ann.pk])}?production={self.production.pk}"', html)
         dee = Person.objects.get(first_name="Dee")  # not an actor: no public page, so no link
         self.assertIn("Dee Rector", html)
-        self.assertNotIn(reverse("public-actor", args=[dee.pk]), html)
+        # (The footer's credit links to /actors/1/, so look for the link a cast list makes.)
+        self.assertNotIn(f'{reverse("public-actor", args=[dee.pk])}?production=', html)
 
     def test_team_members_who_are_not_actors_have_a_public_page(self):
         from backstage.models import Person
@@ -1947,3 +1948,76 @@ class SeoTests(TestCase):
         self.assertNotIn(f"{base}/actors/{self.nobody.pk}/", urls)  # no photo, so no page
         self.assertFalse([u for u in urls if "/backstage/" in u or "/admin/" in u])
         self.assertEqual(len(urls), len(re.findall(r"<loc>", response.content.decode())))  # none twice
+
+
+class FooterTests(TestCase):
+    def test_the_footer_credits_ian_stewart_with_a_link_to_his_page(self):
+        ian = Person.objects.create(pk=1, first_name="Ian", last_name="Stewart")
+        response = self.client.get(reverse("auditions"))
+        self.assertContains(response, f'Website built by <a href="{reverse("public-actor", args=[ian.pk])}"')
+        self.assertNotContains(response, "Created by Ian")
+
+
+class FaviconTests(TestCase):
+    def test_pages_link_the_favicons_and_the_root_address_redirects_to_the_icon(self):
+        html = self.client.get(reverse("auditions")).content.decode()
+        for name in ("favicon.ico", "favicon-32.png", "favicon-16.png", "apple-touch-icon.png"):
+            self.assertIn(f"favicon/{name}", html)
+        response = self.client.get("/favicon.ico")
+        self.assertIn("favicon/favicon.ico", response["Location"])
+        self.assertIn(response.status_code, (301, 302))
+
+
+class BlockGradientTests(TestCase):
+    def block(self, **fields):
+        from home.models import Block
+
+        return Block(name="B", block_type="text", **fields)
+
+    def test_background_css(self):
+        self.assertEqual(self.block().background_css, "")
+        self.assertEqual(self.block(background_colour="#112233").background_css, "background-color: #112233;")
+        # A gradient colour on its own does nothing: there is nothing to fade from.
+        self.assertEqual(self.block(background_colour_2="#445566").background_css, "")
+        gradient = self.block(background_colour="#112233", background_colour_2="#445566", gradient_direction="to right")
+        self.assertEqual(
+            gradient.background_css,
+            "background-color: #112233; background-image: linear-gradient(to right, #112233, #445566);",
+        )
+
+    def test_the_default_direction_is_top_to_bottom(self):
+        self.assertIn("linear-gradient(to bottom,", self.block(background_colour="#112233", background_colour_2="#445566").background_css)
+
+    def test_the_block_is_drawn_with_its_gradient(self):
+        from django.template.loader import render_to_string
+
+        block = self.block(title="T", text="<p>Hi</p>", background_colour="#112233", background_colour_2="#445566")
+        self.assertIn("linear-gradient(to bottom, #112233, #445566)", render_to_string("home/blocks/text.html", {"block": block}))
+
+    def test_the_form_saves_the_gradient_and_the_direction_is_optional(self):
+        from accounts.models import CustomUser
+        from home.models import Block, WebPage
+
+        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        page = WebPage.objects.create(title="About", slug="about")
+        data = {
+            "name": "Fade", "block_type": "text", "title": "", "subtitle": "", "text": "<p>Hi</p>", "layout": "text_left",
+            "image_size": "medium", "background_colour": "#112233", "background_colour_2": "#445566", "text_colour": "", "url": "",
+            "col-TOTAL_FORMS": "4", "col-INITIAL_FORMS": "0", "col-MIN_NUM_FORMS": "0", "col-MAX_NUM_FORMS": "4",
+        }
+        self.assertEqual(self.client.post(reverse("block-create", args=[page.pk]), data).status_code, 302)
+        block = Block.objects.get(name="Fade")
+        self.assertEqual((block.background_colour_2, block.gradient_direction), ("#445566", "to bottom"))
+        data.update(name="Diagonal", gradient_direction="to bottom right")
+        self.client.post(reverse("block-create", args=[page.pk]), data)
+        self.assertEqual(Block.objects.get(name="Diagonal").gradient_direction, "to bottom right")
+
+    def test_a_copy_keeps_the_gradient(self):
+        from home.models import Block
+
+        block = Block.objects.create(
+            name="B", block_type="text", text="<p>x</p>", background_colour="#112233", background_colour_2="#445566",
+            gradient_direction="to right",
+        )
+        copy = block.copy()
+        self.assertEqual((copy.background_colour_2, copy.gradient_direction), ("#445566", "to right"))

@@ -1,6 +1,6 @@
 <footer class="footer sm:footer-horizontal footer-center relative bg-base-300 text-base-content p-4">
     <aside>
-      <p class="bg-amber-50">Created by Ian</p>
+      <p>Website built by <a href="{% url 'public-actor' 1 %}" class="link link-hover text-violet-400">Ian Stewart</a></p>
     </aside>
     <div class="absolute bottom-4 right-4 text-sm">
       {% if user.is_authenticated %}

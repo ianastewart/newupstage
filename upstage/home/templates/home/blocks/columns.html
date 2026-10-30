@@ -12,14 +12,14 @@ With title_above off, each column's title is under its image instead of above it
   {% include "home/blocks/_heading.html" %}
   <div class="grid gap-4 md:gap-6 {% if count == 2 %}md:grid-cols-2{% elif count == 3 %}md:grid-cols-3{% else %}md:grid-cols-2 lg:grid-cols-4{% endif %}{% if not block.equal_height %} items-start{% endif %}">
     {% for column in columns %}
-      <div class="flex min-w-0 flex-col rounded-box{% if flush %} gap-0 overflow-hidden{% else %} gap-4 p-6{% endif %}{% if not block.background_colour %} bg-base-200{% endif %}{% if block.equal_height %} h-full{% endif %}" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+      <div class="flex min-w-0 flex-col rounded-box{% if flush %} gap-0 overflow-hidden{% else %} gap-4 p-6{% endif %}{% if not block.background_colour %} bg-base-200{% endif %}{% if block.equal_height %} h-full{% endif %}" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
         {% include "home/blocks/_column.html" with flush=flush roomy=True ratio=ratio above=above %}
       </div>
     {% endfor %}
   </div>
 </section>
 {% else %}
-<section class="rounded-box p-6 md:p-10" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+<section class="rounded-box p-6 md:p-10" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
   {% include "home/blocks/_heading.html" %}
   <div class="grid gap-8 {% if count == 2 %}md:grid-cols-2{% elif count == 3 %}md:grid-cols-3{% else %}md:grid-cols-2 lg:grid-cols-4{% endif %}">
     {% for column in columns %}

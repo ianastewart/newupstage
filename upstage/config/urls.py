@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.sitemaps.views import sitemap
+from django.templatetags.static import static as static_url
 from django.urls import URLPattern, include, path, re_path
+from django.views.generic import RedirectView
 from django.views.static import serve
 from django.conf import settings
 from django.conf.urls.static import static
@@ -13,6 +15,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("sitemap.xml", login_not_required(sitemap), {"sitemaps": SITEMAPS}, name="sitemap"),
     path("robots.txt", robots_txt, name="robots"),
+    # Browsers ask for /favicon.ico whatever the page says; send them to the real file.
+    path("favicon.ico", login_not_required(RedirectView.as_view(url=static_url("favicon/favicon.ico"))), name="favicon"),
     path("accounts/", include("accounts.urls")),
     path("", include("home.urls")),
     path("backstage/", include("backstage.urls")),

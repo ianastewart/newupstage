@@ -3,7 +3,7 @@ A contact block: its title, subtitle and text, then a form for first name, last 
 a checkbox each for the occasional newsletter, acting and backstage roles. It posts to the page it is on (the view saves a Contact
 and comes back with ?sent=<block id>, which shows a thank-you instead of the form). The hidden "website" box is for bots.
 {% endcomment %}
-<section id="contact-{{ block.pk }}" class="rounded-box p-6 md:p-10" style="{% if block.background_colour %}background-color: {{ block.background_colour }};{% endif %}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+<section id="contact-{{ block.pk }}" class="rounded-box p-6 md:p-10" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
   {% include "home/blocks/_heading.html" %}
   {% if block.has_visible_text %}
     <div class="mb-6">{% include "home/blocks/_text.html" %}</div>
