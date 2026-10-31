@@ -15,7 +15,6 @@ def months_ago(when, months):
     year, month = divmod(index, 12)
     month += 1
     return when.replace(year=year, month=month, day=min(when.day, calendar.monthrange(year, month)[1]))
-SHOWN = [Event.Publish.PUBLISHED, Event.Publish.PROMOTED]
 
 
 def periods(shows, now):
@@ -55,7 +54,7 @@ def diary_productions(shows=("upcoming_stage",)):
     if not in_period:
         return []
     dates = (
-        EventDateTime.objects.filter(in_period, event__publish__in=SHOWN)
+        EventDateTime.objects.filter(in_period, event__publish__in=Event.SHOWN)
         .select_related("event__venue__logo", "event__ticket_site")
         .prefetch_related("event__productions")
         .order_by("datetime", "pk")

@@ -57,7 +57,7 @@ def production_ticket_url(production):
     date = (
         EventDateTime.objects.filter(
             event__productions=production,
-            event__publish__in=[Event.Publish.PUBLISHED, Event.Publish.PROMOTED],
+            event__publish__in=Event.SHOWN,
             event__ticket_site__url__gt="",
             datetime__gte=timezone.now(),
         )
@@ -77,7 +77,7 @@ def production_venue(production):
     dates = list(
         EventDateTime.objects.filter(
             event__productions=production,
-            event__publish__in=[Event.Publish.PUBLISHED, Event.Publish.PROMOTED],
+            event__publish__in=Event.SHOWN,
             event__venue__logo__isnull=False,
         ).select_related("event__venue__logo")
     )

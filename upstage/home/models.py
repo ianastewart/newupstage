@@ -254,6 +254,14 @@ class Block(models.Model):
         "Images the same height", default=False,
         help_text="Columns blocks: every image is as tall as the shortest one; the taller images are cropped to match.",
     )
+    centre_heading = models.BooleanField(
+        "Centre the title and subtitle", default=False,
+        help_text="The title and subtitle are centred instead of at the left.",
+    )
+    full_width = models.BooleanField(
+        "Full width", default=False,
+        help_text="Text blocks: the background runs the full width of the page, with the content still lined up with the other blocks.",
+    )
     title_above = models.BooleanField(
         "Title above", default=True,
         help_text="Columns blocks: each column's title is above its image; if off, it is under the image.",
@@ -436,7 +444,11 @@ class Block(models.Model):
 
     def clean(self):
         errors = {}
-        if self.has_text and not self.has_visible_text:
+        if self.block_type == self.BlockType.TEXT:
+            # The text is optional: a text block can be just a title and subtitle, but not nothing at all.
+            if not (self.title or self.subtitle or self.has_visible_text):
+                errors["text"] = "Give this block a title, a subtitle or some text."
+        elif self.has_text and not self.has_visible_text:
             errors["text"] = "This type of block needs some text."
         if self.block_type == self.BlockType.CAST:
             if not self.production_id:

@@ -2021,3 +2021,63 @@ class BlockGradientTests(TestCase):
         )
         copy = block.copy()
         self.assertEqual((copy.background_colour_2, copy.gradient_direction), ("#445566", "to right"))
+
+
+class CentreHeadingTests(TestCase):
+    """A text block can centre its title and subtitle."""
+
+    def render(self, centre):
+        from home.models import Block
+
+        block = Block.objects.create(name="T", block_type="text", title="Hello", subtitle="There", centre_heading=centre)
+        return render_to_string("home/blocks/_heading.html", {"block": block})
+
+    def test_centred_only_when_ticked(self):
+        self.assertIn("text-center", self.render(True))
+        self.assertNotIn("text-center", self.render(False))
+
+
+class CentreHeadingFormTests(TestCase):
+    """The block form offers the centre-heading tick box."""
+
+    def test_form_has_the_checkbox(self):
+        from django.urls import reverse
+        from accounts.models import CustomUser
+        from home.models import WebPage
+
+        page = WebPage.objects.create(title="P", slug="p")
+        self.client.force_login(CustomUser.objects.create_user("m", "m@example.com", "a-Long-pa55word!"))
+        response = self.client.get(reverse("block-create", args=[page.pk]))
+        self.assertContains(response, 'name="centre_heading"')
+
+
+class TextBlockOptionalTextTests(TestCase):
+    """A text block's text is optional, and it can run the full width of a public page."""
+
+    def make(self, **kwargs):
+        from home.models import Block
+
+        return Block(name="T", block_type="text", **kwargs)
+
+    def test_a_text_block_needs_a_title_subtitle_or_text(self):
+        from django.core.exceptions import ValidationError
+
+        with self.assertRaises(ValidationError):
+            self.make().full_clean()
+        self.make(title="Just a title").full_clean()
+        self.make(subtitle="Just a subtitle").full_clean()
+        self.make(text="<p>Just text</p>").full_clean()
+
+    def test_other_blocks_still_need_text(self):
+        from django.core.exceptions import ValidationError
+        from home.models import Block
+
+        with self.assertRaises(ValidationError):
+            Block(name="S", block_type="split", title="x").full_clean()
+
+    def test_full_width_only_on_a_public_page(self):
+        block = self.make(title="Wide", full_width=True)
+        block.save()
+        self.assertIn("full-bleed", render_to_string(block.template, {"block": block, "public_page": True}))
+        self.assertNotIn("full-bleed", render_to_string(block.template, {"block": block}))
+        self.assertNotIn("prose", render_to_string(block.template, {"block": block, "public_page": True}))

@@ -1,6 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import F, Min, Q
+from django.db.models import Exists, F, Min, OuterRef, Q
 from django_enum import EnumField
 
 from backstage.fields import HeadshotImageField
@@ -110,6 +110,12 @@ class Venue(models.Model):
         return self.name
 
 
+class EventQuerySet(models.QuerySet):
+    def published(self):
+        """The events the public site shows: Published or Promoted ones."""
+        return self.filter(publish__in=Event.SHOWN)
+
+
 class Event(models.Model):
     """ Wrapper for 1 or more stage productions """
 
@@ -125,6 +131,11 @@ class Event(models.Model):
         PUBLISHED = "published", "Published"
         PROMOTED = "promoted", "Promoted"
 
+    # The Publish values the public site shows (Promoted only adds a badge in backstage).
+    SHOWN = [Publish.PUBLISHED, Publish.PROMOTED]
+
+    objects = EventQuerySet.as_manager()
+
     event_type = models.CharField(
         max_length=20, choices=EventType.choices, default=EventType.PERFORMANCE
     )
@@ -139,6 +150,11 @@ class Event(models.Model):
 
     def __str__(self):
         return self.get_event_type_display()
+
+    @property
+    def published(self):
+        """Whether the public site shows this event (it is Published or Promoted)."""
+        return self.publish in self.SHOWN
 
 
 class EventDateTime(models.Model):
@@ -169,6 +185,14 @@ class ProductionQuerySet(models.QuerySet):
     def with_broadcast_date(self):
         """Each production has `broadcast_at`: its broadcast date, or None (see Production.broadcast_datetime)."""
         return self.annotate(broadcast_at=broadcast_date())
+
+    def published(self):
+        """The productions with a published event (see Production.published)."""
+        return self.filter(Exists(Event.objects.published().filter(productions=OuterRef("pk"))))
+
+    def unpublished(self):
+        """The productions with no published event."""
+        return self.filter(~Exists(Event.objects.published().filter(productions=OuterRef("pk"))))
 
 
 class Production(models.Model):
@@ -205,6 +229,12 @@ class Production(models.Model):
             raise ValidationError({"parent": "A parent production cannot itself be part of another."})
         if self.parent.type != self.type:
             raise ValidationError({"parent": f"The parent is a {self.parent.get_type_display().lower()}, so this must be one too."})
+
+    @property
+    def published(self):
+        """Whether the production is published: it has at least one Published or Promoted event. For queries use
+        `Production.objects.published()` / `.unpublished()`."""
+        return self.events.published().exists()
 
     @property
     def is_parent(self):
@@ -259,7 +289,7 @@ class Production(models.Model):
     def _listen_url(self, published_only):
         events = self.events.filter(event_type=Event.EventType.BROADCAST).exclude(listen_url="")
         if published_only:
-            events = events.filter(publish__in=[Event.Publish.PUBLISHED, Event.Publish.PROMOTED])
+            events = events.published()
         event = events.annotate(first_date=Min("datetimes__datetime")).order_by(F("first_date").asc(nulls_last=True), "pk").first()
         return event.listen_url if event else ""
 

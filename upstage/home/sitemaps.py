@@ -45,7 +45,7 @@ class EventSitemap(Sitemap):
     """Published events only, as on the site."""
 
     def items(self):
-        return Event.objects.filter(publish__in=[Event.Publish.PUBLISHED, Event.Publish.PROMOTED]).order_by("pk")
+        return Event.objects.published().order_by("pk")
 
     def location(self, event):
         return reverse("public-event", args=[event.pk])

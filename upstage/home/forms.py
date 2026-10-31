@@ -18,7 +18,7 @@ class BlockForm(forms.ModelForm):
     class Meta:
         model = Block
         fields = [
-            "name", "block_type", "title", "subtitle", "text", "diary_shows", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights", "title_above", "fade_in_seconds",
+            "name", "block_type", "title", "subtitle", "text", "diary_shows", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights", "title_above", "centre_heading", "full_width", "fade_in_seconds",
             "background_colour", "background_colour_2", "gradient_direction", "text_colour",
         ]
         widgets = {

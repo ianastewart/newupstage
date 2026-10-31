@@ -324,7 +324,7 @@ def auditions(request):
 def event_detail(request, pk):
     """One event's public page: what it is, where, every date, who it is for and how to get tickets. Published events only."""
     event = get_object_or_404(
-        Event.objects.filter(publish__in=[Event.Publish.PUBLISHED, Event.Publish.PROMOTED])
+        Event.objects.published()
         .select_related("venue__logo", "ticket_site")
         .prefetch_related("datetimes", "productions__images__image"),
         pk=pk,

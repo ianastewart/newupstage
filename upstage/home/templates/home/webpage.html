@@ -14,7 +14,7 @@
 {% block content %}
 <div class="mx-auto max-w-6xl space-y-6 p-6">
   {% for page_block in page_blocks %}
-    {% include page_block.block.template with block=page_block.block %}
+    {% include page_block.block.template with block=page_block.block public_page=True %}
   {% empty %}
     <div class="rounded-box bg-base-200 p-12 text-center">
       <p>This page has no blocks yet.</p>

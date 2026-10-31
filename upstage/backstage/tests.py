@@ -3264,3 +3264,28 @@ class NavbarLightLogoTests(TestCase):
         Image.objects.create(description="Upstage Surrey Logo", image="images/dark-logo.png", image_type="logo")
         self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
         self.assertNotContains(self.client.get(reverse("production-list")), 'data-logo="light"')
+
+
+class ProductionPublishedTests(TestCase):
+    """A production is published when it has a Published or Promoted event."""
+
+    def make(self, title, *publishes):
+        from backstage.models import Event
+
+        production = Production.objects.create(title=title)
+        for publish in publishes:
+            production.events.add(Event.objects.create(event_type="performance", publish=publish))
+        return production
+
+    def test_property(self):
+        self.assertFalse(self.make("None").published)
+        self.assertFalse(self.make("Hidden", "not_published").published)
+        self.assertTrue(self.make("Shown", "not_published", "published").published)
+        self.assertTrue(self.make("Pushed", "promoted").published)
+
+    def test_querysets_agree_with_the_property(self):
+        for title, publishes in [("A", ()), ("B", ("not_published",)), ("C", ("published",)), ("D", ("promoted", "published"))]:
+            self.make(title, *publishes)
+        self.assertEqual(sorted(Production.objects.published().values_list("title", flat=True)), ["C", "D"])
+        self.assertEqual(sorted(Production.objects.unpublished().values_list("title", flat=True)), ["A", "B"])
+        self.assertEqual(Production.objects.published().count(), len([p for p in Production.objects.all() if p.published]))

@@ -685,10 +685,7 @@ class ProductionView(CRUDView):
             if production_type := self.get_type():
                 queryset = queryset.filter(type=production_type)
             if published := self.get_published():
-                shown = models.Event.objects.filter(
-                    productions=OuterRef("pk"), publish__in=[models.Event.Publish.PUBLISHED, models.Event.Publish.PROMOTED]
-                )
-                queryset = queryset.filter(Exists(shown) if published == "published" else ~Exists(shown))
+                queryset = queryset.published() if published == "published" else queryset.unpublished()
             if search := self.get_search():
                 queryset = queryset.filter(title__icontains=search)
             queryset = queryset.order_by(*self.SORTS[self.get_sort()][1])
