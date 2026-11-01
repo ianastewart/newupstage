@@ -416,7 +416,7 @@ class Contact(models.Model):
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     email = models.EmailField()
-    newsletter = models.BooleanField("Occasional newsletter", default=False)
+    newsletter = models.BooleanField("Mails about new productions", default=False)
     acting = models.BooleanField("Acting", default=False)
     backstage = models.BooleanField("Backstage roles", default=False)
 

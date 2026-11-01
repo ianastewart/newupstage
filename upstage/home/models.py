@@ -169,6 +169,7 @@ class Block(models.Model):
         PROMOTION = "promotion", "Promotion"
         DIARY = "diary", "Diary"
         CONTACT = "contact", "Contact form"
+        PEOPLE = "people", "People"
 
     class GradientDirection(models.TextChoices):
         TO_BOTTOM = "to bottom", "Top to bottom"
@@ -207,12 +208,21 @@ class Block(models.Model):
         BlockType.PROMOTION: "home/blocks/promotion.html",
         BlockType.DIARY: "home/blocks/diary.html",
         BlockType.CONTACT: "home/blocks/contact.html",
+        BlockType.PEOPLE: "home/blocks/people.html",
     }
 
     name = models.CharField(max_length=255, help_text="Identifies the block when adding it to pages.")
     block_type = models.CharField(max_length=20, choices=BlockType.choices, default=BlockType.TEXT)
     title = models.CharField(max_length=255, blank=True)
     subtitle = models.CharField(max_length=255, blank=True)
+    anchor = models.SlugField(
+        max_length=50, blank=True,
+        help_text="Optional. Link to this block from a link or button with #anchor, e.g. #tickets; the page scrolls smoothly to it.",
+    )
+    people = models.ManyToManyField(
+        "backstage.Person", blank=True, related_name="+",
+        help_text="People blocks: the people to show, in a grid, each with their photo and name.",
+    )
     text = models.TextField(blank=True, help_text="HTML. Used by text, text and image, hero image (optional) and auditions (optional) blocks.")
     background_colour = models.CharField(
         max_length=7, blank=True, validators=[hex_colour], help_text="#rrggbb; leave blank for the theme's colour."
@@ -429,13 +439,23 @@ class Block(models.Model):
         with_public_urls([member.actor for member in members], self.production)
         return members
 
+    def people_list(self):
+        """For a people block: the people chosen (by last name), each with `public_url`: their public page, or ""."""
+        from .views import with_public_urls  # Imported here: the views import this module.
+
+        people = list(self.people.select_related("image"))
+        with_public_urls(people)
+        return people
+
     def copy(self):
-        """A copy of the block, with " (copy)" added to its name, and a copy of its columns."""
+        """A copy of the block, with " (copy)" added to its name, and a copy of its columns and people."""
         columns = list(self.columns.all())
+        people = list(self.people.all())
         block = Block.objects.get(pk=self.pk)
         block.pk = None
         block.name = f"{self.name} (copy)"[:255]
         block.save()
+        block.people.set(people)
         for column in columns:
             column.pk = None
             column.block = block

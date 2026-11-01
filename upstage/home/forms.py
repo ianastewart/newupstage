@@ -1,7 +1,7 @@
 from django import forms
 from rmeditor.widgets import RichTextWidget
 
-from backstage.models import Image, Production
+from backstage.models import Image, Person, Production
 
 from .models import Block, BlockColumn, WebPage, default_diary_shows
 
@@ -18,7 +18,7 @@ class BlockForm(forms.ModelForm):
     class Meta:
         model = Block
         fields = [
-            "name", "block_type", "title", "subtitle", "text", "diary_shows", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights", "title_above", "centre_heading", "full_width", "fade_in_seconds",
+            "name", "block_type", "title", "subtitle", "anchor", "text", "people", "diary_shows", "production", "image", "url", "image_size", "layout", "separate_columns", "equal_height", "flush_images", "match_image_heights", "title_above", "centre_heading", "full_width", "fade_in_seconds",
             "background_colour", "background_colour_2", "gradient_direction", "text_colour",
         ]
         widgets = {
@@ -38,6 +38,8 @@ class BlockForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["image"].queryset = Image.objects.order_by("description")
         self.fields["production"].queryset = Production.objects.order_by("title")
+        self.fields["people"].queryset = Person.objects.order_by("last_name", "first_name")
+        self.fields["people"].widget.attrs["size"] = 12
         self.fields["fade_in_seconds"].required = False  # left blank, it is the usual 5 seconds
         self.fields["gradient_direction"].required = False  # left out, it is top to bottom
         self.fields["diary_shows"] = forms.MultipleChoiceField(
@@ -45,6 +47,12 @@ class BlockForm(forms.ModelForm):
             initial=self.instance.diary_shows or default_diary_shows(),
             help_text=Block._meta.get_field("diary_shows").help_text.replace(" (a list of DiaryShow values)", ""),
         )  # none ticked is upcoming stage plays
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("block_type") == Block.BlockType.PEOPLE and not cleaned.get("people"):
+            self.add_error("people", "Choose at least one person.")
+        return cleaned
 
     def clean_diary_shows(self):
         return self.cleaned_data.get("diary_shows") or default_diary_shows()

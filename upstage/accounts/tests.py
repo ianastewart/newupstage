@@ -147,3 +147,24 @@ class PublicActorTests(TestCase):
         response = self.client.get(reverse("person-detail", args=[self.with_image.pk]))
         self.assertContains(response, "The Test Play")
         self.assertContains(response, "Hamlet")
+
+
+class UserAdminTests(TestCase):
+    """Users can be listed, added and changed in the Django admin."""
+
+    def setUp(self):
+        self.admin = CustomUser.objects.create_superuser("boss", "boss@example.com", "pw12345!x")
+        self.client.force_login(self.admin)
+
+    def test_the_user_screens_open(self):
+        for url in ("/admin/accounts/customuser/", "/admin/accounts/customuser/add/", f"/admin/accounts/customuser/{self.admin.pk}/change/"):
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+
+    def test_a_user_can_be_added(self):
+        response = self.client.post(
+            "/admin/accounts/customuser/add/",
+            {"username": "newbie", "password1": "Str0ng-pass-123", "password2": "Str0ng-pass-123"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(CustomUser.objects.get(username="newbie").check_password("Str0ng-pass-123"))
+

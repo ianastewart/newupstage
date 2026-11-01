@@ -1,17 +1,22 @@
 {% comment %}
 A contact block: its title, subtitle and text, then a form for first name, last name and email, and "I am interested in" with
-a checkbox each for the occasional newsletter, acting and backstage roles. It posts to the page it is on (the view saves a Contact
+a checkbox each for mails about new productions, acting and backstage roles. It posts to the page it is on (the view saves a Contact
 and comes back with ?sent=<block id>, which shows a thank-you instead of the form). The hidden "website" box is for bots.
 {% endcomment %}
-<section id="contact-{{ block.pk }}" class="rounded-box p-6 md:p-10" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+<section id="contact-{{ block.pk }}" class="rounded-box p-6 md:p-6" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
   {% include "home/blocks/_heading.html" %}
-  {% if block.has_visible_text %}
-    <div class="mb-6">{% include "home/blocks/_text.html" %}</div>
-  {% endif %}
-  {% if contact_sent == block.pk %}
-    <div role="status" class="alert alert-success">Thank you, we have your details.</div>
-  {% else %}
-    {% if contact_block == block.pk %}{% with form=contact_form %}{% include "home/blocks/_contact_form.html" %}{% endwith %}
-    {% else %}{% with form=block.contact_form %}{% include "home/blocks/_contact_form.html" %}{% endwith %}{% endif %}
-  {% endif %}
+  {# On mobile the text sits above the form; from md up it moves to the right of it. #}
+  <div class="{% if block.has_visible_text %}grid gap-6 md:grid-cols-2 md:gap-10{% endif %}">
+    {% if block.has_visible_text %}
+      <div class="md:col-start-2 md:row-start-1">{% include "home/blocks/_text.html" %}</div>
+    {% endif %}
+    <div class="md:col-start-1 md:row-start-1">
+      {% if contact_sent == block.pk %}
+        <div role="status" class="alert alert-success">Thank you, we have your details.</div>
+      {% else %}
+        {% if contact_block == block.pk %}{% with form=contact_form %}{% include "home/blocks/_contact_form.html" %}{% endwith %}
+        {% else %}{% with form=block.contact_form %}{% include "home/blocks/_contact_form.html" %}{% endwith %}{% endif %}
+      {% endif %}
+    </div>
+  </div>
 </section>

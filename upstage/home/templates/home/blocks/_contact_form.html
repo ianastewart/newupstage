@@ -1,5 +1,5 @@
 {# The contact block's form (`form`, and `block`). #}
-<form method="POST" action="" class="max-w-xl rounded-box bg-base-100 p-4 text-base-content shadow-sm">
+<form method="POST" action="" data-theme="nord" class="contact-form max-w-xl bg-transparent text-inherit">
   {% csrf_token %}
   <input type="hidden" name="contact_block" value="{{ block.pk }}" />
   {# A trap for bots: hidden from people. #}

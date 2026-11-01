@@ -1,12 +1,12 @@
 {% comment %}
 An auditions block: its title, subtitle and text, then every production with an audition still to come. Each is a card of three
-columns: a small image, the title (with the production's strap line under it), and the audition days, without times. The image and the days link to the audition's page. On phones the columns stack.
+columns: the audition days (without times), a small image, and the title (with the production's strap line under it). The image and the days link to the audition's page. On phones the columns stack.
 With no audition to come the block shows nothing at all, not even its title.
 The cards use the theme's card colours, so they stand out on any background colour the block has.
 {% endcomment %}
 {% with productions=block.upcoming_auditions %}
 {% if productions %}
-<section class="rounded-box p-6 md:p-10" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+<section class="rounded-box p-6 md:p-6" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
   {% include "home/blocks/_heading.html" %}
   {% if block.has_visible_text %}
     <div class="mb-8">{% include "home/blocks/_text.html" %}</div>
@@ -14,9 +14,18 @@ The cards use the theme's card colours, so they stand out on any background colo
   <ul class="space-y-4">
     {% for production in productions %}
       {# The whole card is a link to the audition's page: the title's link is stretched over it, and the links inside (image, writers, days) sit above it. #}
-      <li class="relative grid items-center gap-4 rounded-box bg-base-100 p-4 text-base-content shadow-sm transition hover:shadow-md md:grid-cols-3">
-        {# Column 1: the image (an empty column if there is none, so the other columns still line up). #}
-        <div>
+      <li class="relative grid items-center gap-4 rounded-box bg-[#050b2a] p-4 text-white shadow-sm transition hover:shadow-md md:grid-cols-[2fr_3fr_3fr]">
+        {# Column 1: the audition days (just the date, not the time). #}
+        <div class="text-center">
+        <div class="text-2xl font-semibold">Auditions</div>
+        <ul class="space-y-1 text-xl">
+          {% for day in production.audition_days %}
+            <li><a href="{% url 'audition-detail' production.pk %}" class="relative z-10 link link-hover">{{ day|date:"D j M Y" }}</a></li>
+          {% endfor %}
+        </ul>
+        </div>
+        {# Column 2: the image, centred (an empty column if there is none, so the other columns still line up). #}
+        <div class="flex justify-center">
           {% with cover=production.default_image %}
             {% if cover %}
               <a href="{% url 'audition-detail' production.pk %}" class="relative z-10 inline-block" aria-label="{{ production.title }} auditions">
@@ -25,22 +34,13 @@ The cards use the theme's card colours, so they stand out on any background colo
             {% endif %}
           {% endwith %}
         </div>
-        {# Column 2: the title, with the strap line under it. #}
+        {# Column 3: the title, with the strap line under it. #}
         <div>
           <h3 class="text-2xl font-bold md:text-3xl"><a href="{% url 'audition-detail' production.pk %}" class="after:absolute after:inset-0">{{ production.title }}</a></h3>
           {% if production.writers %}
             <p class="mt-1">Written by {% for writer in production.writers %}{% if writer.public_url %}<a href="{{ writer.public_url }}" class="relative z-10 link link-hover text-violet-400">{{ writer }}</a>{% else %}{{ writer }}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
           {% endif %}
           {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
-        </div>
-        {# Column 3: the audition days (just the date, not the time). #}
-        <div>
-        <div class="text-xl">Auditions</div>
-        <ul class="space-y-1">
-          {% for day in production.audition_days %}
-            <li><a href="{% url 'audition-detail' production.pk %}" class="relative z-10 link link-hover">{{ day|date:"D j M Y" }}</a></li>
-          {% endfor %}
-        </ul>
         </div>
       </li>
     {% endfor %}

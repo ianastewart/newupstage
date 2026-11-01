@@ -8,13 +8,13 @@
 {% endblock %}
 
 {% block hero %}
-  {% if hero %}{% include hero.template with block=hero full_width=True %}{% endif %}
+  {% if hero %}<div{% if hero.anchor %} id="{{ hero.anchor }}"{% endif %}>{% include hero.template with block=hero full_width=True %}</div>{% endif %}
 {% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-6xl space-y-6 p-6">
   {% for page_block in page_blocks %}
-    {% include page_block.block.template with block=page_block.block public_page=True %}
+    <div{% if page_block.block.anchor %} id="{{ page_block.block.anchor }}"{% endif %}>{% include page_block.block.template with block=page_block.block public_page=True %}</div>
   {% empty %}
     <div class="rounded-box bg-base-200 p-12 text-center">
       <p>This page has no blocks yet.</p>

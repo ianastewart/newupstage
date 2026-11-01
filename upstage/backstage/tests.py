@@ -152,7 +152,7 @@ class SeparateThemesTests(TestCase):
     def setUpTestData(cls):
         from home.models import WebPage
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", cls.PASSWORD)
+        cls.user = CustomUser.objects.create_user("member", "member@example.com", cls.PASSWORD, is_staff=True)
         WebPage.objects.create(title="Home", slug="home")  # the home view shows the page with this slug
 
     def choose(self, theme, **extra):
@@ -229,7 +229,19 @@ class SeparateThemesTests(TestCase):
         response = self.choose("abyss", next="https://evil.example/steal")
         self.assertEqual(response["Location"], reverse("production-list"))
 
-    def test_the_backstage_navbar_offers_both(self):
+    def test_only_staff_can_change_the_public_theme(self):
+        from backstage.models import SiteSettings
+
+        member = CustomUser.objects.create_user("plain", "plain@example.com", self.PASSWORD)
+        self.client.force_login(member)
+        response = self.client.post(reverse("public-theme"), {"public_theme": "abyss"})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(SiteSettings.load().public_theme, "")
+        html = self.client.get(reverse("production-list")).content.decode()
+        self.assertIn("The theme of these backstage pages", html)  # their own theme is still theirs to choose
+        self.assertNotIn("The theme visitors see on the public pages", html)  # but not the public one
+
+    def test_the_backstage_navbar_offers_both_to_staff(self):
         self.choose("dracula")
         html = self.client.get(reverse("production-list")).content.decode()
         self.assertIn("The theme of these backstage pages", html)

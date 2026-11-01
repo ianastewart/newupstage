@@ -19,7 +19,7 @@ With title_above off, each column's title is under its image instead of above it
   </div>
 </section>
 {% else %}
-<section class="rounded-box p-6 md:p-10" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+<section class="rounded-box p-6 md:p-6" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
   {% include "home/blocks/_heading.html" %}
   <div class="grid gap-8 {% if count == 2 %}md:grid-cols-2{% elif count == 3 %}md:grid-cols-3{% else %}md:grid-cols-2 lg:grid-cols-4{% endif %}">
     {% for column in columns %}

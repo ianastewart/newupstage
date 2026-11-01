@@ -7,6 +7,7 @@ from django.utils import timezone
 from backstage.models import Event, EventDateTime, Production
 
 RECENT_MONTHS = 6  # how far back "recent radio plays" goes
+MAX_RECENT = 4  # and the most of them shown (the newest)
 
 
 def months_ago(when, months):
@@ -40,7 +41,7 @@ def periods(shows, now):
 def diary_productions(shows=("upcoming_stage",)):
     """
     The productions that have a published (or promoted) event of any of the chosen kinds (those already past, most recent
-    first, then those still to come, soonest first): recent radio plays (broadcast in the last 6 months), upcoming radio
+    first, then those still to come, soonest first): recent radio plays (broadcast in the last 6 months, at most the 4 newest), upcoming radio
     plays and upcoming stage plays (performances). Each production has `diary_events`: its events of those kinds,
     earliest first, each with
     `dates` (its dates in the period, earliest first, as EventDateTimes), `upcoming` (it has a date still to come), and
@@ -80,4 +81,4 @@ def diary_productions(shows=("upcoming_stage",)):
     # Productions already past (recent radio plays) come first, the most recent first; then those still to come, soonest first.
     past = sorted((p for p in result if p.first_date < now), key=lambda p: (-p.first_date.timestamp(), p.title))
     coming = sorted((p for p in result if p.first_date >= now), key=lambda p: (p.first_date, p.title))
-    return past + coming
+    return past[:MAX_RECENT] + coming

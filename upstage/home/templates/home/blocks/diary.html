@@ -7,14 +7,14 @@ With nothing to come the block shows nothing at all, not even its title.
 {% endcomment %}
 {% with productions=block.diary_productions %}
 {% if productions %}
-<section class="rounded-box p-6 md:p-10" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+<section class="rounded-box p-6 md:p-6" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
   {% include "home/blocks/_heading.html" %}
   {% if block.has_visible_text %}
     <div class="mb-8">{% include "home/blocks/_text.html" %}</div>
   {% endif %}
   <ul class="space-y-4">
     {% for production in productions %}
-      <li class="grid items-center gap-4 rounded-box bg-base-100 p-4 text-base-content shadow-sm md:grid-cols-3">
+      <li class="grid items-center gap-4 rounded-box bg-[#14061f] p-4 text-white shadow-sm md:grid-cols-3">
         {# Column 1: the image (an empty column if there is none, so the other columns still line up). It and the title link to the production's page. #}
         <div>
           {% with cover=production.default_image %}

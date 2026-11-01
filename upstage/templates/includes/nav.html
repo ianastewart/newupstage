@@ -24,7 +24,7 @@
         </div>
         <ul tabindex="0" class="dropdown-content menu z-10 w-48 rounded-box bg-base-200 p-2 shadow-lg">{% include "includes/nav_links.html" %}</ul>
       </div>
-      {# Two themes: the one for these backstage pages (your own, kept in this browser) and the one visitors see on the public pages (for everyone). Many themes: the lists scroll. #}
+      {# Two themes: the one for these backstage pages (your own, kept in this browser) and the one visitors see on the public pages (for everyone; only staff can change it). Many themes: the lists scroll. #}
       <div class="dropdown dropdown-end">
         <div tabindex="0" role="button" class="btn btn-ghost" title="The theme of these backstage pages: your own choice">
           Theme<span class="hidden sm:inline">: backstage</span>
@@ -34,6 +34,7 @@
           {% include "includes/theme_options.html" %}
         </ul>
       </div>
+      {% if user.is_staff %}
       <div class="dropdown dropdown-end">
         <div tabindex="0" role="button" class="btn btn-ghost" title="The theme visitors see on the public pages">
           Public<span class="hidden sm:inline"> theme</span>
@@ -47,6 +48,7 @@
           </ul>
         </form>
       </div>
+      {% endif %}
     </div>
   </div>
   </div>

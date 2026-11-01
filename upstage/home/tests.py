@@ -405,13 +405,13 @@ class ColumnsBlockTests(TestCase):
 
     def test_shared_card_is_the_default(self):
         html = self.columns_html()
-        self.assertIn("rounded-box p-6 md:p-10", html)  # the one card round all the columns
+        self.assertIn("rounded-box p-6 md:p-6", html)  # the one card round all the columns
         self.assertEqual(html.count("bg-base-200"), 0)
         self.assertIn("gap-8", html)
 
     def test_separate_columns_are_each_their_own_card_with_a_gap(self):
         html = self.columns_html(separate_columns=True)
-        self.assertNotIn("md:p-10", html)  # no card round them all
+        self.assertNotIn("md:p-6", html)  # no card round them all
         self.assertEqual(html.count("gap-4 p-6"), 3)  # one padded card each
         self.assertEqual(html.count("bg-base-200"), 3)  # with the theme's card colour...
         self.assertIn("gap-4 md:gap-6", html)  # ...and a gap between
@@ -699,13 +699,13 @@ class AuditionsBlockTests(TestCase):
         cards = re.findall(r'<li class="relative grid[^"]*">', html)
         self.assertEqual(len(cards), 4)  # one card for each production
         for card in cards:
-            self.assertIn("md:grid-cols-3", card)  # three columns side by side...
-            self.assertIn("bg-base-100", card)  # ...in a card...
+            self.assertIn("md:grid-cols-[2fr_3fr_3fr]", card)  # three columns side by side (the dates narrower)
+            self.assertIn("bg-[#050b2a]", card)  # ...in a card...
             self.assertNotRegex(card, r"(?<![:\w-])grid-cols-\d")  # ...which stack on a phone
-        # Column 1 is the image, column 2 the title, column 3 the dates.
+        # Column 1 is the dates, column 2 the image, column 3 the title.
         card = html[html.index("<li class=\"relative grid"):html.index("Past And Future")]
+        self.assertLess(card.index("<ul"), card.index("<img"))
         self.assertLess(card.index("<img"), card.index("Soon Play</a></h3>"))
-        self.assertLess(card.index("Soon Play</a></h3>"), card.index("<ul"))
         self.assertEqual(card.count("<h3"), 1)
 
     def test_a_card_with_no_image_keeps_its_first_column(self):
@@ -1338,6 +1338,9 @@ class DiaryBlockTests(TestCase):
         make("Recent Radio", "broadcast", -30)
         make("Older Radio", "broadcast", -150)
         make("Old Radio", "broadcast", -200)
+        make("Radio Two", "broadcast", -40)
+        make("Radio Three", "broadcast", -50)
+        make("Radio Four", "broadcast", -60)
         make("Coming Radio", "broadcast", 4, ticket=True)
         cls.Block = Block
 
@@ -1360,8 +1363,9 @@ class DiaryBlockTests(TestCase):
         self.assertIn('type="checkbox" name="diary_shows"', str(BlockForm()["diary_shows"]))
         self.assertIn("What&#x27;s on", self.shown("recent_radio"))
 
-    def test_recent_radio_plays_are_the_last_6_months_most_recent_first(self):
-        self.assertEqual(self.titles("recent_radio"), ["Recent Radio", "Older Radio"])
+    def test_recent_radio_plays_are_the_newest_4_of_the_last_6_months_newest_first(self):
+        # Older Radio (150 days ago) is in the 6 months but would be a fifth; Old Radio (200 days) is too old.
+        self.assertEqual(self.titles("recent_radio"), ["Recent Radio", "Radio Two", "Radio Three", "Radio Four"])
 
     def test_upcoming_radio_plays(self):
         self.assertEqual(self.titles("upcoming_radio"), ["Coming Radio"])
@@ -1370,8 +1374,9 @@ class DiaryBlockTests(TestCase):
         self.assertEqual(self.titles("upcoming_stage"), ["Sooner Stage", "Later Stage"])
 
     def test_several_kinds_can_be_ticked_and_are_merged_earliest_first(self):
-        self.assertEqual(self.titles("recent_radio", "upcoming_stage"), ["Recent Radio", "Older Radio", "Sooner Stage", "Later Stage"])
-        self.assertEqual(self.titles("recent_radio", "upcoming_radio"), ["Recent Radio", "Older Radio", "Coming Radio"])
+        past = ["Recent Radio", "Radio Two", "Radio Three", "Radio Four"]
+        self.assertEqual(self.titles("recent_radio", "upcoming_stage"), past + ["Sooner Stage", "Later Stage"])
+        self.assertEqual(self.titles("recent_radio", "upcoming_radio"), past + ["Coming Radio"])
         self.assertEqual(self.titles(), [])
 
     def test_the_form_keeps_the_ticked_boxes_and_defaults_to_upcoming_stage_plays(self):
@@ -1452,7 +1457,7 @@ class ContactBlockTests(TestCase):
         html = self.client.get(self.url).content.decode()
         self.assertIn("Get in touch", html)
         self.assertIn("I am interested in", html)
-        for label in ("Occasional newsletter", "Acting", "Backstage roles"):
+        for label in ("Mails about new productions", "Acting", "Backstage roles"):
             self.assertIn(label, html)
         for name in ("first_name", "last_name", "email"):
             self.assertIn(f'name="{name}"', html)
@@ -1462,7 +1467,7 @@ class ContactBlockTests(TestCase):
 
         labels = {f.name: str(f.verbose_name) for f in Contact._meta.get_fields()}
         self.assertEqual(labels["created"], "Creation date")
-        self.assertEqual(labels["newsletter"], "Occasional newsletter")
+        self.assertEqual(labels["newsletter"], "Mails about new productions")
         self.assertEqual(labels["acting"], "Acting")
         self.assertEqual(labels["backstage"], "Backstage roles")
 

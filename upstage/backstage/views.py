@@ -1,6 +1,6 @@
 from django.db.models import CharField, Count, Exists, F, Min, OuterRef, Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import HttpResponseNotAllowed, HttpResponseRedirect
+from django.http import HttpResponseForbidden, HttpResponseNotAllowed, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.forms import HiddenInput
 from django.urls import reverse
@@ -499,7 +499,7 @@ def other_roles(request, pk):
 
 def contact_list(request):
     """The people who have filled in a contact form, newest first. ?interest=newsletter|acting|backstage narrows it, ?q= searches."""
-    interests = {"newsletter": "Occasional newsletter", "acting": "Acting", "backstage": "Backstage roles"}
+    interests = {"newsletter": "Mails about new productions", "acting": "Acting", "backstage": "Backstage roles"}
     contacts = models.Contact.objects.all()
     interest = request.GET.get("interest")
     if interest in interests:
@@ -739,9 +739,11 @@ class ProductionImageView(CRUDView):
 
 
 def set_public_theme(request):
-    """Choose the theme the public pages use (POST public_theme: a theme name, or "" for automatic), then go back."""
+    """Choose the theme the public pages use (POST public_theme: a theme name, or "" for automatic), then go back. Staff only."""
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
+    if not request.user.is_staff:
+        return HttpResponseForbidden("Only staff can change the public theme.")
     chosen = request.POST.get("public_theme", "")
     if chosen == "" or is_theme(chosen):
         settings_row = models.SiteSettings.load()

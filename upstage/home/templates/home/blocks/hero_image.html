@@ -7,7 +7,7 @@
         <img src="{{ block.image.image.url }}" alt="{{ block.image.description }}" class="hero-fade-in block h-auto w-full" />
       {% endif %}
       {% if block.title or block.subtitle or block.has_visible_text %}
-        <header class="absolute inset-x-0 top-[50%] flex flex-col items-center p-3 text-center md:p-10">
+        <header class="absolute inset-x-0 top-[50%] flex flex-col items-center p-3 text-center md:p-6">
           {% if block.title %}<h2 class="text-2xl font-bold drop-shadow sm:text-3xl md:text-6xl">{{ block.title }}</h2>{% endif %}
           <div class="hero-text-fade hidden flex-col items-center md:flex">
             {% include "home/blocks/_hero_text.html" %}

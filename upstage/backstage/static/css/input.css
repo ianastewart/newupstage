@@ -214,8 +214,41 @@
 .rmeditor-wrap .rme-select,
 .rmeditor-wrap .rme-palette { background: var(--color-base-200); color: var(--color-base-content); }
 
+/* The contact block's form: pale blue input boxes with black text, and pale blue labels and prompts.
+   Unlayered so it beats the daisyUI input styles above. */
+.contact-form input:not([type=checkbox], [type=radio], [type=hidden], [type=submit]) {
+  background-color: var(--color-sky-300);
+  color: #000;
+}
+.contact-form input[type=checkbox] {
+  background-color: var(--color-sky-300);
+  border-color: var(--color-sky-500);
+  border-radius: 0;
+}
+.contact-form label,
+.contact-form legend,
+.contact-form .label,
+.contact-form span {
+  color: var(--color-sky-200);
+}
+.contact-form .btn {
+  background-color: var(--color-sky-300);
+  border: 2px solid var(--color-sky-950);
+  color: var(--color-sky-950);
+}
+.contact-form .btn:hover {
+  background-color: var(--color-sky-400);
+  border-color: var(--color-sky-950);
+}
+
 /* A full width block breaks out of the page's centred column to the edges of the window. */
 html { overflow-x: clip; }
+
+/* Links to a block's anchor (#tickets) scroll smoothly, stopping below the sticky navbar. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+html { scroll-padding-top: 5rem; }
 .full-bleed { width: 100vw; margin-left: calc(50% - 50vw); }
 
 /* Tailwind's reset removes list markers; put bullets and numbers back inside the editor. */

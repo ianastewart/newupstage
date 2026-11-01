@@ -1,0 +1,20 @@
+{% comment %}
+A people block: its title, subtitle, then the chosen people in a grid. Each has their photo at the size it has on their own page
+(up to 300px high), with their name underneath; both link to their public page if they have one, and someone with no photo
+shows their initials.
+{% endcomment %}
+<section class="rounded-box p-6 md:p-6" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+  {% include "home/blocks/_heading.html" %}
+  <div class="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-8">
+    {% for person in block.people_list %}
+      <{% if person.public_url %}a href="{{ person.public_url }}" class="flex flex-col items-center gap-3 text-center transition hover:opacity-80"{% else %}div class="flex flex-col items-center gap-3 text-center"{% endif %}>
+        {% if person.image %}
+          <img src="{{ person.image.image.url }}" alt="{{ person }}" loading="lazy" class="h-auto max-h-[300px] w-auto max-w-full rounded-box shadow-sm" />
+        {% else %}
+          <span class="flex h-[300px] w-full max-w-[240px] items-center justify-center rounded-box bg-base-300 text-5xl font-bold text-base-content opacity-60" aria-hidden="true">{{ person.first_name|slice:":1" }}{{ person.last_name|slice:":1" }}</span>
+        {% endif %}
+        <span class="text-lg font-semibold">{{ person }}</span>
+      </{% if person.public_url %}a{% else %}div{% endif %}>
+    {% endfor %}
+  </div>
+</section>

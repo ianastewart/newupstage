@@ -1,14 +1,14 @@
 {# A text block, in its own background and text colours. Full width (on a public page): the background runs edge to edge, with the content kept in line with the other blocks. The text is optional. #}
 {% if block.full_width and public_page %}
-<section class="full-bleed py-6 md:py-10" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+<section class="full-bleed {% if block.has_visible_text or block.subtitle %}py-6 md:py-6{% else %}py-6{% endif %}" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
   <div class="mx-auto max-w-6xl px-6">
-    {% include "home/blocks/_heading.html" %}
+    {% include "home/blocks/_heading.html" with tight=block.has_visible_text|yesno:",1" %}
     {% if block.has_visible_text %}{% include "home/blocks/_text.html" %}{% endif %}
   </div>
 </section>
 {% else %}
-<section class="rounded-box p-6 md:p-10" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
-  {% include "home/blocks/_heading.html" %}
+<section class="rounded-box {% if block.has_visible_text or block.subtitle %}p-6 md:p-6{% else %}p-6{% endif %}" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
+  {% include "home/blocks/_heading.html" with tight=block.has_visible_text|yesno:",1" %}
   {% if block.has_visible_text %}{% include "home/blocks/_text.html" %}{% endif %}
 </section>
 {% endif %}
