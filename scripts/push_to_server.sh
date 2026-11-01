@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # REPLACE the database and/or media on the Coolify server with the local ones.  This overwrites production data.
 #
-# Usage:  scripts/push_to_server.sh [--dry-run] [db|media|all]      (default: all)
+# Usage:  scripts/push_to_server.sh [--dry-run] [--yes] [db|media|all]      (default: all)
 #   --dry-run   make the local dump/archive and check the server containers, but change nothing on the server
+#   --yes       skip the typed confirmation (for when there is no keyboard to answer it); the server is still backed up first
 #
 # What it does:
 #   1. makes the local dump (USE_COMPOSE_DB=1: the docker compose db; otherwise PGHOST/PGPORT/PGUSER/PGDATABASE) and media archive
@@ -28,9 +29,15 @@ export PGUSER=${PGUSER:-postgres} PGDATABASE=${PGDATABASE:-upstage}
 : "${DB_FILTER:?Set DB_FILTER (docker name filter for the database container)}"
 
 dry=0
-[ "${1:-}" = "--dry-run" ] && { dry=1; shift; }
+yes=0
+while [ "${1:-}" = "--dry-run" ] || [ "${1:-}" = "--yes" ]; do
+  [ "$1" = "--dry-run" ] && dry=1
+  [ "$1" = "--yes" ] && yes=1
+  shift
+done
 what=${1:-all}
-case "$what" in db|media|all) ;; *) echo "Usage: $0 [--dry-run] [db|media|all]" >&2; exit 1 ;; esac
+case "$what" in db|media|all) ;; *) echo "Usage: $0 [--dry-run] [--yes] [db|media|all]" >&2; exit 1 ;; esac
+[ $# -le 1 ] || { echo "Usage: $0 [--dry-run] [--yes] [db|media|all]" >&2; exit 1; }
 
 stamp=$(date +%Y%m%d-%H%M%S)
 local_dir="$OUT_DIR/local"
@@ -79,8 +86,12 @@ OUT_DIR="$OUT_DIR/server-before-push" "$(dirname "$0")/pull_from_server.sh" "$wh
 # 3. Confirm
 echo
 echo "This will REPLACE the $what on $SERVER with the local version."
-read -r -p "Type the server name (${SERVER#*@}) to continue: " answer
-[ "$answer" = "${SERVER#*@}" ] || { echo "Cancelled."; exit 1; }
+if [ "$yes" = 1 ]; then
+  echo "--yes given: continuing without the typed confirmation."
+else
+  read -r -p "Type the server name (${SERVER#*@}) to continue: " answer
+  [ "$answer" = "${SERVER#*@}" ] || { echo "Cancelled."; exit 1; }
+fi
 
 # 4. Database
 if [ "$what" != media ]; then
