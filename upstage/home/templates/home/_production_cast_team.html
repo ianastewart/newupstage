@@ -1,6 +1,6 @@
 {# The cast (left) and the production team (right), side by side where there is room (`cast`, `team`). #}
-<div class="mx-auto grid w-full max-w-3xl items-start gap-6 md:grid-cols-2 md:gap-4">
-  <section class="text-center">
+<div class="mx-auto grid w-full max-w-3xl items-start gap-6{% if show.cast and show.team %} md:grid-cols-2 md:gap-4{% endif %}">
+  {% if show.cast %}<section class="text-center">
     <h2 class="mb-3 text-lg font-semibold uppercase tracking-wide opacity-70">Cast</h2>
     {% if cast %}
       <dl class="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -12,6 +12,6 @@
     {% else %}
       <p class="opacity-70">The cast hasn't been announced yet.</p>
     {% endif %}
-  </section>
-  <div>{% include "home/_production_team.html" %}</div>
+  </section>{% endif %}
+  {% if show.team %}<div>{% include "home/_production_team.html" %}</div>{% endif %}
 </div>

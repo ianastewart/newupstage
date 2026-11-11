@@ -1,4 +1,6 @@
+from django.contrib.auth.decorators import login_not_required
 from django.urls import path
+from django.views.generic import RedirectView
 
 from . import views
 
@@ -10,7 +12,8 @@ urlpatterns = [
     path("productions/<int:pk>/", views.public_production, name="public-production"),
     path("events/<int:pk>/", views.event_detail, name="public-event"),
     path("radio-archive/", views.radio_archive, name="radio-archive"),
-    path("radio-archive/<int:pk>/", views.radio_play, name="radio-play"),
+    # Radio plays used to have their own page: the production page replaces it.
+    path("radio-archive/<int:pk>/", login_not_required(RedirectView.as_view(pattern_name="public-production", permanent=True))),
     path("stage-shows/", views.stage_shows, name="stage-shows"),
     path("films/", views.films, name="films"),
     path("writers/", views.writer_list, name="public-writers"),

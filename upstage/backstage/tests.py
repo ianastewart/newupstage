@@ -3345,3 +3345,63 @@ class FindListenUrlTests(TestCase):
         other.events.add(self.production.events.first())
         other.find_listen_url(cached=True)
         self.assertEqual(self.find.call_count, 2)
+
+
+class ProductionPublicViewTabTests(TestCase):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.production = Production.objects.create(title="The Play")
+
+    def test_the_tab_offers_the_image_choices_and_the_checkboxes(self):
+        from backstage.models import Image, ProductionImage
+
+        ProductionImage.objects.create(production=self.production, image=Image.objects.create(description="Pic", image="images/pic.jpg"))
+        ProductionImage.objects.create(production=self.production, image=Image.objects.create(description="Pic 2", image="images/pic2.jpg"))
+        Image.objects.create(description="Elsewhere", image="images/elsewhere.jpg")
+        response = self.client.get(reverse("production-public", args=[self.production.pk]))
+        self.assertEqual(response.status_code, 200)
+        for text in ("images/pic.jpg", "Default image", "Title", "Strap line", "Description", "Cast", "Team", "View public page"):
+            self.assertContains(response, text)
+        self.assertContains(response, reverse("public-production", args=[self.production.pk]))
+        self.assertContains(response, 'id="public-modal"')
+        self.assertNotContains(response, "images/elsewhere.jpg")  # only the production's own images
+
+    def test_every_production_page_has_the_tab(self):
+        self.assertContains(self.client.get(reverse("production-images", args=[self.production.pk])), "Public view")
+
+    def test_the_background_colour_is_saved_and_a_bad_one_means_the_default(self):
+        url = reverse("production-public", args=[self.production.pk])
+        self.client.post(url, {"image": "", "colour": "#112233"})
+        self.production.refresh_from_db()
+        self.assertEqual((self.production.public_colour, self.production.public_background), ("#112233", "#112233"))
+        self.client.post(url, {"image": "", "colour": "purple"})
+        self.production.refresh_from_db()
+        self.assertEqual((self.production.public_colour, self.production.public_background), ("", "#2e1065"))
+
+    def test_the_default_colour_is_stored_as_blank(self):
+        self.client.post(reverse("production-public", args=[self.production.pk]), {"image": "", "colour": "#2E1065"})
+        self.production.refresh_from_db()
+        self.assertEqual(self.production.public_colour, "")
+
+    def test_a_single_image_is_shown_without_a_choice(self):
+        from backstage.models import Image, ProductionImage
+
+        ProductionImage.objects.create(production=self.production, image=Image.objects.create(description="Only", image="images/only.jpg"))
+        response = self.client.get(reverse("production-public", args=[self.production.pk]))
+        self.assertContains(response, "images/only.jpg")
+        self.assertNotContains(response, 'name="image"')
+        self.assertContains(response, 'type="color"')
+
+    def test_choosing_an_image_saves_it_and_it_must_be_the_productions_own(self):
+        from backstage.models import Image, ProductionImage
+
+        own = Image.objects.create(description="Own", image="images/own.jpg")
+        other = Image.objects.create(description="Other", image="images/other.jpg")
+        ProductionImage.objects.create(production=self.production, image=own)
+        url = reverse("production-public", args=[self.production.pk])
+        self.client.post(url, {"image": own.pk})
+        self.production.refresh_from_db()
+        self.assertEqual(self.production.public_image, own)
+        self.client.post(url, {"image": other.pk})  # not one of its images: nothing chosen
+        self.production.refresh_from_db()
+        self.assertIsNone(self.production.public_image)

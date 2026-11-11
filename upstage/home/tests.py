@@ -47,46 +47,55 @@ class RadioArchiveTests(TestCase):
         self.assertContains(self.client.get(reverse("radio-archive"), {"q": "zzz"}), 'No radio plays match "zzz"')
         self.assertEqual(len(found("")), 3)
 
-    def test_detail_shows_image_writer_team_and_cast(self):
-        response = self.client.get(reverse("radio-play", args=[self.new.pk]))
+    def test_a_play_links_to_its_production_page(self):
+        self.assertContains(self.client.get(reverse("radio-archive")), reverse("public-production", args=[self.new.pk]))
+
+    def test_the_old_radio_archive_address_redirects_to_the_production_page(self):
+        response = self.client.get(f"/radio-archive/{self.new.pk}/")
+        self.assertRedirects(response, reverse("public-production", args=[self.new.pk]), status_code=301)
+
+    def test_production_page_shows_image_team_and_cast(self):
+        response = self.client.get(reverse("public-production", args=[self.new.pk]))
         self.assertEqual(response.status_code, 200)
-        for text in ("images/test-cover.jpg", "Wendy Writer", "Dan Director", "Director", "Hamlet", "Ann Actor"):
+        for text in ("images/test-cover.jpg", "Wendy Writer", "Dan Director", "Hamlet", "Ann Actor"):
             self.assertContains(response, text)
-        # The writer has their own heading, so isn't repeated as a team role.
-        self.assertEqual([member.role.name for member in response.context["team"]], ["Director"])
 
     def test_a_play_with_no_broadcast_date_hides_its_cast_and_awaits_a_date(self):
         Cast.objects.create(production=self.undated, character_name="Ophelia", actor=Person.objects.create(first_name="Bea", last_name="Actor"))
-        response = self.client.get(reverse("radio-play", args=[self.undated.pk]))
+        response = self.client.get(reverse("public-production", args=[self.undated.pk]))
         self.assertContains(response, "Awaiting broadcast date")
         self.assertNotContains(response, "Ophelia")
-        self.assertNotContains(self.client.get(reverse("radio-play", args=[self.new.pk])), "Awaiting broadcast date")
+        self.assertNotContains(self.client.get(reverse("public-production", args=[self.new.pk])), "Awaiting broadcast date")
 
     def test_the_cast_is_sorted_by_actor_first_name_with_unplayed_parts_last(self):
         Cast.objects.create(production=self.new, character_name="Unfilled", actor=None)
         Cast.objects.create(production=self.new, character_name="Ghost", actor=Person.objects.create(first_name="Zed", last_name="Aaa"))
         Cast.objects.create(production=self.new, character_name="Maid", actor=Person.objects.create(first_name="bea", last_name="Zzz"))
-        response = self.client.get(reverse("radio-play", args=[self.new.pk]))
+        response = self.client.get(reverse("public-production", args=[self.new.pk]))
         self.assertEqual([part.character_name for part in response.context["cast"]], ["Hamlet", "Maid", "Ghost", "Unfilled"])
 
-    def test_detail_404_for_other_types(self):
-        self.assertEqual(self.client.get(reverse("radio-play", args=[self.stage.pk])).status_code, 404)
-
     def test_play_without_image_still_renders(self):
-        self.assertEqual(self.client.get(reverse("radio-play", args=[self.old.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("public-production", args=[self.old.pk])).status_code, 200)
 
     def test_listen_now_button_only_when_there_is_a_listen_url(self):
-        self.assertNotContains(self.client.get(reverse("radio-play", args=[self.new.pk])), "Listen now")
+        url = reverse("public-production", args=[self.new.pk])
+        self.assertNotContains(self.client.get(url), "Listen now")
         from backstage.models import Event
 
         event = Event.objects.create(event_type="broadcast", publish="published", listen_url="https://example.com/listen")
         event.productions.add(self.new)
-        response = self.client.get(reverse("radio-play", args=[self.new.pk]))
+        response = self.client.get(url)
         self.assertContains(response, "Listen now")
         self.assertContains(response, 'href="https://example.com/listen"')
         event.publish = "not_published"  # only a published broadcast's address is offered
         event.save()
-        self.assertNotContains(self.client.get(reverse("radio-play", args=[self.new.pk])), "Listen now")
+        self.assertNotContains(self.client.get(url), "Listen now")
+
+    def test_the_radio_plays_menu_item_is_highlighted_on_a_radio_plays_page(self):
+        response = self.client.get(reverse("public-production", args=[self.new.pk]))
+        self.assertContains(response, f'<a href="{reverse("radio-archive")}" class="menu-active">Radio plays</a>', count=2)
+        response = self.client.get(reverse("public-production", args=[self.stage.pk]))
+        self.assertNotContains(response, 'class="menu-active">Radio plays')
 
 
 class PublicNavTests(TestCase):
@@ -1678,6 +1687,7 @@ class PublicProductionTests(TestCase):
 
         cls.site = TicketSite.objects.create(name="Tickets", url="https://tickets.example.com/p")
         cls.production = Production.objects.create(title="The Play", strap_line="A strap")
+        cls.production.set_broadcast(timezone.now() - timedelta(days=30))  # a radio play's cast waits for a date
         event = Event.objects.create(event_type="performance", publish="published", ticket_site=cls.site)
         event.productions.add(cls.production)
         EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=5))
@@ -1688,30 +1698,43 @@ class PublicProductionTests(TestCase):
         ProductionImage.objects.create(production=cls.production, image=cls.cover, is_default=True)
         cls.url = reverse("public-production", args=[cls.production.pk])
 
-    def test_with_a_promotion_image_it_has_the_button_centred_under_the_image(self):
-        from backstage.models import ProductionImage
-
-        promo = Image.objects.create(description="Promo", image="images/promo.jpg", image_type="promotion")
-        ProductionImage.objects.create(production=self.production, image=promo)
+    def test_it_shows_the_default_image_with_the_button_centred_under_it_then_cast_and_team(self):
         html = self.client.get(self.url).content.decode()
-        self.assertIn("images/promo.jpg", html)
+        self.assertIn("images/cover.jpg", html)  # no image chosen: the default one
         self.assertNotIn("absolute bottom-[30px]", html)  # the button is under the image, not on it
         self.assertIn("mt-4 flex flex-wrap items-center justify-center", html)
         self.assertIn("https://tickets.example.com/p", html)
-        self.assertNotIn("images/cover.jpg", html)
-        self.assertIn("Dee Rector", html)  # the team
-        self.assertIn("Hamlet", html)  # the cast is shown too, beside the team
+        self.assertIn("Dee Rector", html)
+        self.assertIn("Hamlet", html)
         self.assertIn("md:grid-cols-2", html)
         self.assertLess(html.index("Hamlet"), html.index("Dee Rector"))  # cast left, team right
 
-    def test_without_one_it_is_a_card_with_cast_team_and_the_button(self):
+    def test_it_shows_the_image_chosen_on_the_public_view_tab(self):
+        from backstage.models import ProductionImage
+
+        chosen = Image.objects.create(description="Chosen", image="images/chosen.jpg", image_type="gallery")
+        ProductionImage.objects.create(production=self.production, image=chosen)
+        self.production.public_image = chosen
+        self.production.save()
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("images/chosen.jpg", html)
+        self.assertNotIn("images/cover.jpg", html)
+
+    def test_everything_is_in_a_box_deep_purple_unless_another_colour_is_set(self):
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("background-color: #2e1065; color: #ffffff;", html)
+        self.production.public_colour = "#fdfaf4"
+        self.production.save()
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("background-color: #fdfaf4; color: #1f1720;", html)  # dark text on a light box
+
+    def test_a_chosen_image_no_longer_on_the_production_falls_back_to_the_default(self):
+        gone = Image.objects.create(description="Gone", image="images/gone.jpg", image_type="gallery")
+        self.production.public_image = gone  # never (or no longer) one of its images
+        self.production.save()
         html = self.client.get(self.url).content.decode()
         self.assertIn("images/cover.jpg", html)
-        self.assertIn("Hamlet", html)
-        self.assertIn("Dee Rector", html)
-        self.assertIn("Director", html)
-        self.assertIn("https://tickets.example.com/p", html)
-        self.assertNotIn("absolute bottom-[30px]", html)
+        self.assertNotIn("images/gone.jpg", html)
 
     def test_it_has_a_listen_button_when_there_are_no_tickets(self):
         from backstage.models import Event, EventDateTime
@@ -1739,6 +1762,32 @@ class PublicProductionTests(TestCase):
         self.assertEqual(html.count("images/logo.png"), 1)
         self.assertLess(html.index("Listen now"), html.index("images/logo.png"))
         self.assertLess(html.index("images/logo.png"), html.index("</div>", html.index("Listen now")))  # same row
+
+    def test_custom_view_shows_only_the_chosen_parts(self):
+        html = self.client.get(self.url, {"custom": 1, "show": ["title", "team"]}).content.decode()
+        self.assertIn("images/cover.jpg", html)  # the image is always shown
+        self.assertIn("The Play", html)
+        self.assertIn("Dee Rector", html)
+        self.assertNotIn("A strap", html)
+        self.assertNotIn("Hamlet", html)
+        self.assertNotIn("md:grid-cols-2", html)  # one column only
+
+    def test_custom_view_has_no_menu_or_footer_and_fits_the_image(self):
+        html = self.client.get(self.url, {"custom": 1, "show": ["title"]}).content.decode()
+        self.assertNotIn("navbar", html)
+        self.assertNotIn("Log in", html)  # the footer
+        self.assertIn("max-h-[75vh]", html)
+        normal = self.client.get(self.url).content.decode()
+        self.assertIn("navbar", normal)
+        self.assertNotIn("max-h-[75vh]", normal)
+
+    def test_custom_view_with_nothing_ticked_shows_no_parts(self):
+        html = self.client.get(self.url, {"custom": 1}).content.decode()
+        for text in ("A strap", "Hamlet", "Dee Rector"):
+            self.assertNotIn(text, html)
+
+    def test_the_page_may_be_framed_by_the_site_itself(self):
+        self.assertEqual(self.client.get(self.url)["X-Frame-Options"], "SAMEORIGIN")
 
     def test_it_is_public_and_a_missing_production_is_not_found(self):
         self.assertEqual(self.client.get(self.url).status_code, 200)
@@ -1889,10 +1938,9 @@ class SeoTests(TestCase):
         self.assertEqual(tags["og_image"], "http://testserver/media/images/poster.jpg")
         self.assertIsNone(tags["robots"])  # public pages are for the search engines
 
-    def test_a_radio_play_has_one_address_whichever_page_it_was_reached_by(self):
-        radio_url = f"http://testserver{reverse('radio-play', args=[self.radio.pk])}"
-        self.assertEqual(self.tags(reverse("public-production", args=[self.radio.pk]))[1]["canonical"], radio_url)
-        self.assertEqual(self.tags(reverse("radio-play", args=[self.radio.pk]))[1]["canonical"], radio_url)
+    def test_a_radio_play_has_its_production_page_as_its_address(self):
+        url = reverse("public-production", args=[self.radio.pk])
+        self.assertEqual(self.tags(url)[1]["canonical"], f"http://testserver{url}")
 
     def test_a_person_page_uses_the_biography_and_photo(self):
         _, tags = self.tags(reverse("public-actor", args=[self.actor.pk]) + f"?production={self.stage.pk}")
@@ -1961,12 +2009,12 @@ class SeoTests(TestCase):
             f"{base}/", f"{base}/actors/", f"{base}/radio-archive/", f"{base}/auditions/",
             f"{base}/page/about/",
             f"{base}/productions/{self.stage.pk}/",
-            f"{base}/radio-archive/{self.radio.pk}/",  # a radio play is listed by its radio archive page
+            f"{base}/productions/{self.radio.pk}/",
             f"{base}/events/{self.published.pk}/",
             f"{base}/actors/{self.actor.pk}/",
         ):
             self.assertIn(expected, urls)
-        self.assertNotIn(f"{base}/productions/{self.radio.pk}/", urls)
+        self.assertNotIn(f"{base}/radio-archive/{self.radio.pk}/", urls)  # that address only redirects
         self.assertNotIn(f"{base}/page/home/", urls)  # the home page is the root
         self.assertNotIn(f"{base}/page/about-copy/", urls)  # a copy still being worked on
         self.assertNotIn(f"{base}/events/{self.hidden.pk}/", urls)  # not published
@@ -2128,7 +2176,7 @@ class AwaitingArchiveTests(TestCase):
 
     def test_a_broadcast_play_without_a_url_shows_the_message_on_both_pages(self):
         play = self.play(-1)
-        for name in ("radio-play", "public-production"):
+        for name in ("public-production",):
             with self.subTest(name):
                 response = self.client.get(reverse(name, args=[play.pk]))
                 self.assertContains(response, self.MESSAGE)
@@ -2136,11 +2184,11 @@ class AwaitingArchiveTests(TestCase):
 
     def test_a_play_with_a_url_shows_the_button_not_the_message(self):
         play = self.play(-1, url="https://x.example/a.mp3")
-        response = self.client.get(reverse("radio-play", args=[play.pk]))
+        response = self.client.get(reverse("public-production", args=[play.pk]))
         self.assertContains(response, "Listen now")
         self.assertNotContains(response, self.MESSAGE)
 
     def test_a_play_not_yet_broadcast_shows_neither(self):
-        response = self.client.get(reverse("radio-play", args=[self.play(5).pk]))
+        response = self.client.get(reverse("public-production", args=[self.play(5).pk]))
         self.assertNotContains(response, self.MESSAGE)
         self.assertNotContains(response, "Listen now")

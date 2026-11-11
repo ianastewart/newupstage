@@ -6,6 +6,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from django.views.decorators.clickjacking import xframe_options_sameorigin
+
 from backstage.forms import ContactForm
 from backstage.models import Event, EventDateTime, Person, Production, Role
 from backstage.views import person_productions
@@ -47,7 +49,10 @@ def person_seo(request, person):
 
 
 def production_image(production):
-    """The image that stands for a production in link previews: its promotion image, else its default image."""
+    """The image that stands for a production in link previews: the one chosen for its public page, else its promotion
+    image, else its default image."""
+    if production.public_image_id:
+        return production.public_view_image
     link = production.default_image
     return promotion_image(production) or (link.image if link else None)
 
@@ -262,37 +267,38 @@ def radio_archive(request):
     })
 
 
-@login_not_required
-def radio_play(request, pk):
-    """One radio play: a bigger image, the writer, the rest of the production team and the cast."""
-    play = get_object_or_404(radio_plays().prefetch_related("cast__actor", "team__person", "team__role"), pk=pk)
-    # The writer has their own line, so the team list leaves them out.
-    team = sorted(
-        (member for member in play.team.all() if member.role.name != "Writer"),
-        key=lambda member: (member.role.name, member.person.last_name, member.person.first_name),
-    )
-    play.find_listen_url(cached=True)
-    cast = cast_by_actor_name(play.cast.all())
-    writers = [member.person for member in play.team.all() if member.role.name == "Writer"]
-    with_public_urls([member.person for member in team] + writers + [part.actor for part in cast], play)
-    return render(request, "home/radio_play.html", {
-        "play": play, "team": team, "cast": cast, "writers": writers,
-        "seo": seo(request, title=play.title, description=play.description, image=production_image(play)),
-    })
+# The parts of a production's public page that the backstage Public view tab can switch off.
+PUBLIC_VIEW_PARTS = ("title", "strap_line", "description", "cast", "team")
+
+
+def public_view_options(request):
+    """
+    Which parts of a production's public page to show. Normally all of them; a request with `custom` (from the
+    backstage Public view tab) shows only the parts named by its `show` values.
+    """
+    if "custom" not in request.GET:
+        return {part: True for part in PUBLIC_VIEW_PARTS}
+    chosen = set(request.GET.getlist("show"))
+    return {part: part in chosen for part in PUBLIC_VIEW_PARTS}
 
 
 @login_not_required
+@xframe_options_sameorigin  # the backstage Public view tab shows it in a frame
 def public_production(request, pk):
     """
-    One production's public page. With a promotion image, that image with the Buy Tickets (or Listen) button on it;
-    without, a card like the cast list block's: the production's image and cast, with the button. The production team
-    is shown either way.
+    One production's public page: its title, strap line and description, the image chosen on the backstage Public view
+    tab (else the default image) with the Buy Tickets (or Listen) button under it, then the cast and the team.
     """
     production = get_object_or_404(
         Production.objects.prefetch_related("images__image", "cast__actor", "team__person", "team__role"), pk=pk
     )
     production.find_listen_url(cached=True)
     ticket_url = production_ticket_url(production)
+    show = public_view_options(request)
+    # A radio play's cast is kept back until it has a broadcast date.
+    awaiting_date = production.type == Production.ProductionType.RADIO and production.broadcast_datetime is None
+    if awaiting_date:
+        show["cast"] = False
     team = sorted(
         production.team.all(), key=lambda member: (member.role.name, member.person.last_name, member.person.first_name)
     )
@@ -301,7 +307,14 @@ def public_production(request, pk):
     with_public_urls([member.person for member in team] + [part.actor for part in cast], production)
     return render(request, "home/production_detail.html", {
         "production": production,
-        "promotion_image": promotion_image(production),
+        "image": production.public_view_image,
+        "show": show,
+        "awaiting_date": awaiting_date,
+        # The Radio plays menu item is highlighted on a radio play's page.
+        "nav_section": "radio-archive" if production.type == Production.ProductionType.RADIO else "",
+        # The backstage Public view shows just the page's contents, the whole image fitting the window if it can.
+        "bare": "custom" in request.GET,
+        "base_template": "public_bare.html" if "custom" in request.GET else "public_base.html",
         "ticket_url": ticket_url,
         # The Listen now button is only offered when there is no Buy Tickets one.
         "listen_url": "" if ticket_url else production.public_listen_url,
@@ -310,8 +323,6 @@ def public_production(request, pk):
         "cast": cast,
         "seo": seo(
             request, title=production.title, description=production.description, image=production_image(production),
-            # A radio play is also at /productions/<pk>/, but its page in the radio archive is the one to show in searches.
-            canonical_path=reverse("radio-play", args=[pk]) if production.type == Production.ProductionType.RADIO else None,
         ),
     })
 

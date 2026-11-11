@@ -1,5 +1,6 @@
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models, transaction
 from django.utils import timezone
 from django.db.models import Exists, F, Min, OuterRef, Q
@@ -218,6 +219,14 @@ class Production(models.Model):
         help_text="The parent production this is part of: it must be the same type of production",
     )
 
+    # The image the public page shows (chosen on the backstage Public view tab); the default image if none is chosen.
+    public_image = models.ForeignKey("Image", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # The background colour of the box round the public page (#rrggbb); blank means DEFAULT_PUBLIC_COLOUR.
+    public_colour = models.CharField(
+        max_length=7, blank=True, validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$", "Enter a colour as #rrggbb.")],
+    )
+    DEFAULT_PUBLIC_COLOUR = "#2e1065"  # deep purple
+
     objects = ProductionQuerySet.as_manager()
 
     def __str__(self):
@@ -348,6 +357,28 @@ class Production(models.Model):
         """The production's default ProductionImage, or None. Uses prefetched images if there are any."""
         images = list(self.images.all())
         return next((i for i in images if i.is_default), None) or min(images, key=ProductionImage.preference, default=None)
+
+    @property
+    def public_view_image(self):
+        """The Image the public page shows: the one chosen for it, if it is still one of the production's images,
+        else the default image, else None."""
+        images = list(self.images.all())
+        chosen = next((i.image for i in images if i.image_id == self.public_image_id), None)
+        if chosen:
+            return chosen
+        default = self.default_image
+        return default.image if default else None
+
+    @property
+    def public_background(self):
+        """The background colour of the box round the public page: the chosen one, else deep purple."""
+        return self.public_colour or self.DEFAULT_PUBLIC_COLOUR
+
+    @property
+    def public_text_colour(self):
+        """White or near-black, whichever reads better on the box's background colour."""
+        red, green, blue = (int(self.public_background[i:i + 2], 16) for i in (1, 3, 5))
+        return "#ffffff" if (0.299 * red + 0.587 * green + 0.114 * blue) < 150 else "#1f1720"
 
     @property
     def writers(self):

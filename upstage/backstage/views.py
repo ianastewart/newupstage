@@ -1,3 +1,5 @@
+import re
+
 from django.db.models import CharField, Count, Exists, F, Min, OuterRef, Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import HttpResponseForbidden, HttpResponseNotAllowed, HttpResponseRedirect
@@ -160,6 +162,33 @@ def production_images(request, pk):
             "available_images": available_images,
         },
     )
+
+
+def production_public(request, pk):
+    """
+    The Public view tab: choose which of the production's images its public page shows (saved), and preview the page
+    with only some of its parts (the choices go to the public page in its address and are not saved).
+    """
+    production = get_object_or_404(models.Production, pk=pk)
+    if request.method == "POST":
+        image_id = request.POST.get("image", "")
+        link = production.images.filter(image_id=image_id).first() if image_id.isdigit() else None
+        production.public_image = link.image if link else None  # nothing chosen: the default image
+        colour = request.POST.get("colour", "").strip()
+        valid = re.fullmatch(r"#[0-9a-fA-F]{6}", colour) and colour.lower() != production.DEFAULT_PUBLIC_COLOUR
+        production.public_colour = colour.lower() if valid else ""  # blank: deep purple
+        production.save(update_fields=["public_image", "public_colour"])
+        return redirect("production-public", pk=production.pk)
+    links = production.images.select_related("image").order_by("-is_default", "-id")
+    return render(request, "backstage/production_public.html", {
+        "production": production,
+        "images": [link.image for link in links],
+        "selected_image": production.public_image_id if production.images.filter(image_id=production.public_image_id).exists() else None,
+        "parts": [
+            ("title", "Title"), ("strap_line", "Strap line"), ("description", "Description"), ("cast", "Cast"),
+            ("team", "Team"),
+        ],
+    })
 
 
 class UpstageView(CRUDView):

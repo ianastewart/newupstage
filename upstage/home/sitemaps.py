@@ -30,14 +30,12 @@ class WebPageSitemap(Sitemap):
 
 
 class ProductionSitemap(Sitemap):
-    """Stage plays, films and the rest have their page; radio plays have theirs in the radio archive."""
+    """Every production has its page."""
 
     def items(self):
         return list(Production.objects.order_by("pk"))
 
     def location(self, production):
-        if production.type == Production.ProductionType.RADIO:
-            return reverse("radio-play", args=[production.pk])
         return reverse("public-production", args=[production.pk])
 
 

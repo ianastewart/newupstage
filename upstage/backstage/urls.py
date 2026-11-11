@@ -17,6 +17,7 @@ urlpatterns = [
     path("others/new/", views.other_new, name="other-new"),
     path("others/<int:pk>/roles/", views.other_roles, name="other-roles"),
     path("production/<int:pk>/images/", views.production_images, name="production-images"),
+    path("production/<int:pk>/public/", views.production_public, name="production-public"),
     path("production/<int:pk>/events/", views.production_events, name="production-events"),
     path("production/<int:pk>/cast/", views.production_cast, name="production-cast"),
     path("production/<int:pk>/team/", views.production_team, name="production-team"),

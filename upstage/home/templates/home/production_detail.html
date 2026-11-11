@@ -1,65 +1,33 @@
-{% extends "public_base.html" %}
+{% extends base_template %}
 
 {% block title %}{{ production.title }} · Upstage Theatre{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-5xl space-y-6 p-6">
-  {% if promotion_image %}
-    {# The promotion image, with the button (or the archive message) centred under it. #}
-    <header class="text-center">
-      <h1 class="text-3xl font-bold">{{ production.title }}</h1>
-      {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
-    {% if production.description %}<div class="mx-auto max-w-2xl">{{ production.description|linebreaks }}</div>{% endif %}
-    </header>
-    <div class="mx-auto w-full max-w-2xl">
-      <img src="{{ promotion_image.image.url }}" alt="{{ promotion_image.description|default:production.title }}" class="block h-auto w-full rounded-box" />
-      <div class="mt-4 flex flex-wrap items-center justify-center gap-4 text-center">
-        {% if ticket_url %}
-          <a href="{{ ticket_url }}" class="btn btn-primary btn-md shadow-lg" target="_blank" rel="noopener noreferrer">Buy Tickets</a>
-          {% if venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}
-        {% elif listen_url %}
-          <a href="{{ listen_url }}" class="btn btn-primary btn-md shadow-lg" target="_blank" rel="noopener noreferrer">Listen now</a>
-          {% if venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}
-        {% elif production.awaiting_archive %}
-          <p class="italic text-primary">Not yet in the Brooklands Radio archive. Please try later.</p>
-        {% endif %}
-      </div>
+<div class="mx-auto max-w-5xl p-6">
+<div class="space-y-6 rounded-box p-6 shadow-sm md:p-8" style="background-color: {{ production.public_background }}; color: {{ production.public_text_colour }};">
+  <header class="text-center">
+    {% if show.title %}<h1 class="text-3xl font-bold">{{ production.title }}</h1>{% endif %}
+    {% if show.strap_line and production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
+    {% if show.description and production.description %}<div class="mx-auto max-w-2xl">{{ production.description|linebreaks }}</div>{% endif %}
+  </header>
+  <div class="mx-auto w-full max-w-2xl">
+    {% if image %}
+      <img src="{{ image.image.url }}" alt="{{ image.description|default:production.title }}" class="{% if bare %}mx-auto max-h-[75vh] w-auto max-w-full{% else %}block h-auto w-full{% endif %} rounded-box" />
+    {% endif %}
+    {# The button (or the archive message) centred under the image, with the venue logo beside it. #}
+    <div class="mt-4 flex flex-wrap items-center justify-center gap-4 text-center">
+      {% if ticket_url %}
+        <a href="{{ ticket_url }}" class="btn btn-primary btn-md shadow-lg" target="_blank" rel="noopener noreferrer">Buy Tickets</a>
+      {% elif listen_url %}
+        <a href="{{ listen_url }}" class="btn btn-primary btn-md shadow-lg" target="_blank" rel="noopener noreferrer">Listen now</a>
+      {% elif production.awaiting_archive %}
+        <p class="italic text-primary">Not yet in the Brooklands Radio archive. Please try later.</p>
+      {% endif %}
+      {% if venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}
     </div>
-    {% include "home/_production_cast_team.html" %}
-  {% else %}
-    {# No promotion image: a card with the production's image, the button, the description, then the cast and the team. #}
-    <div class="card border border-violet-400/40 bg-violet-500/20 shadow-sm">
-      <div class="card-body gap-6">
-        <header>
-          <h1 class="text-3xl font-bold">{{ production.title }}</h1>
-          {% if production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
-        </header>
-        <div class="grid items-start gap-6 md:grid-cols-2 md:gap-10">
-          <div class="space-y-4">
-            {% with cover=production.default_image %}
-              {% if cover %}
-                <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" class="h-auto max-h-[500px] w-auto max-w-full rounded-box shadow-sm" />
-              {% endif %}
-            {% endwith %}
-            {% if ticket_url %}
-              <a href="{{ ticket_url }}" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Buy Tickets</a>
-            {% elif listen_url %}
-              <div class="flex flex-wrap items-center gap-4">
-                <a href="{{ listen_url }}" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Listen now</a>
-                {% if venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}
-              </div>
-            {% elif production.awaiting_archive %}
-              <p class="text-sm italic text-primary">Not yet in the Brooklands Radio archive. Please try later.</p>
-            {% endif %}
-            {% if venue.logo.image and not listen_url %}<div><img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" /></div>{% endif %}
-          </div>
-          <div class="space-y-6">
-            {% if production.description %}<div>{{ production.description|linebreaks }}</div>{% endif %}
-          </div>
-        </div>
-        {% include "home/_production_cast_team.html" %}
-      </div>
-    </div>
-  {% endif %}
+  </div>
+  {% if awaiting_date %}<p class="text-center text-lg italic">Awaiting broadcast date</p>{% endif %}
+  {% if show.cast or show.team %}{% include "home/_production_cast_team.html" %}{% endif %}
+</div>
 </div>
 {% endblock %}

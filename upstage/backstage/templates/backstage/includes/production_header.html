@@ -8,4 +8,5 @@
   <a role="tab" href="{% url 'production-cast' production.pk %}" class="tab{% if active == 'cast' %} tab-active{% endif %}">Cast</a>
   <a role="tab" href="{% url 'production-team' production.pk %}" class="tab{% if active == 'team' %} tab-active{% endif %}">Team</a>
   <a role="tab" href="{% url 'production-events' production.pk %}" class="tab{% if active == 'events' %} tab-active{% endif %}">Events</a>
+  <a role="tab" href="{% url 'production-public' production.pk %}" class="tab{% if active == 'public' %} tab-active{% endif %}">Public view</a>
 </div>

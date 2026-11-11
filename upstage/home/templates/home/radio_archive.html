@@ -19,7 +19,7 @@
   {% else %}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
       {% for play in plays %}
-        <a href="{% url 'radio-play' play.pk %}" class="card bg-base-200 shadow-sm transition hover:shadow-md">
+        <a href="{% url 'public-production' play.pk %}" class="card bg-base-200 shadow-sm transition hover:shadow-md">
           <figure class="aspect-square w-full items-center justify-center bg-base-300">
             {% with cover=play.default_image %}
               {% if cover %}

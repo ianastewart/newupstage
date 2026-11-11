@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}{{ production }} public view · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  {% include "backstage/includes/production_header.html" with active="public" %}
+
+  {# The image and background colour of the public page: the image is saved as soon as one is chosen. #}
+  <form method="post" class="mb-8">
+    {% csrf_token %}
+    {% if images|length == 1 %}
+      {# Only one image: there is nothing to choose, the page shows it. #}
+      <fieldset>
+        <legend class="mb-2 text-lg font-semibold">Image</legend>
+        <img src="{{ images.0.image.url }}" alt="{{ images.0.description }}" class="max-h-60 w-auto max-w-full rounded-box" />
+      </fieldset>
+    {% else %}
+    <fieldset>
+      <legend class="mb-2 text-lg font-semibold">Image</legend>
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <label class="flex cursor-pointer items-center justify-center rounded-box bg-base-200 p-3 text-center text-sm ring-primary has-checked:ring-4">
+          <input type="radio" name="image" value="" class="radio radio-sm mr-2" onchange="this.form.submit()"{% if not selected_image %} checked{% endif %} />
+          Default image
+        </label>
+        {% for image in images %}
+          <label class="relative cursor-pointer overflow-hidden rounded-box bg-base-200 ring-primary has-checked:ring-4">
+            <img src="{{ image.image.url }}" alt="{{ image.description }}" loading="lazy" class="aspect-video w-full object-cover" />
+            <input type="radio" name="image" value="{{ image.pk }}" class="radio radio-sm absolute left-2 top-2 bg-base-100" onchange="this.form.submit()"{% if image.pk == selected_image %} checked{% endif %} />
+            <span class="block truncate px-2 py-1 text-xs">{{ image }}</span>
+          </label>
+        {% endfor %}
+      </div>
+      {% if not images %}<p class="mt-2 text-sm opacity-70">This production has no images yet: add some on the <a href="{% url 'production-images' production.pk %}" class="link">Images tab</a>.</p>{% endif %}
+    </fieldset>
+    {% endif %}
+    <div class="mt-6">
+      <label for="id_colour" class="mb-1 block text-lg font-semibold">Background colour</label>
+      <div class="flex flex-wrap items-center gap-3">
+        <input id="id_colour" type="color" name="colour" value="{{ production.public_background }}" class="h-10 w-20 cursor-pointer rounded border border-base-300 bg-base-100 p-1" />
+        <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('id_colour').value = '{{ production.DEFAULT_PUBLIC_COLOUR }}'">Deep purple (default)</button>
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+      </div>
+    </div>
+  </form>
+
+  {# Opens the public page with these parts in its address; nothing is saved. #}
+  <form id="public-form" method="get" action="{% url 'public-production' production.pk %}" target="_blank" class="space-y-6">
+    <input type="hidden" name="custom" value="1" />
+
+    <fieldset>
+      <legend class="mb-2 text-lg font-semibold">Show</legend>
+      <div class="flex flex-wrap gap-x-6 gap-y-2">
+        {% for value, label in parts %}
+          <label class="flex cursor-pointer items-center gap-2">
+            <input type="checkbox" name="show" value="{{ value }}" class="checkbox checkbox-sm" checked />
+            {{ label }}
+          </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <button type="submit" class="btn btn-primary">View public page</button>
+  </form>
+</div>
+
+<dialog id="public-modal" class="modal">
+  <div class="modal-box flex h-[94vh] max-h-none w-[96vw] max-w-none flex-col p-0">
+    <div class="flex items-center justify-between border-b border-base-300 px-4 py-2">
+      <h2 class="font-semibold">{{ production }}: public view</h2>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="this.closest('dialog').close()">Close</button>
+    </div>
+    <iframe id="public-frame" title="Public view of {{ production }}" class="w-full grow bg-white"></iframe>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<script>
+  // Show the public page in a large modal; without script the form opens it in a new tab.
+  (() => {
+    const form = document.getElementById('public-form');
+    const modal = document.getElementById('public-modal');
+    const frame = document.getElementById('public-frame');
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      frame.src = form.action + '?' + new URLSearchParams(new FormData(form)).toString();
+      modal.showModal();
+    });
+    modal.addEventListener('close', () => { frame.src = 'about:blank'; });
+  })();
+</script>
+{% endblock %}
