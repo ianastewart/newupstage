@@ -3301,3 +3301,47 @@ class ProductionPublishedTests(TestCase):
         self.assertEqual(sorted(Production.objects.published().values_list("title", flat=True)), ["C", "D"])
         self.assertEqual(sorted(Production.objects.unpublished().values_list("title", flat=True)), ["A", "B"])
         self.assertEqual(Production.objects.published().count(), len([p for p in Production.objects.all() if p.published]))
+
+
+class FindListenUrlTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        from backstage.models import Event
+        self.production = Production.objects.create(title="The Good Guard", type="radio")
+        self.production.events.add(Event.objects.create(event_type="broadcast", publish="published"))
+        self.patch = mock.patch("scraper.scrape.find_brooklands_play")
+        self.find = self.patch.start()
+        self.addCleanup(self.patch.stop)
+
+    def test_a_found_url_is_saved(self):
+        self.find.return_value = ("text", "https://x.example/play.mp3")
+        self.assertEqual(self.production.find_listen_url(), "https://x.example/play.mp3")
+        self.assertEqual(self.production.listen_url, "https://x.example/play.mp3")
+
+    def test_a_cached_miss_is_not_looked_up_again(self):
+        self.find.return_value = None
+        self.production.find_listen_url(cached=True)
+        self.production.find_listen_url(cached=True)
+        self.assertEqual(self.find.call_count, 1)
+
+    def test_without_caching_the_site_is_always_asked(self):
+        self.find.return_value = None
+        self.production.find_listen_url(cached=True)
+        self.production.find_listen_url()
+        self.production.find_listen_url()
+        self.assertEqual(self.find.call_count, 3)
+
+    def test_a_cached_failure_is_not_retried_at_once_and_does_not_raise(self):
+        self.find.side_effect = OSError("down")
+        self.assertEqual(self.production.find_listen_url(cached=True), "")
+        self.production.find_listen_url(cached=True)
+        self.assertEqual(self.find.call_count, 1)
+
+    def test_other_productions_are_not_blocked_by_a_miss(self):
+        self.find.return_value = None
+        self.production.find_listen_url(cached=True)
+        other = Production.objects.create(title="Other", type="radio")
+        other.events.add(self.production.events.first())
+        other.find_listen_url(cached=True)
+        self.assertEqual(self.find.call_count, 2)

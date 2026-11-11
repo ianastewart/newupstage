@@ -699,6 +699,8 @@ class ProductionView(CRUDView):
         kwargs["search"] = self.get_search()
         kwargs["sorts"] = [(value, label) for value, (label, _) in self.SORTS.items()]
         kwargs["current_sort"] = self.get_sort()
+        if self.role == Role.DETAIL:
+            self.object.find_listen_url()
         return super().get_context_data(**kwargs)
 
 

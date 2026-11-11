@@ -23,6 +23,8 @@
 
           {% if play.public_listen_url %}
             <a href="{{ play.public_listen_url }}" class="btn btn-primary mt-4" target="_blank" rel="noopener">Listen now</a>
+          {% elif play.awaiting_archive %}
+            <p class="text-sm italic text-primary mt-4">Not yet in the Brooklands Radio archive. Please try later.</p>
           {% endif %}
 
           {% if writers %}

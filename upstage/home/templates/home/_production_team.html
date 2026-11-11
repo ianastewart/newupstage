@@ -1,11 +1,11 @@
-{# The production team: each role with the people in it (`team`: the production's team members). #}
+{# The production team: each role (right-aligned) with the people in it (left-aligned) either side of a centre line (`team`: the production's team members). #}
 {% if team %}
-  <section>
+  <section class="text-center">
     <h2 class="mb-3 text-lg font-semibold uppercase tracking-wide opacity-70">Production team</h2>
-    <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1">
+    <dl class="grid grid-cols-2 gap-x-6 gap-y-1">
       {% for member in team %}
-        <dt class="font-semibold">{{ member.role }}</dt>
-        <dd>{% if member.person.public_url %}<a href="{{ member.person.public_url }}" class="link link-hover text-violet-400">{{ member.person }}</a>{% else %}{{ member.person }}{% endif %}</dd>
+        <dt class="text-right font-semibold">{{ member.role }}</dt>
+        <dd class="text-left">{% if member.person.public_url %}<a href="{{ member.person.public_url }}" class="link link-hover text-violet-400">{{ member.person }}</a>{% else %}{{ member.person }}{% endif %}</dd>
       {% endfor %}
     </dl>
   </section>

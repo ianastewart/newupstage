@@ -271,6 +271,7 @@ def radio_play(request, pk):
         (member for member in play.team.all() if member.role.name != "Writer"),
         key=lambda member: (member.role.name, member.person.last_name, member.person.first_name),
     )
+    play.find_listen_url(cached=True)
     cast = cast_by_actor_name(play.cast.all())
     writers = [member.person for member in play.team.all() if member.role.name == "Writer"]
     with_public_urls([member.person for member in team] + writers + [part.actor for part in cast], play)
@@ -290,6 +291,8 @@ def public_production(request, pk):
     production = get_object_or_404(
         Production.objects.prefetch_related("images__image", "cast__actor", "team__person", "team__role"), pk=pk
     )
+    production.find_listen_url(cached=True)
+    ticket_url = production_ticket_url(production)
     team = sorted(
         production.team.all(), key=lambda member: (member.role.name, member.person.last_name, member.person.first_name)
     )
@@ -299,7 +302,9 @@ def public_production(request, pk):
     return render(request, "home/production_detail.html", {
         "production": production,
         "promotion_image": promotion_image(production),
-        "ticket_url": production_ticket_url(production),
+        "ticket_url": ticket_url,
+        # The Listen now button is only offered when there is no Buy Tickets one.
+        "listen_url": "" if ticket_url else production.public_listen_url,
         "venue": production_venue(production),
         "team": team,
         "cast": cast,

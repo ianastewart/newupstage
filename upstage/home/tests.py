@@ -1688,18 +1688,21 @@ class PublicProductionTests(TestCase):
         ProductionImage.objects.create(production=cls.production, image=cls.cover, is_default=True)
         cls.url = reverse("public-production", args=[cls.production.pk])
 
-    def test_with_a_promotion_image_it_has_the_button_on_the_image(self):
+    def test_with_a_promotion_image_it_has_the_button_centred_under_the_image(self):
         from backstage.models import ProductionImage
 
         promo = Image.objects.create(description="Promo", image="images/promo.jpg", image_type="promotion")
         ProductionImage.objects.create(production=self.production, image=promo)
         html = self.client.get(self.url).content.decode()
         self.assertIn("images/promo.jpg", html)
-        self.assertIn("absolute bottom-[30px]", html)
+        self.assertNotIn("absolute bottom-[30px]", html)  # the button is under the image, not on it
+        self.assertIn("mt-4 flex flex-wrap items-center justify-center", html)
         self.assertIn("https://tickets.example.com/p", html)
         self.assertNotIn("images/cover.jpg", html)
         self.assertIn("Dee Rector", html)  # the team
-        self.assertNotIn("Hamlet", html)  # no cast list in this layout
+        self.assertIn("Hamlet", html)  # the cast is shown too, beside the team
+        self.assertIn("md:grid-cols-2", html)
+        self.assertLess(html.index("Hamlet"), html.index("Dee Rector"))  # cast left, team right
 
     def test_without_one_it_is_a_card_with_cast_team_and_the_button(self):
         html = self.client.get(self.url).content.decode()
@@ -1719,6 +1722,23 @@ class PublicProductionTests(TestCase):
         html = self.client.get(self.url).content.decode()
         self.assertIn("Listen now", html)
         self.assertNotIn("Buy Tickets", html)
+
+    def test_the_venue_logo_is_beside_the_listen_button(self):
+        from backstage.models import Event, EventDateTime, Venue
+
+        logo = Image.objects.create(description="Logo", image="images/logo.png", image_type="logo")
+        venue = Venue.objects.create(name="Brooklands", logo=logo)
+        broadcast = Event.objects.create(
+            event_type="broadcast", publish="published", listen_url="https://listen.example.com/p", venue=venue
+        )
+        broadcast.productions.add(self.production)
+        EventDateTime.objects.create(event=broadcast, datetime=timezone.now() - timedelta(days=1))
+        EventDateTime.objects.filter(event__ticket_site__isnull=False).delete()
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("Listen now", html)
+        self.assertEqual(html.count("images/logo.png"), 1)
+        self.assertLess(html.index("Listen now"), html.index("images/logo.png"))
+        self.assertLess(html.index("images/logo.png"), html.index("</div>", html.index("Listen now")))  # same row
 
     def test_it_is_public_and_a_missing_production_is_not_found(self):
         self.assertEqual(self.client.get(self.url).status_code, 200)
@@ -2086,3 +2106,41 @@ class TextBlockOptionalTextTests(TestCase):
         self.assertIn("full-bleed", render_to_string(block.template, {"block": block, "public_page": True}))
         self.assertNotIn("full-bleed", render_to_string(block.template, {"block": block}))
         self.assertNotIn("prose", render_to_string(block.template, {"block": block, "public_page": True}))
+
+
+class AwaitingArchiveTests(TestCase):
+    MESSAGE = "Not yet in the Brooklands Radio archive. Please try later."
+
+    def setUp(self):
+        from unittest import mock
+        patch = mock.patch("scraper.scrape.find_brooklands_play", return_value=None)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def play(self, days, url=""):
+        play = Production.objects.create(title="Some Play")
+        play.set_broadcast(timezone.now() + timedelta(days=days))
+        if url:
+            event = play.broadcast_event()
+            event.listen_url = url
+            event.save()
+        return play
+
+    def test_a_broadcast_play_without_a_url_shows_the_message_on_both_pages(self):
+        play = self.play(-1)
+        for name in ("radio-play", "public-production"):
+            with self.subTest(name):
+                response = self.client.get(reverse(name, args=[play.pk]))
+                self.assertContains(response, self.MESSAGE)
+                self.assertNotContains(response, "Listen now")
+
+    def test_a_play_with_a_url_shows_the_button_not_the_message(self):
+        play = self.play(-1, url="https://x.example/a.mp3")
+        response = self.client.get(reverse("radio-play", args=[play.pk]))
+        self.assertContains(response, "Listen now")
+        self.assertNotContains(response, self.MESSAGE)
+
+    def test_a_play_not_yet_broadcast_shows_neither(self):
+        response = self.client.get(reverse("radio-play", args=[self.play(5).pk]))
+        self.assertNotContains(response, self.MESSAGE)
+        self.assertNotContains(response, "Listen now")

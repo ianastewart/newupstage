@@ -1,0 +1,17 @@
+{# The cast (left) and the production team (right), side by side where there is room (`cast`, `team`). #}
+<div class="mx-auto grid w-full max-w-3xl items-start gap-6 md:grid-cols-2 md:gap-4">
+  <section class="text-center">
+    <h2 class="mb-3 text-lg font-semibold uppercase tracking-wide opacity-70">Cast</h2>
+    {% if cast %}
+      <dl class="grid grid-cols-2 gap-x-6 gap-y-2">
+        {% for part in cast %}
+          <dt class="text-right font-semibold">{{ part.character_name }}</dt>
+          <dd class="text-left">{% if part.actor %}{% if part.actor.public_url %}<a href="{{ part.actor.public_url }}" class="link link-hover text-violet-400">{{ part.actor }}</a>{% else %}{{ part.actor }}{% endif %}{% else %}—{% endif %}</dd>
+        {% endfor %}
+      </dl>
+    {% else %}
+      <p class="opacity-70">The cast hasn't been announced yet.</p>
+    {% endif %}
+  </section>
+  <div>{% include "home/_production_team.html" %}</div>
+</div>

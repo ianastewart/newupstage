@@ -1,5 +1,7 @@
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.utils import timezone
 from django.db.models import Exists, F, Min, OuterRef, Q
 from django_enum import EnumField
 
@@ -293,10 +295,48 @@ class Production(models.Model):
         event = events.annotate(first_date=Min("datetimes__datetime")).order_by(F("first_date").asc(nulls_last=True), "pk").first()
         return event.listen_url if event else ""
 
+    # Seconds before a cached Brooklands Radio lookup that found nothing, or failed, is tried again.
+    LOOKUP_RETRY = 60 * 60
+
+    def find_listen_url(self, cached=False):
+        """
+        For a published radio play with no listen URL, look it up on Brooklands Radio and save it on the
+        production's Broadcast event. Returns the URL found, or "" (also if the lookup fails).
+        """
+        if self.type != self.ProductionType.RADIO or not self.published or self.listen_url:
+            return ""
+        key = f"brooklands-miss-{self.pk}"
+        if cached and cache.get(key):
+            return ""
+        from scraper.scrape import find_brooklands_play
+        try:
+            found = find_brooklands_play(self.title)
+        except Exception:  # the site being down must not break the page; try again soon
+            if cached:
+                cache.set(key, True, self.LOOKUP_RETRY)
+            return ""
+        if not found:
+            if cached:
+                cache.set(key, True, self.LOOKUP_RETRY)
+            return ""
+        event = self.broadcast_event()
+        event.listen_url = found[1]
+        event.save(update_fields=["listen_url"])
+        return event.listen_url
+
     @property
     def listen_url(self):
         """Where to listen: the address of the production's first Broadcast event that has one, or ""."""
         return self._listen_url(published_only=False)
+
+    @property
+    def awaiting_archive(self):
+        """Whether it is a radio play that has been broadcast but has no public listen URL yet."""
+        broadcast = self.broadcast_datetime
+        return (
+            self.type == self.ProductionType.RADIO and broadcast is not None and broadcast <= timezone.now()
+            and not self.public_listen_url
+        )
 
     @property
     def public_listen_url(self):
