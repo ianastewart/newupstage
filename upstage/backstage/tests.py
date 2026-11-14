@@ -3378,6 +3378,31 @@ class ProductionPublicViewTabTests(TestCase):
         self.production.refresh_from_db()
         self.assertEqual((self.production.public_colour, self.production.public_background), ("", "#2e1065"))
 
+    def test_the_tab_uses_the_shared_colour_picker_with_the_fixed_palette(self):
+        from backstage.themes import PUBLIC_PALETTE
+
+        response = self.client.get(reverse("production-public", args=[self.production.pk]))
+        self.assertEqual(len(response.context["colour_palette"]), 8)
+        self.assertContains(response, "data-swatches", count=2)  # the field, plus the script's own selector
+        for _, colour in PUBLIC_PALETTE:
+            self.assertRegex(colour, r"^#[0-9a-f]{6}$")
+            self.assertContains(response, colour)
+
+    def test_the_picker_has_the_fixed_palette_and_the_saved_places_of_background_1(self):
+        from backstage.models import Palette
+        from backstage.themes import PUBLIC_PALETTE
+
+        url = reverse("production-public", args=[self.production.pk])
+        palette = Palette.objects.get(name="Background 1")  # made by a migration, with no colours
+        self.assertEqual(palette.slots(), [None] * 8)
+        palette.set_colour(2, "#AAFF00")
+        response = self.client.get(url)
+        self.assertEqual(list(response.context["colour_palette"]), PUBLIC_PALETTE)  # the top row never changes
+        saved = list(response.context["colour_saved"])
+        self.assertEqual(len(saved), 8)
+        self.assertEqual((saved[0], saved[2]), (None, ("", "#aaff00")))
+        self.assertContains(response, 'null,null,["", "#aaff00"],null')
+
     def test_the_default_colour_is_stored_as_blank(self):
         self.client.post(reverse("production-public", args=[self.production.pk]), {"image": "", "colour": "#2E1065"})
         self.production.refresh_from_db()
@@ -3390,7 +3415,7 @@ class ProductionPublicViewTabTests(TestCase):
         response = self.client.get(reverse("production-public", args=[self.production.pk]))
         self.assertContains(response, "images/only.jpg")
         self.assertNotContains(response, 'name="image"')
-        self.assertContains(response, 'type="color"')
+        self.assertContains(response, 'name="colour"')
 
     def test_choosing_an_image_saves_it_and_it_must_be_the_productions_own(self):
         from backstage.models import Image, ProductionImage
@@ -3405,3 +3430,182 @@ class ProductionPublicViewTabTests(TestCase):
         self.client.post(url, {"image": other.pk})  # not one of its images: nothing chosen
         self.production.refresh_from_db()
         self.assertIsNone(self.production.public_image)
+
+
+class PaletteTests(TestCase):
+    def setUp(self):
+        from backstage.models import Palette
+
+        self.palette = Palette.objects.create(name="Pink to blue")
+
+    def test_a_palette_keeps_its_colours_in_order_as_name_colour_pairs(self):
+        from backstage.models import PaletteColour
+
+        PaletteColour.objects.create(palette=self.palette, position=1, name="Blue", colour="#4895EF")
+        PaletteColour.objects.create(palette=self.palette, position=0, name="Pink", colour="#f72585")
+        self.assertEqual(self.palette.as_pairs(), [("Pink", "#f72585"), ("Blue", "#4895ef")])  # saved in lower case
+        self.assertFalse(self.palette.is_complete)
+
+    def test_a_palette_holds_at_most_eight_colours(self):
+        from django.db import IntegrityError, transaction
+        from backstage.models import PaletteColour
+
+        for position in range(8):
+            PaletteColour.objects.create(palette=self.palette, position=position, colour="#112233")
+        self.assertTrue(self.palette.is_complete)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            PaletteColour.objects.create(palette=self.palette, position=0, colour="#445566")  # the place is taken
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            PaletteColour.objects.create(palette=self.palette, position=8, colour="#445566")  # a ninth colour
+
+    def test_a_colour_must_be_rrggbb(self):
+        from django.core.exceptions import ValidationError
+        from backstage.models import PaletteColour
+
+        for bad in ("purple", "#123", "123456"):
+            with self.assertRaises(ValidationError):
+                PaletteColour(palette=self.palette, position=0, colour=bad).full_clean()
+        PaletteColour(palette=self.palette, position=7, colour="#a1b2c3").full_clean()
+        with self.assertRaises(ValidationError):
+            PaletteColour(palette=self.palette, position=8, colour="#a1b2c3").full_clean()
+
+    def test_deleting_a_palette_deletes_its_colours(self):
+        from backstage.models import PaletteColour
+
+        PaletteColour.objects.create(palette=self.palette, position=0, colour="#112233")
+        palette_id = self.palette.pk
+        self.palette.delete()
+        self.assertEqual(PaletteColour.objects.filter(palette_id=palette_id).count(), 0)
+
+
+class SavePaletteColourTests(TestCase):
+    def setUp(self):
+        from backstage.models import Palette
+
+        self.url = reverse("save-palette-colour")
+        self.client.force_login(CustomUser.objects.create_user(username="staff", password="p", is_staff=True))
+        self.palette = Palette.objects.get(name="Background 1")  # made by a migration, with no colours
+        for position in range(8):
+            self.palette.set_colour(position, f"#00000{position}")
+
+    def test_a_colour_replaces_what_was_in_the_chosen_place(self):
+        response = self.client.post(self.url, {"colour": "#AABBCC", "position": "3"})
+        self.assertEqual(response.status_code, 200)
+        slots = response.json()["slots"]
+        self.assertEqual(len(slots), 8)
+        self.assertEqual(slots[3], ["", "#aabbcc"])
+        self.assertEqual(self.palette.colours.count(), 8)  # replaced, not added
+        self.assertEqual(self.palette.colours.get(position=3).colour, "#aabbcc")
+
+    def test_an_empty_place_can_be_filled(self):
+        self.palette.colours.filter(position=5).delete()
+        self.assertIsNone(self.palette.slots()[5])
+        self.client.post(self.url, {"colour": "#010203", "position": "5"})
+        self.assertEqual(self.palette.slots()[5], ("", "#010203"))
+
+    def test_a_bad_colour_or_place_is_refused_and_nothing_changes(self):
+        before = self.palette.slots()
+        for data in ({"colour": "red", "position": "1"}, {"colour": "#ffffff", "position": "8"}, {"colour": "#ffffff"}):
+            self.assertEqual(self.client.post(self.url, data).status_code, 400, data)
+        self.assertEqual(self.palette.slots(), before)
+
+    def test_only_staff_can_save_and_only_by_post(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+        self.client.force_login(CustomUser.objects.create_user(username="member", password="p"))
+        self.assertEqual(self.client.post(self.url, {"colour": "#aabbcc", "position": "0"}).status_code, 403)
+
+
+class ProductionSoundTests(TestCase):
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        from django.test import override_settings
+
+        self.media = tempfile.mkdtemp()
+        override = override_settings(MEDIA_ROOT=self.media)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.addCleanup(shutil.rmtree, self.media, True)
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.production = Production.objects.create(title="The Play")
+        self.url = reverse("production-images", args=[self.production.pk])
+
+    def upload(self, name="play.mp3", content=b"ID3 sound"):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return self.client.post(self.url, {"action": "sound", "sound": SimpleUploadedFile(name, content)})
+
+    def test_the_tab_is_called_media(self):
+        response = self.client.get(self.url)
+        self.assertContains(response, 'class="tab tab-active">Media</a>')
+        self.assertNotContains(response, 'class="tab">Images</a>')
+
+    def test_a_sound_file_is_saved_in_media_sounds_and_can_be_played(self):
+        self.assertRedirects(self.upload(), self.url)
+        self.production.refresh_from_db()
+        self.assertRegex(self.production.sound.name, r"^sounds/play.*\.mp3$")
+        self.assertContains(self.client.get(self.url), f'src="/media/{self.production.sound.name}"')
+
+    def test_a_new_sound_becomes_the_one_used_and_the_old_file_stays_listed(self):
+        self.upload("one.mp3")
+        self.upload("two.wav")
+        self.production.refresh_from_db()
+        self.assertTrue(self.production.sound.name.startswith("sounds/two"))
+        files = self.client.get(self.url).context["sound_files"]
+        self.assertEqual([f["name"] for f in files][0][:3], "one")
+        self.assertEqual([f["chosen"] for f in files], [False, True])
+
+    def test_the_existing_sound_files_are_listed_above_the_upload(self):
+        self.assertEqual(self.client.get(self.url).context["sound_files"], [])
+        self.assertContains(self.client.get(self.url), "No sound files have been uploaded yet.")
+        self.upload("one.mp3")
+        response = self.client.get(self.url)
+        self.assertContains(response, "Used by this production")
+        content = response.content.decode()
+        self.assertLess(content.index("Used by this production"), content.index('name="sound"'))
+        self.assertLess(content.index("Images</h2>"), content.index("Sounds</h2>"))
+
+    def test_another_production_can_use_a_file_that_is_already_there(self):
+        self.upload("one.mp3")
+        self.production.refresh_from_db()
+        name = self.production.sound.name.removeprefix("sounds/")
+        other = Production.objects.create(title="Other")
+        other_url = reverse("production-images", args=[other.pk])
+        self.client.post(other_url, {"action": "choose_sound", "name": name})
+        other.refresh_from_db()
+        self.assertEqual(other.sound.name, f"sounds/{name}")
+        self.client.post(other_url, {"action": "choose_sound", "name": "../../secret.mp3"})  # not a listed file
+        other.refresh_from_db()
+        self.assertEqual(other.sound.name, f"sounds/{name}")
+
+    def test_only_sound_files_are_accepted(self):
+        response = self.upload("notes.txt")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "not allowed")
+        self.production.refresh_from_db()
+        self.assertFalse(self.production.sound)
+
+    def test_the_sound_can_be_stopped_without_deleting_the_file(self):
+        import os
+
+        self.upload()
+        self.production.refresh_from_db()
+        path = self.production.sound.path
+        self.client.post(self.url, {"action": "remove_sound"})
+        self.production.refresh_from_db()
+        self.assertFalse(self.production.sound)
+        self.assertTrue(os.path.exists(path))  # other productions may use it
+
+
+class ListenUrlTests(TestCase):
+    def test_a_listen_address_is_a_web_address_or_a_local_one_starting_with_a_slash(self):
+        from django.core.exceptions import ValidationError
+
+        from backstage.models import validate_listen_url
+
+        for good in ("https://listen.example.com/x.mp3", "http://example.com", "/media/sounds/play.mp3", "/listen/"):
+            validate_listen_url(good)
+        for bad in ("//evil.example.com/x", "/has space.mp3", "media/sounds/play.mp3", "ftp://example.com/x", "javascript:alert(1)"):
+            with self.assertRaises(ValidationError, msg=bad):
+                validate_listen_url(bad)

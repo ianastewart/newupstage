@@ -99,6 +99,7 @@ TEMPLATES = [
                 'backstage.context_processors.navbar_logo',
                 'backstage.context_processors.css_version',
                 'backstage.context_processors.themes',
+                'backstage.context_processors.colour_palette',
                 'home.seo.default_seo',
             ],
         },

@@ -1,18 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}{{ production }} images · Upstage Theatre{% endblock %}
+{% block title %}{{ production }} media · Upstage Theatre{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-6xl p-6">
   {% include "backstage/includes/production_header.html" with active="images" %}
 
-  <div class="mb-6 flex flex-wrap items-center justify-end gap-4">
-    <div class="flex gap-2">
-      <a href="{% url 'image-create' %}?production={{ production.pk }}" class="btn btn-ghost">Add image</a>
-      <button type="button" class="btn btn-primary" onclick="document.getElementById('add-images').showModal()"{% if not available_images %} disabled{% endif %}>Add from library</button>
-    </div>
-  </div>
-
+  <h2 class="mb-2 text-lg font-semibold">Images</h2>
   {% if production_images %}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
       {% for production_image in production_images %}
@@ -56,6 +50,48 @@
       <p class="mt-2 text-sm opacity-70">Add one{% if available_images %} or add one from the library{% endif %}.</p>
     </div>
   {% endif %}
+  <div class="mt-4 flex gap-2">
+    <a href="{% url 'image-create' %}?production={{ production.pk }}" class="btn btn-primary">Add image</a>
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('add-images').showModal()"{% if not available_images %} disabled{% endif %}>Add from library</button>
+  </div>
+
+  <section class="mt-8">
+    <h2 class="mb-2 text-lg font-semibold">Sounds</h2>
+    {% if sound_files %}
+      <ul class="mb-4 space-y-2">
+        {% for file in sound_files %}
+          <li class="flex flex-wrap items-center gap-3 rounded-box p-2{% if file.chosen %} bg-base-200 ring-2 ring-primary{% endif %}">
+            <audio controls preload="none" src="{{ file.url }}" class="h-8 max-w-full"></audio>
+            <span class="text-sm">{{ file.name }}</span>
+            {% if file.chosen %}
+              <span class="badge badge-primary badge-sm">Used by this production</span>
+              <form method="POST" class="ml-auto">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="remove_sound" />
+                <button type="submit" class="btn btn-ghost btn-xs text-error">Stop using</button>
+              </form>
+            {% else %}
+              <form method="POST" class="ml-auto">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="choose_sound" />
+                <input type="hidden" name="name" value="{{ file.name }}" />
+                <button type="submit" class="btn btn-ghost btn-xs">Use for this production</button>
+              </form>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="mb-3 text-sm opacity-70">No sound files have been uploaded yet.</p>
+    {% endif %}
+    <form method="POST" enctype="multipart/form-data" class="flex items-center gap-2">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="sound" />
+      {{ sound_form.sound }}
+      <button type="submit" class="btn btn-primary shrink-0">Upload sound</button>
+    </form>
+    {% for error in sound_form.sound.errors %}<p class="mt-1 text-sm text-error">{{ error }}</p>{% endfor %}
+  </section>
 </div>
 
 <dialog id="add-images" class="modal">

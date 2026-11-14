@@ -1,6 +1,7 @@
+import re
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import MaxValueValidator, RegexValidator, URLValidator
 from django.db import models, transaction
 from django.utils import timezone
 from django.db.models import Exists, F, Min, OuterRef, Q
@@ -101,6 +102,15 @@ class TicketSite(models.Model):
         return self.name
 
 
+def validate_listen_url(value):
+    """A listen address: a web address (http or https), or a place on this site, which starts with / (/media/sounds/a.mp3)."""
+    if value.startswith("/"):
+        if value.startswith("//") or any(c.isspace() for c in value):
+            raise ValidationError("A local address starts with a single / and has no spaces.")
+        return
+    URLValidator(schemes=["http", "https"])(value)
+
+
 class Venue(models.Model):
     name = models.CharField(max_length=255)
     address = models.TextField(max_length=255, blank=True)
@@ -149,7 +159,8 @@ class Event(models.Model):
         TicketSite, null=True, blank=True, on_delete=models.SET_NULL
     )
     # Where to listen to a Broadcast event (tickets are for performances).
-    listen_url = models.URLField(blank=True)
+    # A web address, or a local one starting with / (a sound file on this site, say /media/sounds/play.mp3).
+    listen_url = models.CharField(max_length=200, blank=True, validators=[validate_listen_url])
 
     def __str__(self):
         return self.get_event_type_display()
@@ -226,6 +237,8 @@ class Production(models.Model):
         max_length=7, blank=True, validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$", "Enter a colour as #rrggbb.")],
     )
     DEFAULT_PUBLIC_COLOUR = "#2e1065"  # deep purple
+    # A sound file for the production (uploaded on its Media tab), kept in MEDIA_ROOT/sounds/.
+    sound = models.FileField(upload_to="sounds/", blank=True)
 
     objects = ProductionQuerySet.as_manager()
 
@@ -397,7 +410,7 @@ class ParentProduction(Production):
 
 
 class Cast(models.Model):
-    character_name = models.CharField(max_length=255)
+    character_name = models.CharField(max_length=255, blank=True)
     characteristics = models.TextField(blank=True)
     production = models.ForeignKey(
         Production, on_delete=models.CASCADE, related_name="cast"
@@ -411,7 +424,7 @@ class Cast(models.Model):
     )
 
     def __str__(self):
-        return f"{self.character_name} in {self.production}"
+        return f"{self.character_name} in {self.production}" if self.character_name else f"{self.actor} in {self.production}"
 
 
 class Role(models.Model):
@@ -478,6 +491,66 @@ class ProductionImage(models.Model):
         images = production.images.select_related("image")
         if not images.filter(is_default=True).exists() and (best := min(images, key=cls.preference, default=None)):
             best.make_default()
+
+
+class Palette(models.Model):
+    """A named set of up to 8 colours (e.g. the swatches offered for a public page's background)."""
+
+    SIZE = 8
+
+    name = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def as_pairs(self):
+        """[(colour name, #rrggbb)] in order, the form of themes.PUBLIC_PALETTE."""
+        return [(colour.name, colour.colour) for colour in self.colours.all()]
+
+    @property
+    def is_complete(self):
+        """Whether all 8 colours are set."""
+        return self.colours.count() == self.SIZE
+
+    def slots(self):
+        """The 8 places in order: a (name, #rrggbb), or None where nothing is saved."""
+        by_position = {c.position: (c.name, c.colour) for c in self.colours.all()}
+        return [by_position.get(i) for i in range(self.SIZE)]
+
+    def set_colour(self, position, colour, name=""):
+        """Save `colour` (#rrggbb) in place `position` (0 to 7), replacing what was there. ValueError if either is bad."""
+        colour = (colour or "").strip().lower()
+        if not re.fullmatch(r"#[0-9a-f]{6}", colour):
+            raise ValueError("That is not a colour (#rrggbb).")
+        if not isinstance(position, int) or not 0 <= position < self.SIZE:
+            raise ValueError("Choose one of the saved boxes.")
+        saved, _ = self.colours.update_or_create(position=position, defaults={"name": name, "colour": colour})
+        return saved
+
+
+class PaletteColour(models.Model):
+    palette = models.ForeignKey(Palette, on_delete=models.CASCADE, related_name="colours")
+    # Where the colour comes in the palette: 0 to 7 (so a palette cannot have more than 8 colours).
+    position = models.PositiveSmallIntegerField(validators=[MaxValueValidator(Palette.SIZE - 1)])
+    name = models.CharField(max_length=255, blank=True)
+    colour = models.CharField(max_length=7, validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$", "Enter a colour as #rrggbb.")])
+
+    class Meta:
+        ordering = ["palette", "position"]
+        constraints = [
+            models.UniqueConstraint(fields=["palette", "position"], name="one_colour_per_palette_position"),
+            models.CheckConstraint(condition=models.Q(position__lt=8), name="palette_position_below_8"),
+        ]
+
+    def __str__(self):
+        return f"{self.palette} {self.position + 1}: {self.name or self.colour}"
+
+    def save(self, *args, **kwargs):
+        self.colour = self.colour.lower()
+        super().save(*args, **kwargs)
 
 
 class Contact(models.Model):

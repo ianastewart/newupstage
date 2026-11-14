@@ -4,7 +4,7 @@
 <h1 class="mb-4 text-3xl font-bold">{{ production }}</h1>
 <div role="tablist" class="tabs tabs-border mb-6">
   <a role="tab" href="{% url 'production-detail' production.pk %}" class="tab{% if active == 'details' %} tab-active{% endif %}">Details</a>
-  <a role="tab" href="{% url 'production-images' production.pk %}" class="tab{% if active == 'images' %} tab-active{% endif %}">Images</a>
+  <a role="tab" href="{% url 'production-images' production.pk %}" class="tab{% if active == 'images' %} tab-active{% endif %}">Media</a>
   <a role="tab" href="{% url 'production-cast' production.pk %}" class="tab{% if active == 'cast' %} tab-active{% endif %}">Cast</a>
   <a role="tab" href="{% url 'production-team' production.pk %}" class="tab{% if active == 'team' %} tab-active{% endif %}">Team</a>
   <a role="tab" href="{% url 'production-events' production.pk %}" class="tab{% if active == 'events' %} tab-active{% endif %}">Events</a>

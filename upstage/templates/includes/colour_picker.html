@@ -1,0 +1,157 @@
+{# The colour picker used for every colour setting. Mark a text input data-swatches: it gets a top line (current colour, hex code, clear X unless data-required, and for staff Save to palette) and two rows of 8 small swatches: the fixed palette (colour_palette), then the saved colours (colour_saved: the 8 places of the palette Background 1, which staff overwrite with Save to palette). #}
+<script id="colour-palette" type="application/json">[{% for name, hex in colour_palette %}["{{ name|escapejs }}", "{{ hex|escapejs }}"]{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+<script id="colour-saved" type="application/json">[{% for slot in colour_saved %}{% if slot %}["{{ slot.0|escapejs }}", "{{ slot.1|escapejs }}"]{% else %}null{% endif %}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+<script>
+  (() => {
+    const palette = JSON.parse(document.getElementById('colour-palette').textContent);
+    let saved = JSON.parse(document.getElementById('colour-saved').textContent);
+    const canSave = {% if user.is_staff %}true{% else %}false{% endif %};
+    const pickers = [];  // each picker's way of drawing itself again after a colour is saved
+    const csrf = () => (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
+    const isHex = (value) => /^#[0-9a-f]{6}$/.test(value);
+    const SWATCH = 'size-5 rounded border text-[10px] leading-none transition ring-offset-1 ring-offset-base-100 focus:outline-none focus-visible:ring-2 ring-primary';
+
+    document.querySelectorAll('input[data-swatches]').forEach((input) => {
+      const required = input.hasAttribute('data-required');
+      let choosing = false;  // Save to palette was pressed: the next click picks the saved box to overwrite
+
+      const line = document.createElement('div');
+      line.className = 'flex flex-wrap items-center gap-2';
+      input.classList.remove('w-full');
+      input.classList.add('w-28');
+      input.insertAdjacentElement('beforebegin', line);
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-2 space-y-1.5';
+      const top = document.createElement('div');
+      top.className = 'flex flex-wrap items-center gap-1.5';
+      top.setAttribute('aria-label', 'Palette');
+      const bottom = document.createElement('div');
+      bottom.className = 'flex flex-wrap items-center gap-1.5';
+      bottom.setAttribute('aria-label', 'Saved colours');
+      wrap.append(top, bottom);
+
+      // The current colour; click it for the browser's own chooser.
+      const chooser = document.createElement('input');
+      chooser.type = 'color';
+      chooser.title = chooser.ariaLabel = 'Current colour: click to choose any colour';
+      chooser.className = 'h-8 w-10 shrink-0 cursor-pointer rounded border border-base-300 bg-base-100 p-0.5';
+      const change = (value) => {
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      chooser.addEventListener('input', () => change(chooser.value));
+      line.append(chooser, input);
+
+      if (!required) {
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.title = clear.ariaLabel = "Clear: use the theme's colour";
+        clear.className = 'btn btn-ghost btn-sm btn-square';
+        clear.textContent = '✕';
+        clear.addEventListener('click', () => change(''));
+        line.appendChild(clear);
+      }
+
+      let save, note;
+      if (canSave) {
+        save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'btn btn-ghost btn-sm';
+        save.textContent = 'Save to palette';
+        note = document.createElement('span');
+        note.className = 'text-xs opacity-70';
+        note.setAttribute('role', 'status');
+        line.append(save, note);
+      }
+
+      const swatch = (name, value) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.value = value;
+        button.title = button.ariaLabel = `${name ? name + ' ' : ''}${value}`;
+        button.className = `${SWATCH} border-base-content/30`;
+        button.style.backgroundColor = value;
+        return button;
+      };
+      const mark = () => {
+        const now = input.value.trim().toLowerCase();
+        wrap.querySelectorAll('button[data-value]').forEach((b) => {
+          const on = b.dataset.value !== '' && b.dataset.value.toLowerCase() === now && !choosing;
+          b.classList.toggle('ring-2', on);
+          b.setAttribute('aria-pressed', on);
+        });
+        if (isHex(now)) chooser.value = now;
+        chooser.classList.toggle('opacity-30', !isHex(now));  // no colour chosen: the theme's
+      };
+      const render = () => {
+        top.replaceChildren(...palette.map(([name, value]) => {
+          const button = swatch(name, value);
+          if (choosing) {  // a saved box must be chosen: the palette cannot be overwritten
+            button.disabled = true;
+            button.textContent = '🚫';
+            button.className += ' cursor-not-allowed opacity-60';
+            button.title = button.ariaLabel = 'Not available: choose one of the saved boxes';
+          } else {
+            button.addEventListener('click', () => change(value));
+          }
+          return button;
+        }));
+        bottom.replaceChildren(...saved.map((slot, position) => {
+          const button = slot ? swatch(slot[0], slot[1]) : document.createElement('button');
+          if (!slot) {
+            button.type = 'button';
+            button.className = `${SWATCH} border-dashed border-base-content/30`;
+            button.title = button.ariaLabel = 'Empty';
+            button.dataset.value = '';
+          }
+          if (choosing) {
+            button.disabled = false;
+            button.className += ' animate-pulse ring-2 ring-warning';
+            button.title = button.ariaLabel = `Overwrite box ${position + 1}`;
+            button.addEventListener('click', () => store(position));
+          } else if (slot) {
+            button.addEventListener('click', () => change(slot[1]));
+          } else {
+            button.disabled = true;
+          }
+          return button;
+        }));
+        mark();
+      };
+      const stop = (message) => {
+        choosing = false;
+        save.textContent = 'Save to palette';
+        note.textContent = message || '';
+        render();
+      };
+      const store = async (position) => {
+        try {
+          const response = await fetch('{% url "save-palette-colour" %}', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf(), 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ colour: input.value.trim().toLowerCase(), position }),
+          });
+          const data = await response.json();
+          if (data.slots) saved = data.slots;
+          pickers.forEach((redraw) => redraw());
+          stop(data.message);
+        } catch (e) { stop('Could not save the colour.'); }
+      };
+      if (canSave) {
+        save.addEventListener('click', () => {
+          if (choosing) { stop(); return; }  // pressed again: cancel
+          if (!isHex(input.value.trim().toLowerCase())) { note.textContent = 'Choose a colour first.'; return; }
+          choosing = true;
+          save.textContent = 'Cancel';
+          note.textContent = 'Click the saved box to overwrite.';
+          render();
+        });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && choosing) stop(); });
+      }
+      input.addEventListener('input', mark);
+      pickers.push(render);
+      line.insertAdjacentElement('afterend', wrap);
+      render();
+    });
+  })();
+</script>

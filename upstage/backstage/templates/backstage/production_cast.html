@@ -45,7 +45,7 @@
 
     <div id="member-form" class="card h-fit scroll-mt-4 bg-base-200 shadow-sm">
       <div class="card-body">
-        <h2 class="card-title">{% if editing %}Edit {{ editing.character_name }}{% else %}Add character{% endif %}</h2>
+        <h2 class="card-title">{% if editing %}Edit {{ editing.character_name|default:editing.actor }}{% else %}Add character{% endif %}</h2>
         <form method="POST">
           {% csrf_token %}
           {% if editing %}<input type="hidden" name="member" value="{{ editing.pk }}" />{% endif %}

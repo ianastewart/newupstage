@@ -12,7 +12,7 @@
         {% with cover=production.default_image %}
           {% if cover %}
             {# The whole default image, uncropped, at most 300px high; links to the Images tab to change it. #}
-            <a href="{% url 'production-images' production.pk %}" title="Default image: change it on the Images tab" class="shrink-0">
+            <a href="{% url 'production-images' production.pk %}" title="Default image: change it on the Media tab" class="shrink-0">
               <img src="{{ cover.image.image.url }}" alt="{{ production.title }}" class="h-auto max-h-[300px] w-auto max-w-full rounded-box shadow-sm" />
             </a>
           {% endif %}

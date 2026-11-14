@@ -1,6 +1,7 @@
 from urllib.parse import urlparse
 
 from django import forms
+from django.core.validators import FileExtensionValidator
 from django.db.models import Q
 from django.db.models.functions import Lower
 
@@ -53,6 +54,23 @@ class PersonRolesForm(forms.ModelForm):
         widgets = {"roles": forms.CheckboxSelectMultiple}
 
 
+SOUND_EXTENSIONS = ["mp3", "wav", "ogg", "m4a", "aac", "flac"]
+
+
+class ProductionSoundForm(forms.ModelForm):
+    """The sound file of a production (the Media tab): an audio file, saved in media/sounds/."""
+
+    class Meta:
+        model = models.Production
+        fields = ["sound"]
+        widgets = {"sound": forms.FileInput(attrs={"class": "file-input file-input-xs w-64 max-w-full", "accept": "audio/*," + ",".join(f".{e}" for e in SOUND_EXTENSIONS)})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["sound"].required = True
+        self.fields["sound"].validators.append(FileExtensionValidator(SOUND_EXTENSIONS))
+
+
 class CastForm(forms.ModelForm):
     class Meta:
         model = models.Cast
@@ -97,10 +115,14 @@ class EventDetailsForm(forms.ModelForm):
     class Meta:
         model = models.Event
         fields = ["event_type", "publish", "venue", "listen_url", "description"]
-        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 3}),
+            "listen_url": forms.TextInput(attrs={"placeholder": "https://... or /media/sounds/..."}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["listen_url"].help_text = "A web address, or an address on this site starting with / (a sound file, say)."
         if self.instance.ticket_site_id:
             self.fields["ticket_url"].initial = self.instance.ticket_site.url
 

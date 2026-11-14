@@ -157,7 +157,7 @@ class ColourSwatchTests(TestCase):
             response = self.client.get(url)
             # One attribute per colour field, plus the script's own selector.
             self.assertContains(response, "data-swatches", count=fields + 1, msg_prefix=url)
-            self.assertContains(response, "Theatre red", msg_prefix=url)
+            self.assertContains(response, "Sky Aqua", msg_prefix=url)
 
 
 class StylesheetVersionTests(TestCase):

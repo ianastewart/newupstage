@@ -2,7 +2,7 @@ import re
 
 from django.db.models import CharField, Count, Exists, F, Min, OuterRef, Prefetch, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
-from django.http import HttpResponseForbidden, HttpResponseNotAllowed, HttpResponseRedirect
+from django.http import HttpResponseForbidden, JsonResponse, HttpResponseNotAllowed, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.forms import HiddenInput
 from django.urls import reverse
@@ -13,6 +13,7 @@ from django.utils.dateparse import parse_datetime
 from neapolitan.views import CRUDView, Role
 
 from backstage import forms, models
+from backstage.context_processors import PICKER_PALETTE_NAME
 from backstage.themes import is_theme
 
 
@@ -123,12 +124,40 @@ def production_events(request, pk):
     })
 
 
-def production_images(request, pk):
-    """Show a production's images; add images from the library or remove them."""
-    production = get_object_or_404(models.Production, pk=pk)
+def _sound_files(production):
+    """The sound files in media/sounds/, by name, as {name, url, chosen}: chosen when `production` uses the file."""
+    storage = production.sound.storage
+    try:
+        names = sorted(storage.listdir("sounds")[1], key=str.lower)
+    except FileNotFoundError:
+        return []
+    return [
+        {"name": name, "url": storage.url(f"sounds/{name}"), "chosen": production.sound.name == f"sounds/{name}"}
+        for name in names
+    ]
 
-    if request.method == "POST":
-        if request.POST.get("action") == "add":
+
+def production_images(request, pk):
+    """The Media tab: a production's sound file (upload or remove) and its images (add from the library or remove)."""
+    production = get_object_or_404(models.Production, pk=pk)
+    sound_form = forms.ProductionSoundForm(instance=production)
+
+    if request.method == "POST" and request.POST.get("action") == "sound":
+        sound_form = forms.ProductionSoundForm(request.POST, request.FILES, instance=production)
+        if sound_form.is_valid():
+            sound_form.save()  # the file joins those in media/sounds/ and is the one this production uses
+            return redirect("production-images", pk=production.pk)
+    elif request.method == "POST":
+        if request.POST.get("action") == "remove_sound":
+            # Only this production stops using it: other productions may use the same file.
+            production.sound = ""
+            production.save(update_fields=["sound"])
+        elif request.POST.get("action") == "choose_sound":
+            name = request.POST.get("name", "")
+            if name in [f["name"] for f in _sound_files(production)]:
+                production.sound = f"sounds/{name}"
+                production.save(update_fields=["sound"])
+        elif request.POST.get("action") == "add":
             image_ids = [i for i in request.POST.getlist("images") if i.isdigit()]
             already_added = production.images.values("image_id")
             new_images = models.Image.objects.filter(pk__in=image_ids).exclude(pk__in=already_added)
@@ -160,6 +189,8 @@ def production_images(request, pk):
             "production": production,
             "production_images": production_images,
             "available_images": available_images,
+            "sound_form": sound_form,
+            "sound_files": _sound_files(production),
         },
     )
 
@@ -784,3 +815,23 @@ def set_public_theme(request):
     if not url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}):
         back = reverse("production-list")
     return redirect(back)
+
+
+def save_palette_colour(request):
+    """
+    The colour picker's Save to palette button (POST colour and position, 0 to 7): save the colour in that place of
+    the picker's saved palette, replacing what was there. Answers with JSON: {"ok", "message", "slots"}, the 8 places
+    as they now are. Staff only.
+    """
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    if not request.user.is_staff:
+        return JsonResponse({"ok": False, "message": "Only staff can change the palette."}, status=403)
+    palette, _ = models.Palette.objects.get_or_create(name=PICKER_PALETTE_NAME)
+    position = request.POST.get("position", "")
+    try:
+        palette.set_colour(int(position) if position.isdigit() else None, request.POST.get("colour", ""))
+        ok, message = True, "Saved."
+    except ValueError as error:
+        ok, message = False, str(error)
+    return JsonResponse({"ok": ok, "message": message, "slots": palette.slots()}, status=200 if ok else 400)

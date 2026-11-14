@@ -3,8 +3,11 @@ import os
 from django.contrib.staticfiles import finders
 from django.utils.functional import SimpleLazyObject
 
-from backstage.models import Image, SiteSettings
-from backstage.themes import THEMES, is_theme
+from backstage.models import Image, Palette, SiteSettings
+from backstage.themes import PUBLIC_PALETTE, THEMES, is_theme
+
+# The palette (in the admin) whose colours are the colour picker's fixed row.
+PICKER_PALETTE_NAME = "Background 1"
 
 # The image library entry shown on the left of the navbar.
 NAVBAR_LOGO_DESCRIPTION = "Upstage Surrey Logo"
@@ -52,3 +55,17 @@ def themes(request):
         return chosen if is_theme(chosen) else ""
 
     return {"themes": THEMES, "public_theme": SimpleLazyObject(find_public_theme)}
+
+
+def colour_palette(request):
+    """
+    The colour picker's two rows. `colour_palette`: the fixed row, themes.PUBLIC_PALETTE as [(name, #rrggbb)].
+    `colour_saved`: the saved row, the 8 places of the palette PICKER_PALETTE_NAME (a (name, #rrggbb) or None for an
+    empty place). The saved row is only looked up when a template uses it.
+    """
+
+    def find_saved():
+        palette = Palette.objects.filter(name=PICKER_PALETTE_NAME).first()
+        return palette.slots() if palette else [None] * Palette.SIZE
+
+    return {"colour_palette": PUBLIC_PALETTE, "colour_saved": SimpleLazyObject(find_saved)}

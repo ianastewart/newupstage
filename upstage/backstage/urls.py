@@ -5,6 +5,7 @@ from backstage import views
 
 urlpatterns = [
     path("public-theme/", views.set_public_theme, name="public-theme"),
+    path("palette/colour/", views.save_palette_colour, name="save-palette-colour"),
     path("actors/", views.actor_list, name="actor-list"),
     path("actors/new/", views.actor_new, name="actor-new"),
     path("actors/<int:pk>/roles/", views.actor_roles, name="actor-roles"),

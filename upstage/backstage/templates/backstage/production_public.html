@@ -31,13 +31,13 @@
           </label>
         {% endfor %}
       </div>
-      {% if not images %}<p class="mt-2 text-sm opacity-70">This production has no images yet: add some on the <a href="{% url 'production-images' production.pk %}" class="link">Images tab</a>.</p>{% endif %}
+      {% if not images %}<p class="mt-2 text-sm opacity-70">This production has no images yet: add some on the <a href="{% url 'production-images' production.pk %}" class="link">Media tab</a>.</p>{% endif %}
     </fieldset>
     {% endif %}
     <div class="mt-6">
       <label for="id_colour" class="mb-1 block text-lg font-semibold">Background colour</label>
       <div class="flex flex-wrap items-center gap-3">
-        <input id="id_colour" type="color" name="colour" value="{{ production.public_background }}" class="h-10 w-20 cursor-pointer rounded border border-base-300 bg-base-100 p-1" />
+        <input id="id_colour" type="text" name="colour" value="{{ production.public_background }}" maxlength="7" placeholder="#rrggbb" data-swatches data-required data-default="{{ production.DEFAULT_PUBLIC_COLOUR }}" class="input input-sm w-28 font-mono" />
         <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('id_colour').value = '{{ production.DEFAULT_PUBLIC_COLOUR }}'">Deep purple (default)</button>
         <button type="submit" class="btn btn-primary btn-sm">Save</button>
       </div>
@@ -74,6 +74,8 @@
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
+
+{% include "includes/colour_picker.html" %}
 
 <script>
   // Show the public page in a large modal; without script the form opens it in a new tab.

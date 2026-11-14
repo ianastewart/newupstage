@@ -59,7 +59,7 @@
             {% if person.parts %}
               <div class="flex flex-wrap gap-1">
                 {% for part in person.parts %}
-                  <a href="{% url 'production-detail' part.production.pk %}" class="badge badge-secondary badge-outline hover:bg-secondary hover:text-secondary-content" title="{{ part.character_name }} in {{ part.production.title }}">{{ part.production.title }} <span class="opacity-70">· {{ part.character_name }}</span></a>
+                  <a href="{% url 'production-detail' part.production.pk %}" class="badge badge-secondary badge-outline hover:bg-secondary hover:text-secondary-content" title="{% if part.character_name %}{{ part.character_name }} in {% endif %}{{ part.production.title }}">{{ part.production.title }}{% if part.character_name %} <span class="opacity-70">· {{ part.character_name }}</span>{% endif %}</a>
                 {% endfor %}
               </div>
             {% else %}
