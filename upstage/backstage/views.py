@@ -1,7 +1,7 @@
 import re
 
 from django.db.models import CharField, Count, Exists, F, Min, OuterRef, Prefetch, Q, Value
-from django.db.models.functions import Coalesce, Lower, NullIf
+from django.db.models.functions import Coalesce, Lower, NullIf, TruncDate
 from django.http import HttpResponseForbidden, JsonResponse, HttpResponseNotAllowed, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.forms import HiddenInput
@@ -71,7 +71,7 @@ def production_team(request, pk):
         related_name="team",
         form_class=forms.ProductionTeamForm,
         select_related=["person__image", "role"],
-        order_by=["role__name", "person__last_name", "person__first_name"],
+        order_by=models.team_order_by(),
         template_name="backstage/production_team.html",
         url_name="production-team",
     )
@@ -124,39 +124,23 @@ def production_events(request, pk):
     })
 
 
-def _sound_files(production):
-    """The sound files in media/sounds/, by name, as {name, url, chosen}: chosen when `production` uses the file."""
-    storage = production.sound.storage
-    try:
-        names = sorted(storage.listdir("sounds")[1], key=str.lower)
-    except FileNotFoundError:
-        return []
-    return [
-        {"name": name, "url": storage.url(f"sounds/{name}"), "chosen": production.sound.name == f"sounds/{name}"}
-        for name in names
-    ]
-
-
 def production_images(request, pk):
-    """The Media tab: a production's sound file (upload or remove) and its images (add from the library or remove)."""
+    """The Media tab: a production's images (add from the library or remove) and sounds (upload or delete)."""
     production = get_object_or_404(models.Production, pk=pk)
-    sound_form = forms.ProductionSoundForm(instance=production)
+    sound_form = forms.SoundForm()
 
     if request.method == "POST" and request.POST.get("action") == "sound":
-        sound_form = forms.ProductionSoundForm(request.POST, request.FILES, instance=production)
+        sound_form = forms.SoundForm(request.POST, request.FILES)
         if sound_form.is_valid():
-            sound_form.save()  # the file joins those in media/sounds/ and is the one this production uses
+            sound = sound_form.save(commit=False)
+            sound.production = production  # a sound always belongs to a production
+            sound.save()
             return redirect("production-images", pk=production.pk)
     elif request.method == "POST":
-        if request.POST.get("action") == "remove_sound":
-            # Only this production stops using it: other productions may use the same file.
-            production.sound = ""
-            production.save(update_fields=["sound"])
-        elif request.POST.get("action") == "choose_sound":
-            name = request.POST.get("name", "")
-            if name in [f["name"] for f in _sound_files(production)]:
-                production.sound = f"sounds/{name}"
-                production.save(update_fields=["sound"])
+        if request.POST.get("action") == "delete_sound":
+            sound_id = request.POST.get("sound", "")
+            if sound_id.isdigit() and (sound := production.sounds.filter(pk=sound_id).first()):
+                sound.delete()  # and its file
         elif request.POST.get("action") == "add":
             image_ids = [i for i in request.POST.getlist("images") if i.isdigit()]
             already_added = production.images.values("image_id")
@@ -190,9 +174,25 @@ def production_images(request, pk):
             "production_images": production_images,
             "available_images": available_images,
             "sound_form": sound_form,
-            "sound_files": _sound_files(production),
+            "sounds": production.sounds.all(),
         },
     )
+
+
+def _public_image_choices(production):
+    """The production's images the public page can show: all but its gallery images."""
+    return (
+        production.images.select_related("image")
+        .exclude(image__image_type=models.Image.ImageType.GALLERY)
+        .order_by("-is_default", "-id")
+    )
+
+
+# The parts of a production's public page that can be switched off on the Public view tab: (name, label).
+PUBLIC_PARTS = [
+    ("title", "Title"), ("strap_line", "Strap line"), ("description", "Description"), ("venue_logo", "Venue logo"), ("cast", "Cast"),
+    ("team", "Team"),
+]
 
 
 def production_public(request, pk):
@@ -201,24 +201,32 @@ def production_public(request, pk):
     with only some of its parts (the choices go to the public page in its address and are not saved).
     """
     production = get_object_or_404(models.Production, pk=pk)
+    if request.method == "POST" and request.POST.get("action") == "parts":
+        # Save which parts of the public page are shown (the ones left unticked are switched off).
+        shown = set(request.POST.getlist("show"))
+        production.public_hidden_parts = [part for part, _ in PUBLIC_PARTS if part not in shown]
+        production.save(update_fields=["public_hidden_parts"])
+        return redirect("production-public", pk=production.pk)
     if request.method == "POST":
         image_id = request.POST.get("image", "")
-        link = production.images.filter(image_id=image_id).first() if image_id.isdigit() else None
-        production.public_image = link.image if link else None  # nothing chosen: the default image
+        link = _public_image_choices(production).filter(image_id=image_id).first() if image_id.isdigit() else None
+        default = production.default_image
+        # Nothing chosen, or the default image chosen: the page follows the production's default image.
+        production.public_image = link.image if link and not (default and default.pk == link.pk) else None
         colour = request.POST.get("colour", "").strip()
+        if re.fullmatch(r"[0-9a-fA-F]{6}", colour):
+            colour = "#" + colour  # typed without the #
         valid = re.fullmatch(r"#[0-9a-fA-F]{6}", colour) and colour.lower() != production.DEFAULT_PUBLIC_COLOUR
         production.public_colour = colour.lower() if valid else ""  # blank: deep purple
         production.save(update_fields=["public_image", "public_colour"])
         return redirect("production-public", pk=production.pk)
-    links = production.images.select_related("image").order_by("-is_default", "-id")
+    images = [link.image for link in _public_image_choices(production)]
+    shown = production.public_view_image  # the chosen image, else the default one
     return render(request, "backstage/production_public.html", {
         "production": production,
-        "images": [link.image for link in links],
-        "selected_image": production.public_image_id if production.images.filter(image_id=production.public_image_id).exists() else None,
-        "parts": [
-            ("title", "Title"), ("strap_line", "Strap line"), ("description", "Description"), ("cast", "Cast"),
-            ("team", "Team"),
-        ],
+        "images": images,
+        "selected_image": shown.pk if shown in images else None,
+        "parts": [(part, label, part not in production.public_hidden_parts) for part, label in PUBLIC_PARTS],
     })
 
 
@@ -397,7 +405,7 @@ class ImageView(CRUDView):
         return super().get_success_url()
 
 
-# Headings for a person's production team credits, in the order they're shown.
+# Headings for a person's production team credits (the sections follow models.TEAM_ROLE_ORDER).
 CREDIT_HEADINGS = {"Writer": "Plays written", "Director": "Directed", "Editor": "Edited"}
 
 
@@ -422,12 +430,9 @@ def person_productions(person):
         .order_by(F("broadcast_at").desc(nulls_last=True), "production__title")
     ):
         credits.setdefault(credit.role.name, []).append(credit.production)
-    order = list(CREDIT_HEADINGS)
     sections = [
         (CREDIT_HEADINGS.get(role, role), productions)
-        for role, productions in sorted(
-            credits.items(), key=lambda item: (order.index(item[0]) if item[0] in order else len(order), item[0])
-        )
+        for role, productions in sorted(credits.items(), key=lambda item: (models.team_role_rank(item[0]), item[0]))
     ]
     return list(characters.items()), sections
 
@@ -447,6 +452,29 @@ class PersonView(CRUDView):
         "others": ("other-list", "", "Other roles"),
         "others-details": ("other-list", "?view=details", "Other roles"),
     }
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.role == Role.LIST:
+            queryset = filter_by_name(queryset, self.request.GET.get("q", "").strip())
+            queryset = queryset.order_by(*people_ordering("first"), "pk")  # alphabetical by first name
+        return queryset
+
+    def dispatch(self, request, *args, **kwargs):
+        # A page that sends someone here to add a person (?next=<its address>) gets them back after the person is saved.
+        # It is kept in the session, as the form can go off to upload a photo and come back (?restore=1) first.
+        if self.role == Role.CREATE and request.method == "GET":
+            back = request.GET.get("next", "")
+            if back and url_has_allowed_host_and_scheme(back, allowed_hosts={request.get_host()}):
+                request.session["person_next"] = back
+            elif "restore" not in request.GET:
+                request.session.pop("person_next", None)  # a fresh visit: not on the way back to anywhere
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_success_url(self):
+        if self.role == Role.CREATE and (back := self.request.session.pop("person_next", "")):
+            return back
+        return super().get_success_url()
 
     def get_form(self, data=None, files=None, **kwargs):
         # A new person can start with a role ticked: /person/new/?role=Actor (the "New actor" button).
@@ -482,6 +510,8 @@ class PersonView(CRUDView):
         return HttpResponseRedirect(self.get_success_url())
 
     def get_context_data(self, **kwargs):
+        if self.role == Role.LIST:
+            kwargs["search"] = self.request.GET.get("q", "").strip()
         if self.role == Role.DELETE and self.object.image_id:
             kwargs["photo_uses"] = self.photo_uses(self.object)
         if self.role == Role.DETAIL:
@@ -581,14 +611,23 @@ def people_ordering(sort):
     return (Coalesce(NullIf(Lower("last_name"), Value("")), Lower("first_name")), Lower("first_name"))
 
 
+def filter_by_name(people, search):
+    """Only the people whose name matches `search`: every word of it must be in the first or the last name."""
+    for word in search.split():
+        people = people.filter(Q(first_name__icontains=word) | Q(last_name__icontains=word))
+    return people
+
+
 def writer_list(request):
     """
     Everyone with the Writer role: photos and names, or with details (and the productions they wrote). Alphabetical
-    by surname, or by first name (?sort=first).
+    by first name, or by surname (?sort=last).
     """
     details = request.GET.get("view") == "details"
-    sort = "first" if request.GET.get("sort") == "first" else "last"
+    sort = "last" if request.GET.get("sort") == "last" else "first"
+    search = request.GET.get("q", "").strip()
     writers = models.Person.objects.filter(roles__name="Writer").select_related("image").order_by(*people_ordering(sort)).distinct()
+    writers = filter_by_name(writers, search)
     if details:
         writers = writers.prefetch_related(
             Prefetch(
@@ -600,16 +639,17 @@ def writer_list(request):
                 to_attr="writing_credits",
             )
         )
-    return render(request, "backstage/writer_list.html", {"writers": writers, "details": details, "sort": sort})
+    return render(request, "backstage/writer_list.html", {"writers": writers, "details": details, "sort": sort, "search": search})
 
 
 def other_list(request):
     """
     Everyone except those whose only roles are Actor and/or Writer (they have their own lists), so people with other roles
-    and people with no role at all: photos and names, or with details. Alphabetical by surname, or by first name (?sort=first).
+    and people with no role at all: photos and names, or with details. Alphabetical by first name, or by surname (?sort=last).
     """
     details = request.GET.get("view") == "details"
-    sort = "first" if request.GET.get("sort") == "first" else "last"
+    sort = "last" if request.GET.get("sort") == "last" else "first"
+    search = request.GET.get("q", "").strip()
     roles = models.Person.roles.through.objects.filter(person=OuterRef("pk"))
     has_other_role = Exists(roles.exclude(role__name__in=["Actor", "Writer"]))
     has_any_role = Exists(roles)
@@ -619,6 +659,7 @@ def other_list(request):
         .select_related("image")
         .order_by(*people_ordering(sort))
     )
+    people = filter_by_name(people, search)
     if details:
         people = people.prefetch_related(
             "roles",
@@ -630,7 +671,7 @@ def other_list(request):
                 to_attr="credits",
             ),
         )
-    return render(request, "backstage/other_list.html", {"people": people, "details": details, "sort": sort})
+    return render(request, "backstage/other_list.html", {"people": people, "details": details, "sort": sort, "search": search})
 
 
 def audition_list(request):
@@ -642,12 +683,14 @@ def audition_list(request):
 
 def actor_list(request):
     """
-    Everyone with the Actor role: photos and names, or with details. Alphabetical by surname, or by first name
-    (?sort=first).
+    Everyone with the Actor role: photos and names, or with details. Alphabetical by first name, or by surname
+    (?sort=last).
     """
     details = request.GET.get("view") == "details"
-    sort = "first" if request.GET.get("sort") == "first" else "last"
+    sort = "last" if request.GET.get("sort") == "last" else "first"
+    search = request.GET.get("q", "").strip()
     actors = models.Person.objects.filter(roles__name="Actor").select_related("image").order_by(*people_ordering(sort)).distinct()
+    actors = filter_by_name(actors, search)
     if details:
         actors = actors.prefetch_related(
             Prefetch(
@@ -658,7 +701,7 @@ def actor_list(request):
                 to_attr="parts",
             )
         )
-    return render(request, "backstage/actor_list.html", {"actors": actors, "details": details, "sort": sort})
+    return render(request, "backstage/actor_list.html", {"actors": actors, "details": details, "sort": sort, "search": search})
 
 
 class TicketSiteView(CRUDView):
@@ -723,10 +766,12 @@ class ProductionView(CRUDView):
     def get_search(self):
         return self.request.GET.get("q", "").strip()
 
-    # By broadcast date (that of its Broadcast event); productions without one go last, most recently added first.
+    # By date: the broadcast date of a radio play, or the first performance of a stage play (the earliest if there are
+    # several); productions without a date go last, most recently added first. On the same day, a production that is
+    # not part of a parent production comes before the ones that are (the evening's plays follow their parent).
     SORTS = {
-        "newest": ("Newest first", [F("broadcast_at").desc(nulls_last=True), "-id"]),
-        "oldest": ("Oldest first", [F("broadcast_at").asc(nulls_last=True), "-id"]),
+        "newest": ("Newest first", [F("sort_day").desc(nulls_last=True), F("parent_id").asc(nulls_first=True), F("sort_date").desc(nulls_last=True), "-id"]),
+        "oldest": ("Oldest first", [F("sort_day").asc(nulls_last=True), F("parent_id").asc(nulls_first=True), F("sort_date").asc(nulls_last=True), "-id"]),
         "title": ("Alphabetical", [Lower("title"), "-id"]),
     }
 
@@ -737,7 +782,12 @@ class ProductionView(CRUDView):
     def get_queryset(self):
         queryset = super().get_queryset().order_by("-id")
         if self.role == Role.LIST:
-            queryset = queryset.with_broadcast_date()
+            queryset = queryset.with_broadcast_date().with_event_date().annotate(
+                sort_date=Coalesce("broadcast_at", "event_at")
+            ).annotate(
+                sort_day=TruncDate("sort_date"),
+                wraps_others=Exists(models.ParentProduction.objects.filter(pk=OuterRef("pk"))),
+            )
             # The default image is used as the cover in the list (Production.default_image).
             queryset = queryset.prefetch_related(
                 Prefetch("images", queryset=models.ProductionImage.objects.select_related("image").order_by("id"))

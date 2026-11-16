@@ -57,40 +57,31 @@
 
   <section class="mt-8">
     <h2 class="mb-2 text-lg font-semibold">Sounds</h2>
-    {% if sound_files %}
+    {% if sounds %}
       <ul class="mb-4 space-y-2">
-        {% for file in sound_files %}
-          <li class="flex flex-wrap items-center gap-3 rounded-box p-2{% if file.chosen %} bg-base-200 ring-2 ring-primary{% endif %}">
-            <audio controls preload="none" src="{{ file.url }}" class="h-8 max-w-full"></audio>
-            <span class="text-sm">{{ file.name }}</span>
-            {% if file.chosen %}
-              <span class="badge badge-primary badge-sm">Used by this production</span>
-              <form method="POST" class="ml-auto">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="remove_sound" />
-                <button type="submit" class="btn btn-ghost btn-xs text-error">Stop using</button>
-              </form>
-            {% else %}
-              <form method="POST" class="ml-auto">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="choose_sound" />
-                <input type="hidden" name="name" value="{{ file.name }}" />
-                <button type="submit" class="btn btn-ghost btn-xs">Use for this production</button>
-              </form>
-            {% endif %}
+        {% for sound in sounds %}
+          <li class="flex flex-wrap items-center gap-3 rounded-box bg-base-200 p-2">
+            <audio controls preload="none" src="{{ sound.file.url }}" class="h-8 max-w-full"></audio>
+            <span class="text-sm">{{ sound.name }}</span>
+            <form method="POST" class="ml-auto">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete_sound" />
+              <input type="hidden" name="sound" value="{{ sound.pk }}" />
+              <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+            </form>
           </li>
         {% endfor %}
       </ul>
     {% else %}
-      <p class="mb-3 text-sm opacity-70">No sound files have been uploaded yet.</p>
+      <p class="mb-3 text-sm opacity-70">This production has no sounds yet.</p>
     {% endif %}
     <form method="POST" enctype="multipart/form-data" class="flex items-center gap-2">
       {% csrf_token %}
       <input type="hidden" name="action" value="sound" />
-      {{ sound_form.sound }}
+      {{ sound_form.file }}
       <button type="submit" class="btn btn-primary shrink-0">Upload sound</button>
     </form>
-    {% for error in sound_form.sound.errors %}<p class="mt-1 text-sm text-error">{{ error }}</p>{% endfor %}
+    {% for error in sound_form.file.errors %}<p class="mt-1 text-sm text-error">{{ error }}</p>{% endfor %}
   </section>
 </div>
 

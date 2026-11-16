@@ -19,10 +19,6 @@
     <fieldset>
       <legend class="mb-2 text-lg font-semibold">Image</legend>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        <label class="flex cursor-pointer items-center justify-center rounded-box bg-base-200 p-3 text-center text-sm ring-primary has-checked:ring-4">
-          <input type="radio" name="image" value="" class="radio radio-sm mr-2" onchange="this.form.submit()"{% if not selected_image %} checked{% endif %} />
-          Default image
-        </label>
         {% for image in images %}
           <label class="relative cursor-pointer overflow-hidden rounded-box bg-base-200 ring-primary has-checked:ring-4">
             <img src="{{ image.image.url }}" alt="{{ image.description }}" loading="lazy" class="aspect-video w-full object-cover" />
@@ -36,13 +32,20 @@
     {% endif %}
     <div class="mt-6">
       <label for="id_colour" class="mb-1 block text-lg font-semibold">Background colour</label>
-      <div class="flex flex-wrap items-center gap-3">
-        <input id="id_colour" type="text" name="colour" value="{{ production.public_background }}" maxlength="7" placeholder="#rrggbb" data-swatches data-required data-default="{{ production.DEFAULT_PUBLIC_COLOUR }}" class="input input-sm w-28 font-mono" />
-        <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('id_colour').value = '{{ production.DEFAULT_PUBLIC_COLOUR }}'">Deep purple (default)</button>
+      <div>
+        <input id="id_colour" type="text" name="colour" value="{{ production.public_colour }}" maxlength="7" placeholder="None: deep purple" pattern="#?[0-9a-fA-F]{6}" title="A colour as #rrggbb, or empty for none" data-swatches class="input input-sm w-40 font-mono" />
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
         <button type="submit" class="btn btn-primary btn-sm">Save</button>
       </div>
     </div>
   </form>
+
+  <div class="mb-8">
+    <h2 class="mb-2 text-lg font-semibold">Blocks</h2>
+    <p class="mb-3 text-sm opacity-70">Add text, images and other blocks to the public page. They show after the cast and team, in the order you give them.</p>
+    <a href="{% url 'production-blocks' production.pk %}" class="btn btn-primary btn-sm">Edit blocks</a>
+  </div>
 
   {# Opens the public page with these parts in its address; nothing is saved. #}
   <form id="public-form" method="get" action="{% url 'public-production' production.pk %}" target="_blank" class="space-y-6">
@@ -51,16 +54,21 @@
     <fieldset>
       <legend class="mb-2 text-lg font-semibold">Show</legend>
       <div class="flex flex-wrap gap-x-6 gap-y-2">
-        {% for value, label in parts %}
+        {% for value, label, shown in parts %}
           <label class="flex cursor-pointer items-center gap-2">
-            <input type="checkbox" name="show" value="{{ value }}" class="checkbox checkbox-sm" checked />
+            <input type="checkbox" name="show" value="{{ value }}" class="checkbox checkbox-sm"{% if shown %} checked{% endif %} />
             {{ label }}
           </label>
         {% endfor %}
       </div>
     </fieldset>
 
-    <button type="submit" class="btn btn-primary">View public page</button>
+    <div class="flex flex-wrap items-center gap-3">
+      <button type="submit" class="btn btn-primary">View public page</button>
+      {# Saves the ticked parts (the public page then shows just those); the button above only previews them. #}
+      <button type="button" id="save-parts" class="btn btn-primary">Save choices</button>
+    </div>
+    <p class="text-sm opacity-70">View public page previews the ticked parts without saving them. Save choices makes the public page show just those.</p>
   </form>
 </div>
 
@@ -89,6 +97,25 @@
       modal.showModal();
     });
     modal.addEventListener('close', () => { frame.src = 'about:blank'; });
+
+    // Save choices: post the ticked parts (a form of its own, so the preview's address never carries the token).
+    document.getElementById('save-parts').addEventListener('click', () => {
+      const post = document.createElement('form');
+      post.method = 'post';
+      post.action = "{% url 'production-public' production.pk %}";
+      const add = (name, value) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        post.appendChild(input);
+      };
+      add('csrfmiddlewaretoken', '{{ csrf_token }}');
+      add('action', 'parts');
+      form.querySelectorAll('input[name=show]:checked').forEach((box) => add('show', box.value));
+      document.body.appendChild(post);
+      post.submit();
+    });
   })();
 </script>
 {% endblock %}

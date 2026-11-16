@@ -26,7 +26,7 @@ class WebPageSitemap(Sitemap):
     """The pages built in the page editor. The home page is the site's root, and a copy still being worked on is left out."""
 
     def items(self):
-        return WebPage.objects.exclude(slug="home").filter(copied_from__isnull=True).order_by("slug")
+        return WebPage.objects.exclude(slug="home").filter(copied_from__isnull=True, production__isnull=True).order_by("slug")
 
 
 class ProductionSitemap(Sitemap):

@@ -27,6 +27,7 @@ urlpatterns = [
     path("pages/<int:pk>/delete/", views.page_delete, name="page-delete"),
     path("pages/<int:pk>/replace-original/", views.page_replace_original, name="page-replace-original"),
     path("pages/<int:pk>/edit/", views.page_edit, name="page-edit"),
+    path("productions/<int:pk>/blocks/", views.production_page_edit, name="production-blocks"),
     path("pages/<int:page_pk>/blocks/new/", views.block_create, name="block-create"),
     path("pages/<int:page_pk>/blocks/<int:pk>/edit/", views.block_edit, name="block-edit"),
 ]

@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from backstage.forms import ContactForm
-from backstage.models import Event, EventDateTime, Person, Production, Role
+from backstage.models import Event, EventDateTime, Person, Production, Role, team_sort_key
 from backstage.views import person_productions
 
 from .auditions import audition_view, upcoming_auditions
@@ -61,7 +61,7 @@ def production_image(production):
 def webpage(request, slug):
     """A page built from its blocks, in order."""
     slug = slug or 'home'
-    page = get_object_or_404(WebPage, slug=slug)
+    page = get_object_or_404(WebPage, slug=slug, production__isnull=True)  # a production's blocks are on its own page
     page_blocks = list(page.page_blocks())
     # The page's first hero image block goes in the base template's hero area, above the content.
     hero = next((pb.block for pb in page_blocks if pb.block.block_type == Block.BlockType.HERO_IMAGE), None)
@@ -268,16 +268,16 @@ def radio_archive(request):
 
 
 # The parts of a production's public page that the backstage Public view tab can switch off.
-PUBLIC_VIEW_PARTS = ("title", "strap_line", "description", "cast", "team")
+PUBLIC_VIEW_PARTS = ("title", "strap_line", "description", "venue_logo", "cast", "team")
 
 
-def public_view_options(request):
+def public_view_options(request, production):
     """
-    Which parts of a production's public page to show. Normally all of them; a request with `custom` (from the
-    backstage Public view tab) shows only the parts named by its `show` values.
+    Which parts of a production's public page to show: those not switched off on its backstage Public view tab. A
+    request with `custom` (the tab's preview) shows only the parts named by its `show` values instead.
     """
     if "custom" not in request.GET:
-        return {part: True for part in PUBLIC_VIEW_PARTS}
+        return {part: part not in production.public_hidden_parts for part in PUBLIC_VIEW_PARTS}
     chosen = set(request.GET.getlist("show"))
     return {part: part in chosen for part in PUBLIC_VIEW_PARTS}
 
@@ -294,19 +294,24 @@ def public_production(request, pk):
     )
     production.find_listen_url(cached=True)
     ticket_url = production_ticket_url(production)
-    show = public_view_options(request)
+    show = public_view_options(request, production)
     # A radio play's cast is kept back until it has a broadcast date.
     awaiting_date = production.type == Production.ProductionType.RADIO and production.broadcast_datetime is None
     if awaiting_date:
         show["cast"] = False
-    team = sorted(
-        production.team.all(), key=lambda member: (member.role.name, member.person.last_name, member.person.first_name)
-    )
+    team = sorted(production.team.all(), key=team_sort_key)
     cast = cast_by_actor_name(production.cast.all())
     # The people with a public page (see public_actors and public_team_members) are linked to it.
     with_public_urls([member.person for member in team] + [part.actor for part in cast], production)
+    # The blocks added to the production's public page (a contact form is not offered here: nothing receives it).
+    page = WebPage.objects.filter(production=production).first()
+    page_blocks = [
+        pb for pb in (page.page_blocks() if page else [])
+        if pb.block.block_type != Block.BlockType.CONTACT
+    ]
     return render(request, "home/production_detail.html", {
         "production": production,
+        "page_blocks": page_blocks,
         "image": production.public_view_image,
         "show": show,
         "awaiting_date": awaiting_date,
@@ -380,7 +385,7 @@ def audition_detail(request, pk):
 
 
 def page_list(request):
-    return render(request, "home/page_list.html", {"pages": WebPage.objects.all()})
+    return render(request, "home/page_list.html", {"pages": WebPage.objects.filter(production__isnull=True)})
 
 
 def page_copy(request, pk):
@@ -422,6 +427,12 @@ def page_create(request):
         page = form.save()
         return redirect("page-edit", pk=page.pk)
     return render(request, "home/page_form.html", {"form": form})
+
+
+def production_page_edit(request, pk):
+    """Edit the blocks on a production's public page: its page of blocks (made when first wanted) in the page editor."""
+    production = get_object_or_404(Production, pk=pk)
+    return redirect("page-edit", pk=WebPage.for_production(production).pk)
 
 
 def page_edit(request, pk):

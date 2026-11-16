@@ -5,11 +5,15 @@
 {% block content %}
 <div class="mx-auto max-w-6xl p-6">
   <div class="mb-4">
-    <a href="{% url 'page-list' %}" class="btn btn-ghost btn-sm">← Pages</a>
+    {% if page.production_id %}
+      <a href="{% url 'production-public' page.production_id %}" class="btn btn-ghost btn-sm">← {{ page.production }}: public view</a>
+    {% else %}
+      <a href="{% url 'page-list' %}" class="btn btn-ghost btn-sm">← Pages</a>
+    {% endif %}
   </div>
 
   <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-    <h1 class="text-3xl font-bold">{{ page.title }}</h1>
+    <h1 class="text-3xl font-bold">{% if page.production_id %}Blocks on the public page of {{ page.production }}{% else %}{{ page.title }}{% endif %}</h1>
     <div class="flex flex-wrap gap-2">
       {% if page.copied_from_id %}
         <button type="button" class="btn btn-warning" onclick="document.getElementById('replace-original').showModal()">Replace original</button>
@@ -59,6 +63,7 @@
   {% endif %}
 
   {# Page details: title and slug. Open if there's an error to fix. #}
+  {% if not page.production_id %}
   <details class="collapse collapse-arrow mb-6 bg-base-200 shadow-sm"{% if form.errors %} open{% endif %}>
     <summary class="collapse-title font-semibold">Page details <span class="font-normal opacity-60">· /page/{{ page.slug }}/</span></summary>
     <div class="collapse-content">
@@ -72,6 +77,7 @@
       </form>
     </div>
   </details>
+  {% endif %}
 
   <div class="space-y-4">
     {% for page_block in page_blocks %}

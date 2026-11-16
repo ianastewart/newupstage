@@ -48,7 +48,7 @@
           {% if editing %}<input type="hidden" name="member" value="{{ editing.pk }}" />{% endif %}
           {{ form }}
           <p class="mt-2 text-xs opacity-70">
-            Missing someone? <a href="{% url 'person-create' %}" class="link">Add a person</a> ·
+            Missing someone? {% url 'production-team' production.pk as team_url %}<a href="{% url 'person-create' %}?next={{ team_url|urlencode }}" class="link">Add a person</a> ·
             <a href="{% url 'role-create' %}" class="link">Add a role</a>
           </p>
           <div class="mt-4 flex justify-end gap-2">

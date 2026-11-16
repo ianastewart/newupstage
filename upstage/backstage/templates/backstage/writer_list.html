@@ -10,25 +10,37 @@
       <p class="text-sm opacity-70">{{ writers|length }} writer{{ writers|length|pluralize }}</p>
     </div>
     <div class="flex flex-wrap items-center gap-3">
-      {# Sort by surname (the default) or first name. Each choice keeps the view (photos or details) and each view keeps the sort. #}
+      {# Sort by first name (the default) or surname. Each choice keeps the view (photos or details) and each view keeps the sort. #}
       <div class="flex items-center gap-2">
         <span class="text-sm opacity-70">Sort by</span>
         <div role="tablist" class="tabs tabs-box">
-          <a role="tab" href="?{% if details %}view=details{% endif %}" class="tab{% if sort == 'last' %} tab-active{% endif %}">Last name</a>
-          <a role="tab" href="?sort=first{% if details %}&amp;view=details{% endif %}" class="tab{% if sort == 'first' %} tab-active{% endif %}">First name</a>
+          <a role="tab" href="{% querystring sort=None %}" class="tab{% if sort == 'first' %} tab-active{% endif %}">First name</a>
+          <a role="tab" href="{% querystring sort='last' %}" class="tab{% if sort == 'last' %} tab-active{% endif %}">Last name</a>
         </div>
       </div>
       <div role="tablist" class="tabs tabs-box">
-        <a role="tab" href="?{% if sort == 'first' %}sort=first{% endif %}" class="tab{% if not details %} tab-active{% endif %}">Photos</a>
-        <a role="tab" href="?view=details{% if sort == 'first' %}&amp;sort=first{% endif %}" class="tab{% if details %} tab-active{% endif %}">Details</a>
+        <a role="tab" href="{% querystring view=None %}" class="tab{% if not details %} tab-active{% endif %}">Photos</a>
+        <a role="tab" href="{% querystring view='details' %}" class="tab{% if details %} tab-active{% endif %}">Details</a>
       </div>
       <a href="{% url 'writer-new' %}" class="btn btn-primary">New writer</a>
     </div>
   </div>
 
+  {# Search by name; the sort and the view are kept. #}
+  <form method="get" class="mb-6 flex flex-wrap items-center gap-3">
+    {% if sort == 'last' %}<input type="hidden" name="sort" value="last" />{% endif %}
+    {% if details %}<input type="hidden" name="view" value="details" />{% endif %}
+    <label class="input w-full sm:w-72">
+      <svg class="h-4 w-4 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      <input type="search" name="q" value="{{ search }}" placeholder="Search names" aria-label="Search names" />
+    </label>
+    <button type="submit" class="btn">Search</button>
+    {% if search %}<a href="{% querystring q=None %}" class="btn btn-ghost">Clear</a>{% endif %}
+  </form>
+
   {% if not writers %}
     <div class="rounded-box bg-base-200 p-12 text-center">
-      <p>No one has the Writer role yet.</p>
+      {% if search %}<p>No writers match "{{ search }}".</p>{% else %}<p>No one has the Writer role yet.</p>{% endif %}
     </div>
   {% elif details %}
     <div class="grid gap-4 md:grid-cols-2">

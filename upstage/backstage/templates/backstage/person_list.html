@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load neapolitan %}
+
+{% block title %}People · Upstage Theatre{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl p-6">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-3xl font-bold">{{ object_verbose_name_plural|capfirst }}</h1>
+    {% if create_view_url %}<a href="{{ create_view_url }}" class="btn btn-primary">Add a new {{ object_verbose_name }}</a>{% endif %}
+  </div>
+
+  <form method="get" class="mb-6 flex flex-wrap items-center gap-3">
+    <label class="input w-full sm:w-72">
+      <svg class="h-4 w-4 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      <input type="search" name="q" value="{{ search }}" placeholder="Search names" aria-label="Search names" />
+    </label>
+    <button type="submit" class="btn">Search</button>
+    {% if search %}<a href="{% querystring q=None %}" class="btn btn-ghost">Clear</a>{% endif %}
+  </form>
+
+  {% if object_list %}
+    {% object_list object_list view %}
+  {% elif search %}
+    <p class="mt-8">No people match "{{ search }}".</p>
+  {% else %}
+    <p class="mt-8">There are no people yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

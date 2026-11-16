@@ -283,28 +283,43 @@ class ActorListTests(TestCase):
         self.assertEqual(response.status_code, 200)
         return [person.first_name for person in response.context["actors"]]
 
-    def test_sorted_by_last_name_by_default(self):
-        self.assertEqual(self.names(), ["Zack", "Bea", "Divya", "Alice"])
+    def test_sorted_by_first_name_by_default(self):
+        self.assertEqual(self.names(), ["Alice", "Bea", "Divya", "Zack"])
 
-    def test_sorted_by_first_name(self):
-        self.assertEqual(self.names("?sort=first"), ["Alice", "Bea", "Divya", "Zack"])
+    def test_sorted_by_last_name(self):
+        self.assertEqual(self.names("?sort=last"), ["Zack", "Bea", "Divya", "Alice"])
 
     def test_the_sort_works_in_the_details_view_too(self):
-        self.assertEqual(self.names("?view=details&sort=first"), ["Alice", "Bea", "Divya", "Zack"])
-        self.assertEqual(self.names("?view=details"), ["Zack", "Bea", "Divya", "Alice"])
+        self.assertEqual(self.names("?view=details&sort=last"), ["Zack", "Bea", "Divya", "Alice"])
+        self.assertEqual(self.names("?view=details"), ["Alice", "Bea", "Divya", "Zack"])
 
-    def test_an_unknown_sort_means_last_name(self):
-        self.assertEqual(self.names("?sort=nonsense"), ["Zack", "Bea", "Divya", "Alice"])
-        self.assertEqual(self.client.get(reverse("actor-list") + "?sort=nonsense").context["sort"], "last")
+    def test_an_unknown_sort_means_first_name(self):
+        self.assertEqual(self.names("?sort=nonsense"), ["Alice", "Bea", "Divya", "Zack"])
+        self.assertEqual(self.client.get(reverse("actor-list") + "?sort=nonsense").context["sort"], "first")
 
     def test_the_sort_choices_keep_the_view_and_the_views_keep_the_sort(self):
-        html = self.client.get(reverse("actor-list") + "?sort=first&view=details").content.decode()
-        self.assertIn('href="?sort=first&amp;view=details"', html)  # First name, staying on details
-        self.assertIn('href="?view=details"', html)  # Last name, staying on details
-        self.assertIn('href="?sort=first"', html)  # Photos, keeping the sort
-        self.assertRegex(html, r'href="\?sort=first&amp;view=details" class="tab tab-active"')  # first name is the active sort
-        photos = self.client.get(reverse("actor-list") + "?sort=first").content.decode()
-        self.assertIn('href="?view=details&amp;sort=first"', photos)  # Details, keeping the sort
+        html = self.client.get(reverse("actor-list") + "?sort=last&view=details").content.decode()
+        self.assertIn('href="?view=details"', html)  # First name, staying on details
+        self.assertIn('href="?sort=last&amp;view=details"', html)  # Last name, staying on details
+        self.assertIn('href="?sort=last"', html)  # Photos, keeping the sort
+        self.assertRegex(html, r'href="\?sort=last&amp;view=details" class="tab tab-active"')  # last name is the active sort
+        photos = self.client.get(reverse("actor-list") + "?sort=last").content.decode()
+        self.assertIn('href="?sort=last&amp;view=details"', photos)  # Details, keeping the sort
+        # First name comes first of the two sort choices.
+        self.assertLess(html.index(">First name</a>"), html.index(">Last name</a>"))
+
+    def test_actors_can_be_searched_by_name_and_the_search_is_kept(self):
+        names = lambda query: [a.first_name for a in self.client.get(reverse("actor-list") + query).context["actors"]]
+        self.assertEqual(names("?q=ali"), ["Alice"])
+        self.assertEqual(names("?q=ZACK"), ["Zack"])  # either name, any case
+        self.assertEqual(names("?q=a+d"), ["Divya"])  # every word must match
+        self.assertEqual(names("?q=nobody"), [])
+        html = self.client.get(reverse("actor-list") + "?q=ali&sort=last&view=details").content.decode()
+        self.assertIn('value="ali"', html)
+        self.assertIn('name="sort" value="last"', html)
+        self.assertIn('name="view" value="details"', html)
+        self.assertRegex(html, r'href="\?q=ali&amp;sort=last&amp;view=details"[^>]*>Details')  # the tabs keep the search
+        self.assertIn('No actors match', self.client.get(reverse("actor-list") + "?q=nobody").content.decode())
 
     def test_there_is_a_new_actor_button(self):
         html = self.client.get(reverse("actor-list")).content.decode()
@@ -383,26 +398,27 @@ class WriterListTests(TestCase):
         self.assertEqual(response.status_code, 200)
         return [person.first_name for person in response.context["writers"]]
 
-    def test_sorted_by_last_name_by_default(self):
-        self.assertEqual(self.names(), ["Zack", "Bea", "Divya", "Alice"])
+    def test_sorted_by_first_name_by_default(self):
+        self.assertEqual(self.names(), ["Alice", "Bea", "Divya", "Zack"])
 
-    def test_sorted_by_first_name(self):
-        self.assertEqual(self.names("?sort=first"), ["Alice", "Bea", "Divya", "Zack"])
+    def test_sorted_by_last_name(self):
+        self.assertEqual(self.names("?sort=last"), ["Zack", "Bea", "Divya", "Alice"])
 
     def test_the_sort_works_in_the_details_view_too(self):
-        self.assertEqual(self.names("?view=details&sort=first"), ["Alice", "Bea", "Divya", "Zack"])
-        self.assertEqual(self.names("?view=details"), ["Zack", "Bea", "Divya", "Alice"])
+        self.assertEqual(self.names("?view=details&sort=last"), ["Zack", "Bea", "Divya", "Alice"])
+        self.assertEqual(self.names("?view=details"), ["Alice", "Bea", "Divya", "Zack"])
 
-    def test_an_unknown_sort_means_last_name(self):
-        self.assertEqual(self.client.get(reverse("writer-list") + "?sort=nonsense").context["sort"], "last")
+    def test_an_unknown_sort_means_first_name(self):
+        self.assertEqual(self.client.get(reverse("writer-list") + "?sort=nonsense").context["sort"], "first")
 
     def test_the_sort_choices_keep_the_view_and_the_views_keep_the_sort(self):
-        html = self.client.get(reverse("writer-list") + "?sort=first&view=details").content.decode()
-        self.assertIn('href="?sort=first&amp;view=details"', html)
+        html = self.client.get(reverse("writer-list") + "?sort=last&view=details").content.decode()
+        self.assertIn('href="?sort=last&amp;view=details"', html)
         self.assertIn('href="?view=details"', html)
-        self.assertIn('href="?sort=first"', html)
-        photos = self.client.get(reverse("writer-list") + "?sort=first").content.decode()
-        self.assertIn('href="?view=details&amp;sort=first"', photos)
+        self.assertIn('href="?sort=last"', html)
+        photos = self.client.get(reverse("writer-list") + "?sort=last").content.decode()
+        self.assertIn('href="?sort=last&amp;view=details"', photos)
+        self.assertLess(html.index(">First name</a>"), html.index(">Last name</a>"))
 
     def test_photos_view_is_a_grid_of_cards_that_link_back_to_the_photos(self):
         html = self.client.get(reverse("writer-list")).content.decode()
@@ -3360,7 +3376,7 @@ class ProductionPublicViewTabTests(TestCase):
         Image.objects.create(description="Elsewhere", image="images/elsewhere.jpg")
         response = self.client.get(reverse("production-public", args=[self.production.pk]))
         self.assertEqual(response.status_code, 200)
-        for text in ("images/pic.jpg", "Default image", "Title", "Strap line", "Description", "Cast", "Team", "View public page"):
+        for text in ("images/pic.jpg", "Title", "Strap line", "Description", "Cast", "Team", "View public page"):
             self.assertContains(response, text)
         self.assertContains(response, reverse("public-production", args=[self.production.pk]))
         self.assertContains(response, 'id="public-modal"')
@@ -3420,14 +3436,40 @@ class ProductionPublicViewTabTests(TestCase):
     def test_choosing_an_image_saves_it_and_it_must_be_the_productions_own(self):
         from backstage.models import Image, ProductionImage
 
+        default = Image.objects.create(description="Default", image="images/default.jpg")
         own = Image.objects.create(description="Own", image="images/own.jpg")
         other = Image.objects.create(description="Other", image="images/other.jpg")
+        ProductionImage.objects.create(production=self.production, image=default, is_default=True)
         ProductionImage.objects.create(production=self.production, image=own)
         url = reverse("production-public", args=[self.production.pk])
         self.client.post(url, {"image": own.pk})
         self.production.refresh_from_db()
         self.assertEqual(self.production.public_image, own)
         self.client.post(url, {"image": other.pk})  # not one of its images: nothing chosen
+        self.production.refresh_from_db()
+        self.assertIsNone(self.production.public_image)
+        self.client.post(url, {"image": own.pk})
+        self.client.post(url, {"image": default.pk})  # the default image: the page follows the default again
+        self.production.refresh_from_db()
+        self.assertIsNone(self.production.public_image)
+
+    def test_there_is_no_default_image_box_and_gallery_images_are_left_out(self):
+        from backstage.models import Image, ProductionImage
+
+        shown = Image.objects.create(description="Poster", image="images/poster.jpg")
+        other = Image.objects.create(description="Second", image="images/second.jpg")
+        gallery = Image.objects.create(description="Rehearsal", image="images/rehearsal.jpg", image_type="gallery")
+        ProductionImage.objects.create(production=self.production, image=shown, is_default=True)
+        ProductionImage.objects.create(production=self.production, image=other)
+        ProductionImage.objects.create(production=self.production, image=gallery)
+        url = reverse("production-public", args=[self.production.pk])
+        response = self.client.get(url)
+        self.assertNotContains(response, "Default image")
+        self.assertNotContains(response, 'name="image" value=""')
+        self.assertNotContains(response, "images/rehearsal.jpg")
+        self.assertEqual([i.description for i in response.context["images"]], ["Poster", "Second"])
+        self.assertEqual(response.context["selected_image"], shown.pk)  # the one the page shows is ticked
+        self.client.post(url, {"image": gallery.pk})  # a gallery image cannot be chosen
         self.production.refresh_from_db()
         self.assertIsNone(self.production.public_image)
 
@@ -3531,71 +3573,59 @@ class ProductionSoundTests(TestCase):
         self.production = Production.objects.create(title="The Play")
         self.url = reverse("production-images", args=[self.production.pk])
 
-    def upload(self, name="play.mp3", content=b"ID3 sound"):
+    def upload(self, name="play.mp3", content=b"ID3 sound", url=None):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        return self.client.post(self.url, {"action": "sound", "sound": SimpleUploadedFile(name, content)})
+        return self.client.post(url or self.url, {"action": "sound", "file": SimpleUploadedFile(name, content)})
 
     def test_the_tab_is_called_media(self):
         response = self.client.get(self.url)
         self.assertContains(response, 'class="tab tab-active">Media</a>')
         self.assertNotContains(response, 'class="tab">Images</a>')
 
-    def test_a_sound_file_is_saved_in_media_sounds_and_can_be_played(self):
+    def test_an_uploaded_sound_is_linked_to_the_production_and_saved_in_media_sounds(self):
         self.assertRedirects(self.upload(), self.url)
-        self.production.refresh_from_db()
-        self.assertRegex(self.production.sound.name, r"^sounds/play.*\.mp3$")
-        self.assertContains(self.client.get(self.url), f'src="/media/{self.production.sound.name}"')
+        sound = self.production.sounds.get()
+        self.assertRegex(sound.file.name, r"^sounds/play.*\.mp3$")
+        self.assertContains(self.client.get(self.url), f'src="/media/{sound.file.name}"')
 
-    def test_a_new_sound_becomes_the_one_used_and_the_old_file_stays_listed(self):
+    def test_a_production_can_have_several_sounds_and_they_are_not_shared(self):
+        other = Production.objects.create(title="Other")
         self.upload("one.mp3")
         self.upload("two.wav")
-        self.production.refresh_from_db()
-        self.assertTrue(self.production.sound.name.startswith("sounds/two"))
-        files = self.client.get(self.url).context["sound_files"]
-        self.assertEqual([f["name"] for f in files][0][:3], "one")
-        self.assertEqual([f["chosen"] for f in files], [False, True])
-
-    def test_the_existing_sound_files_are_listed_above_the_upload(self):
-        self.assertEqual(self.client.get(self.url).context["sound_files"], [])
-        self.assertContains(self.client.get(self.url), "No sound files have been uploaded yet.")
-        self.upload("one.mp3")
+        self.upload("three.ogg", url=reverse("production-images", args=[other.pk]))
+        self.assertEqual([s.name[:3] for s in self.production.sounds.all()], ["one", "two"])
+        self.assertEqual([s.name[:5] for s in other.sounds.all()], ["three"])
         response = self.client.get(self.url)
-        self.assertContains(response, "Used by this production")
-        content = response.content.decode()
-        self.assertLess(content.index("Used by this production"), content.index('name="sound"'))
-        self.assertLess(content.index("Images</h2>"), content.index("Sounds</h2>"))
-
-    def test_another_production_can_use_a_file_that_is_already_there(self):
-        self.upload("one.mp3")
-        self.production.refresh_from_db()
-        name = self.production.sound.name.removeprefix("sounds/")
-        other = Production.objects.create(title="Other")
-        other_url = reverse("production-images", args=[other.pk])
-        self.client.post(other_url, {"action": "choose_sound", "name": name})
-        other.refresh_from_db()
-        self.assertEqual(other.sound.name, f"sounds/{name}")
-        self.client.post(other_url, {"action": "choose_sound", "name": "../../secret.mp3"})  # not a listed file
-        other.refresh_from_db()
-        self.assertEqual(other.sound.name, f"sounds/{name}")
+        self.assertContains(response, "two")
+        self.assertNotContains(response, "three")
 
     def test_only_sound_files_are_accepted(self):
         response = self.upload("notes.txt")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "not allowed")
-        self.production.refresh_from_db()
-        self.assertFalse(self.production.sound)
+        self.assertFalse(self.production.sounds.exists())
 
-    def test_the_sound_can_be_stopped_without_deleting_the_file(self):
+    def test_deleting_a_sound_deletes_its_file_but_only_from_its_own_production(self):
+        import os
+
+        other = Production.objects.create(title="Other")
+        self.upload()
+        path = self.production.sounds.get().file.path
+        sound = self.production.sounds.get()
+        self.client.post(reverse("production-images", args=[other.pk]), {"action": "delete_sound", "sound": sound.pk})
+        self.assertTrue(os.path.exists(path))  # another production's tab cannot delete it
+        self.client.post(self.url, {"action": "delete_sound", "sound": sound.pk})
+        self.assertFalse(self.production.sounds.exists())
+        self.assertFalse(os.path.exists(path))
+
+    def test_deleting_a_production_deletes_its_sound_files(self):
         import os
 
         self.upload()
-        self.production.refresh_from_db()
-        path = self.production.sound.path
-        self.client.post(self.url, {"action": "remove_sound"})
-        self.production.refresh_from_db()
-        self.assertFalse(self.production.sound)
-        self.assertTrue(os.path.exists(path))  # other productions may use it
+        path = self.production.sounds.get().file.path
+        self.production.delete()
+        self.assertFalse(os.path.exists(path))
 
 
 class ListenUrlTests(TestCase):
@@ -3609,3 +3639,321 @@ class ListenUrlTests(TestCase):
         for bad in ("//evil.example.com/x", "/has space.mp3", "media/sounds/play.mp3", "ftp://example.com/x", "javascript:alert(1)"):
             with self.assertRaises(ValidationError, msg=bad):
                 validate_listen_url(bad)
+
+
+class ProductionListEventDateTests(TestCase):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+
+    def test_each_production_shows_the_full_date_of_its_first_event_and_no_strap_line(self):
+        import datetime
+
+        from django.utils import timezone
+
+        from backstage.models import Event, EventDateTime
+
+        play = Production.objects.create(title="Dated Play", type="stage", strap_line="A strap line to hide")
+        undated = Production.objects.create(title="Undated Play", type="stage")
+        rehearsal = Event.objects.create(event_type="rehearsal")  # not an event the public comes to
+        performance = Event.objects.create(event_type="performance")
+        for event in (rehearsal, performance):
+            play.events.add(event)
+        EventDateTime.objects.create(event=rehearsal, datetime=timezone.make_aware(datetime.datetime(2020, 1, 5, 19, 0)))
+        EventDateTime.objects.create(event=performance, datetime=timezone.make_aware(datetime.datetime(2026, 10, 17, 19, 30)))
+        EventDateTime.objects.create(event=performance, datetime=timezone.make_aware(datetime.datetime(2026, 10, 3, 19, 30)))
+        response = self.client.get(reverse("production-list"))
+        self.assertContains(response, "3 October 2026")
+        self.assertNotContains(response, "A strap line to hide")
+        self.assertNotContains(response, "January 2020")
+        dates = {p.title: p.event_at for p in response.context["object_list"]}
+        self.assertEqual(dates["Dated Play"].day, 3)  # the first date
+        self.assertIsNone(dates[undated.title])
+        self.assertContains(response, "No date")
+
+    def test_a_date_is_highlighted_when_the_production_has_a_date_still_to_come(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from backstage.models import Event, EventDateTime
+
+        def production(title, *days):
+            play = Production.objects.create(title=title, type="stage")
+            event = Event.objects.create(event_type="performance")
+            play.events.add(event)
+            for offset in days:
+                EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=offset))
+
+        production("Past", -30)
+        production("Soon", 10)
+        production("Run", -2, 5)  # the first night has gone but more are to come
+        production("Nodates")
+        upcoming = {p.title: p.upcoming for p in self.client.get(reverse("production-list")).context["object_list"]}
+        self.assertEqual(upcoming, {"Past": False, "Soon": True, "Run": True, "Nodates": False})
+        self.assertContains(self.client.get(reverse("production-list")), "badge-accent", count=2)
+
+    def test_stage_productions_sort_by_their_earliest_date(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from backstage.models import Event, EventDateTime
+
+        def production(title, kind, *days):
+            play = Production.objects.create(title=title, type="stage" if kind == "performance" else "radio")
+            event = Event.objects.create(event_type=kind)
+            play.events.add(event)
+            for offset in days:
+                EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=offset))
+
+        production("Run", "performance", 40, 10, 30)  # earliest date is day 10
+        production("Single", "performance", 20)
+        production("Radio", "broadcast", 15)
+        production("Undated", "performance")
+
+        def titles(sort):
+            response = self.client.get(reverse("production-list") + f"?sort={sort}")
+            return [p.title for p in response.context["object_list"]]
+
+        self.assertEqual(titles("oldest"), ["Run", "Radio", "Single", "Undated"])
+        self.assertEqual(titles("newest"), ["Single", "Radio", "Run", "Undated"])
+
+    def test_on_the_same_day_a_production_without_a_parent_comes_first(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from backstage.models import Event, EventDateTime, ParentProduction
+
+        night = (timezone.now() + timedelta(days=20)).replace(hour=19, minute=30)
+        evening = ParentProduction.objects.create(title="Evening", type="stage")
+
+        def production(title, when, parent=None):
+            play = Production.objects.create(title=title, type="stage", parent=parent)
+            event = Event.objects.create(event_type="performance")
+            play.events.add(event)
+            EventDateTime.objects.create(event=event, datetime=when)
+
+        production("Child A", night - timedelta(hours=1), parent=evening)  # earlier in the day, but has a parent
+        production("Standalone", night)
+        production("Child B", night + timedelta(minutes=5), parent=evening)
+        evening.events.add(Event.objects.create(event_type="performance"))
+        EventDateTime.objects.create(event=evening.events.first(), datetime=night)
+        production("Next day", night + timedelta(days=1))
+
+        def titles(sort):
+            response = self.client.get(reverse("production-list") + f"?sort={sort}")
+            return [p.title for p in response.context["object_list"]]
+
+        # The two without a parent come first on the day (by time), then the evening's plays.
+        self.assertEqual(titles("oldest"), ["Standalone", "Evening", "Child A", "Child B", "Next day"])
+        self.assertEqual(titles("newest"), ["Next day", "Standalone", "Evening", "Child B", "Child A"])
+
+    def test_the_badges_say_parent_for_a_parent_and_part_of_for_a_child(self):
+        from backstage.models import ParentProduction
+
+        evening = ParentProduction.objects.create(title="Evening", type="stage")
+        Production.objects.create(title="Child", type="stage", parent=evening)
+        Production.objects.create(title="Alone", type="stage")
+        html = self.client.get(reverse("production-list")).content.decode()
+        self.assertEqual(html.count("Stage play parent"), 1)
+        self.assertEqual(html.count("Part of Evening"), 1)
+        # The parent and the single play have a type badge; the child has only its "Part of" one.
+        self.assertEqual(html.count(">Stage play</span>"), 1)
+
+
+class PublicColourTypedTests(TestCase):
+    def test_a_colour_typed_without_the_hash_is_saved(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        production = Production.objects.create(title="The Play")
+        self.client.post(reverse("production-public", args=[production.pk]), {"image": "", "colour": "FF8800"})
+        production.refresh_from_db()
+        self.assertEqual(production.public_colour, "#ff8800")
+
+
+class PublicPartsSavedTests(TestCase):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.production = Production.objects.create(title="The Play", strap_line="A strap line", description="About it")
+        self.tab = reverse("production-public", args=[self.production.pk])
+        self.page = reverse("public-production", args=[self.production.pk])
+
+    def test_the_ticked_parts_are_saved_and_the_public_page_shows_just_those(self):
+        response = self.client.post(self.tab, {"action": "parts", "show": ["title", "description"]})
+        self.assertRedirects(response, self.tab)
+        self.production.refresh_from_db()
+        self.assertEqual(self.production.public_hidden_parts, ["strap_line", "venue_logo", "cast", "team"])
+        html = self.client.get(self.page).content.decode()
+        self.assertIn("About it", html)
+        self.assertNotIn("A strap line", html)
+
+    def test_the_tab_shows_the_saved_choices_ticked(self):
+        self.client.post(self.tab, {"action": "parts", "show": ["title"]})
+        parts = self.client.get(self.tab).context["parts"]
+        self.assertEqual({part: shown for part, _, shown in parts}, {
+            "title": True, "strap_line": False, "description": False, "venue_logo": False, "cast": False, "team": False})
+        self.assertEqual([part for part, _, _ in parts], ["title", "strap_line", "description", "venue_logo", "cast", "team"])
+
+    def test_saving_the_parts_leaves_the_image_and_colour_alone(self):
+        self.client.post(self.tab, {"image": "", "colour": "#112233"})
+        self.client.post(self.tab, {"action": "parts", "show": ["title"]})
+        self.production.refresh_from_db()
+        self.assertEqual(self.production.public_colour, "#112233")
+
+    def test_the_preview_still_overrides_what_is_saved(self):
+        self.client.post(self.tab, {"action": "parts", "show": ["title"]})
+        html = self.client.get(self.page, {"custom": 1, "show": ["title", "strap_line"]}).content.decode()
+        self.assertIn("A strap line", html)
+
+    def test_everything_is_shown_until_choices_are_saved(self):
+        html = self.client.get(self.page).content.decode()
+        self.assertIn("A strap line", html)
+        self.assertIn("About it", html)
+
+
+class CastFormActorOrderTests(TestCase):
+    def test_the_actors_are_listed_by_first_name(self):
+        from backstage.forms import CastForm
+
+        for first, last in (("Zoe", "Adams"), ("adam", "Zimmer"), ("Bea", "Young"), ("Adam", "Brown")):
+            Person.objects.create(first_name=first, last_name=last)
+        names = [str(person) for person in CastForm().fields["actor"].queryset]
+        self.assertEqual(names, ["Adam Brown", "adam Zimmer", "Bea Young", "Zoe Adams"])
+
+
+class AddPersonFromCastTests(TestCase):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.production = Production.objects.create(title="The Play")
+        self.cast = reverse("production-cast", args=[self.production.pk])
+        self.create = reverse("person-create")
+
+    def test_the_cast_page_links_to_the_new_person_form_with_a_way_back(self):
+        response = self.client.get(self.cast)
+        self.assertContains(response, f"{self.create}?role=Actor&amp;next={self.cast}")
+
+    def test_after_the_person_is_saved_we_are_back_on_the_cast_page(self):
+        self.client.get(self.create, {"role": "Actor", "next": self.cast})
+        response = self.client.post(self.create, {"first_name": "New", "last_name": "Actor"})
+        self.assertRedirects(response, self.cast, fetch_redirect_response=False)
+        self.assertTrue(Person.objects.filter(first_name="New").exists())
+
+    def test_the_way_back_survives_the_photo_round_trip(self):
+        self.client.get(self.create, {"role": "Actor", "next": self.cast})
+        self.client.get(self.create, {"restore": 1, "image": ""})  # back from uploading a photo
+        response = self.client.post(self.create, {"first_name": "New", "last_name": "Actor"})
+        self.assertRedirects(response, self.cast, fetch_redirect_response=False)
+
+    def test_a_fresh_visit_or_another_site_does_not_redirect_away(self):
+        self.client.get(self.create, {"next": self.cast})
+        self.client.get(self.create)  # opened from somewhere else: the earlier way back is forgotten
+        response = self.client.post(self.create, {"first_name": "Plain", "last_name": "Person"})
+        person = Person.objects.get(first_name="Plain")
+        self.assertRedirects(response, reverse("person-detail", args=[person.pk]), fetch_redirect_response=False)
+        self.client.get(self.create, {"next": "https://evil.example.com/"})
+        response = self.client.post(self.create, {"first_name": "Other", "last_name": "Person"})
+        self.assertNotIn("evil", response["Location"])
+
+    def test_the_team_page_does_the_same_without_ticking_actor(self):
+        team = reverse("production-team", args=[self.production.pk])
+        self.assertContains(self.client.get(team), f'href="{self.create}?next={team}"')
+        self.client.get(self.create, {"next": team})
+        response = self.client.post(self.create, {"first_name": "New", "last_name": "Crew"})
+        self.assertRedirects(response, team, fetch_redirect_response=False)
+
+
+class TeamOrderTests(TestCase):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.production = Production.objects.create(title="The Play", type="stage")
+        # Added in the wrong order on purpose, with people whose names sort the other way round.
+        for role, first, last in (
+            ("Costumer", "Ann", "Adams"), ("Editor", "Eve", "Ellis"), ("Producer", "Pat", "Price"),
+            ("Director", "Dan", "Dale"), ("Writer", "Wes", "West"), ("Assistant", "Abe", "Able"), ("Writer", "Wendy", "Archer"),
+        ):
+            ProductionTeam.objects.create(
+                production=self.production, role=Role.objects.get_or_create(name=role)[0],
+                person=Person.objects.create(first_name=first, last_name=last),
+            )
+        self.expected = ["Writer", "Writer", "Director", "Producer", "Editor", "Assistant", "Costumer"]
+
+    def test_the_backstage_team_list_shows_writer_director_producer_editor_then_the_rest(self):
+        response = self.client.get(reverse("production-team", args=[self.production.pk]))
+        self.assertEqual([m.role.name for m in response.context["members"]], self.expected)
+        self.assertEqual([m.person.last_name for m in response.context["members"]][:2], ["Archer", "West"])
+
+    def test_the_public_page_uses_the_same_order(self):
+        response = self.client.get(reverse("public-production", args=[self.production.pk]))
+        self.assertEqual([m.role.name for m in response.context["team"]], self.expected)
+
+    def test_a_persons_credits_follow_the_same_order(self):
+        from backstage.views import person_productions
+
+        person = Person.objects.create(first_name="Multi", last_name="Tasker")
+        for role in ("Editor", "Producer", "Writer", "Costumer", "Director"):
+            ProductionTeam.objects.create(production=self.production, role=Role.objects.get(name=role), person=person)
+        headings = [heading for heading, _ in person_productions(person)[1]]
+        self.assertEqual(headings, ["Plays written", "Directed", "Producer", "Edited", "Costumer"])
+
+
+class PeopleSearchTests(TestCase):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        actor, writer, crew = (Role.objects.get_or_create(name=n)[0] for n in ("Actor", "Writer", "Costumer"))
+        for first, last, role in (
+            ("Wanda", "Wright", writer), ("Walter", "Plum", writer), ("Cora", "Costa", crew), ("Colin", "Kay", None),
+            ("Alan", "Actor", actor),
+        ):
+            person = Person.objects.create(first_name=first, last_name=last)
+            if role:
+                person.roles.add(role)
+
+    def names(self, url_name, key, query):
+        response = self.client.get(reverse(url_name) + query)
+        self.assertEqual(response.status_code, 200)
+        return sorted(p.first_name for p in response.context[key])
+
+    def test_writers_can_be_searched_by_name(self):
+        self.assertEqual(self.names("writer-list", "writers", ""), ["Walter", "Wanda"])
+        self.assertEqual(self.names("writer-list", "writers", "?q=wan"), ["Wanda"])
+        self.assertEqual(self.names("writer-list", "writers", "?q=PLUM"), ["Walter"])
+        self.assertEqual(self.names("writer-list", "writers", "?q=cora"), [])  # not a writer
+        html = self.client.get(reverse("writer-list") + "?q=nobody&sort=last").content.decode()
+        self.assertIn('No writers match "nobody"', html)
+        self.assertIn('name="sort" value="last"', html)
+
+    def test_other_roles_can_be_searched_by_name(self):
+        self.assertEqual(self.names("other-list", "people", ""), ["Colin", "Cora"])
+        self.assertEqual(self.names("other-list", "people", "?q=co"), ["Colin", "Cora"])
+        self.assertEqual(self.names("other-list", "people", "?q=kay"), ["Colin"])
+        self.assertEqual(self.names("other-list", "people", "?q=wanda"), [])  # a writer
+        self.assertIn('No one matches "zzz"', self.client.get(reverse("other-list") + "?q=zzz").content.decode())
+
+    def test_all_people_can_be_searched_by_name(self):
+        self.assertEqual(self.names("person-list", "object_list", ""), ["Alan", "Colin", "Cora", "Walter", "Wanda"])
+        self.assertEqual(self.names("person-list", "object_list", "?q=wa"), ["Walter", "Wanda"])
+        self.assertEqual(self.names("person-list", "object_list", "?q=alan+actor"), ["Alan"])
+        html = self.client.get(reverse("person-list") + "?q=wa").content.decode()
+        self.assertIn('value="wa"', html)
+        self.assertIn("Clear", html)
+        self.assertIn('No people match "zzz"', self.client.get(reverse("person-list") + "?q=zzz").content.decode())
+
+
+class PeopleDefaultSortTests(TestCase):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        for first, last in (("Zack", "Abbott"), ("Alice", "Zane"), ("Bea", "Brown")):
+            Person.objects.create(first_name=first, last_name=last)
+
+    def test_the_other_roles_list_sorts_by_first_name_and_offers_both_sorts_first_name_first(self):
+        response = self.client.get(reverse("other-list"))
+        self.assertEqual([p.first_name for p in response.context["people"]], ["Alice", "Bea", "Zack"])
+        self.assertEqual(response.context["sort"], "first")
+        html = response.content.decode()
+        self.assertLess(html.index(">First name</a>"), html.index(">Last name</a>"))
+        last = self.client.get(reverse("other-list") + "?sort=last")
+        self.assertEqual([p.first_name for p in last.context["people"]], ["Zack", "Bea", "Alice"])
+
+    def test_the_all_people_list_is_in_first_name_order(self):
+        response = self.client.get(reverse("person-list"))
+        self.assertEqual([p.first_name for p in response.context["object_list"]], ["Alice", "Bea", "Zack"])

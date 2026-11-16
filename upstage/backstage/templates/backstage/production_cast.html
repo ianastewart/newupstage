@@ -50,7 +50,7 @@
           {% csrf_token %}
           {% if editing %}<input type="hidden" name="member" value="{{ editing.pk }}" />{% endif %}
           {{ form }}
-          <p class="mt-2 text-xs opacity-70">Actor not listed? <a href="{% url 'person-create' %}" class="link">Add a person</a>.</p>
+          <p class="mt-2 text-xs opacity-70">Actor not listed? {% url 'production-cast' production.pk as cast_url %}<a href="{% url 'person-create' %}?role=Actor&amp;next={{ cast_url|urlencode }}" class="link">Add a person</a>.</p>
           <div class="mt-4 flex justify-end gap-2">
             {% if editing %}<a href="{% url 'production-cast' production.pk %}" class="btn btn-ghost">Cancel</a>{% endif %}
             <button type="submit" class="btn btn-primary">{% if editing %}Save{% else %}Add{% endif %}</button>

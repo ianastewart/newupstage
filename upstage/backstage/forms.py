@@ -57,18 +57,17 @@ class PersonRolesForm(forms.ModelForm):
 SOUND_EXTENSIONS = ["mp3", "wav", "ogg", "m4a", "aac", "flac"]
 
 
-class ProductionSoundForm(forms.ModelForm):
-    """The sound file of a production (the Media tab): an audio file, saved in media/sounds/."""
+class SoundForm(forms.ModelForm):
+    """Upload a sound file for a production (the Media tab): an audio file, saved in media/sounds/."""
 
     class Meta:
-        model = models.Production
-        fields = ["sound"]
-        widgets = {"sound": forms.FileInput(attrs={"class": "file-input file-input-xs w-64 max-w-full", "accept": "audio/*," + ",".join(f".{e}" for e in SOUND_EXTENSIONS)})}
+        model = models.Sound
+        fields = ["file"]
+        widgets = {"file": forms.FileInput(attrs={"class": "file-input file-input-xs w-64 max-w-full", "accept": "audio/*," + ",".join(f".{e}" for e in SOUND_EXTENSIONS)})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["sound"].required = True
-        self.fields["sound"].validators.append(FileExtensionValidator(SOUND_EXTENSIONS))
+        self.fields["file"].validators.append(FileExtensionValidator(SOUND_EXTENSIONS))
 
 
 class CastForm(forms.ModelForm):
@@ -76,6 +75,11 @@ class CastForm(forms.ModelForm):
         model = models.Cast
         fields = ["character_name", "characteristics", "actor"]
         widgets = {"characteristics": forms.Textarea(attrs={"rows": 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Alphabetical by first name, as the names are shown.
+        self.fields["actor"].queryset = models.Person.objects.order_by(Lower("first_name"), Lower("last_name"))
 
 
 class ProductionTeamForm(forms.ModelForm):

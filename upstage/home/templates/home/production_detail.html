@@ -23,11 +23,15 @@
       {% elif production.awaiting_archive %}
         <p class="italic text-primary">Not yet in the Brooklands Radio archive. Please try later.</p>
       {% endif %}
-      {% if venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}
+      {% if show.venue_logo and venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}
     </div>
   </div>
   {% if awaiting_date %}<p class="text-center text-lg italic">Awaiting broadcast date</p>{% endif %}
   {% if show.cast or show.team %}{% include "home/_production_cast_team.html" %}{% endif %}
+  {# The blocks added on the backstage Public view tab, in their order. #}
+  {% for page_block in page_blocks %}
+    <div{% if page_block.block.anchor %} id="{{ page_block.block.anchor }}"{% endif %}>{% include page_block.block.template with block=page_block.block public_page=True %}</div>
+  {% endfor %}
 </div>
 </div>
 {% endblock %}

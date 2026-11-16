@@ -54,10 +54,15 @@
           </figure>
           <div class="card-body gap-1 p-3">
             <p class="truncate font-semibold">{{ production.title }}</p>
-            {% if production.strap_line %}<p class="line-clamp-2 text-xs opacity-70">{{ production.strap_line }}</p>{% endif %}
+            <p class="text-xs">{% if production.event_at %}<span class="{% if production.upcoming %}badge badge-sm badge-accent font-semibold{% else %}opacity-70{% endif %}">{{ production.event_at|date:"j F Y" }}</span>{% else %}<span class="opacity-60">No date</span>{% endif %}</p>
             <div class="mt-1 flex flex-wrap gap-1">
-              <span class="badge badge-sm badge-secondary">{{ production.get_type_display }}</span>
-              {% if production.parent %}<span class="badge badge-sm badge-outline truncate">Part of {{ production.parent }}</span>{% endif %}
+              {% if production.parent %}
+                <span class="badge badge-sm badge-outline truncate">Part of {{ production.parent }}</span>
+              {% elif production.wraps_others %}
+                <span class="badge badge-sm badge-secondary">{{ production.get_type_display }} parent</span>
+              {% else %}
+                <span class="badge badge-sm badge-secondary">{{ production.get_type_display }}</span>
+              {% endif %}
             </div>
           </div>
         </a>

@@ -1746,6 +1746,24 @@ class PublicProductionTests(TestCase):
         self.assertIn("Listen now", html)
         self.assertNotIn("Buy Tickets", html)
 
+    def test_the_venue_logo_can_be_switched_off_on_the_public_view_tab(self):
+        from backstage.models import Event, EventDateTime, Venue
+
+        logo = Image.objects.create(description="Logo", image="images/venuelogo.png", image_type="logo")
+        venue = Venue.objects.create(name="Brooklands", logo=logo)
+        broadcast = Event.objects.create(event_type="broadcast", publish="published", listen_url="https://listen.example.com/p", venue=venue)
+        broadcast.productions.add(self.production)
+        EventDateTime.objects.create(event=broadcast, datetime=timezone.now() - timedelta(days=1))
+        EventDateTime.objects.filter(event__ticket_site__isnull=False).delete()
+        self.assertIn("images/venuelogo.png", self.client.get(self.url).content.decode())
+        # The preview (?custom) shows only the ticked parts: the logo is not ticked.
+        self.assertNotIn("images/venuelogo.png", self.client.get(self.url, {"custom": 1, "show": ["title"]}).content.decode())
+        self.assertIn("images/venuelogo.png", self.client.get(self.url, {"custom": 1, "show": ["venue_logo"]}).content.decode())
+        # Saved as off for the production.
+        self.production.public_hidden_parts = ["venue_logo"]
+        self.production.save()
+        self.assertNotIn("images/venuelogo.png", self.client.get(self.url).content.decode())
+
     def test_the_venue_logo_is_beside_the_listen_button(self):
         from backstage.models import Event, EventDateTime, Venue
 
@@ -2192,3 +2210,77 @@ class AwaitingArchiveTests(TestCase):
         response = self.client.get(reverse("public-production", args=[self.play(5).pk]))
         self.assertNotContains(response, self.MESSAGE)
         self.assertNotContains(response, "Listen now")
+
+
+class ProductionPageBlocksTests(TestCase):
+    """Blocks added to a production's public page."""
+
+    def setUp(self):
+        from accounts.models import CustomUser
+
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.production = Production.objects.create(title="The Play")
+        self.public = reverse("public-production", args=[self.production.pk])
+
+    def add(self, name, block_type="text", text="", **fields):
+        from home.models import Block, WebPage
+
+        block = Block.objects.create(name=name, block_type=block_type, text=text, **fields)
+        WebPage.for_production(self.production).add_block(block)
+        return block
+
+    def test_the_editor_opens_the_productions_own_page_of_blocks_and_makes_it_once(self):
+        from home.models import WebPage
+
+        url = reverse("production-blocks", args=[self.production.pk])
+        first = self.client.get(url)
+        page = WebPage.objects.get(production=self.production)
+        self.assertRedirects(first, reverse("page-edit", args=[page.pk]))
+        self.client.get(url)
+        self.assertEqual(WebPage.objects.filter(production=self.production).count(), 1)
+
+    def test_the_editor_goes_back_to_the_public_view_tab_and_has_no_page_details(self):
+        from home.models import WebPage
+
+        page = WebPage.for_production(self.production)
+        html = self.client.get(reverse("page-edit", args=[page.pk])).content.decode()
+        self.assertIn(reverse("production-public", args=[self.production.pk]), html)
+        self.assertNotIn("Page details", html)  # no title and address to change
+        self.assertIn(reverse("block-create", args=[page.pk]), html)
+
+    def test_the_public_tab_links_to_the_editor(self):
+        html = self.client.get(reverse("production-public", args=[self.production.pk])).content.decode()
+        self.assertIn(reverse("production-blocks", args=[self.production.pk]), html)
+
+    def test_the_blocks_show_on_the_public_page_in_order_after_the_cast_and_team(self):
+        from backstage.models import Cast, Person
+
+        Cast.objects.create(production=self.production, character_name="Hamlet", actor=Person.objects.create(first_name="Ann", last_name="Actor"))
+        self.production.set_broadcast(timezone.now() - timedelta(days=30))
+        self.add("One", text="<p>First block text</p>")
+        self.add("Two", text="<p>Second block text</p>")
+        html = self.client.get(self.public).content.decode()
+        self.assertLess(html.index("Hamlet"), html.index("First block text"))
+        self.assertLess(html.index("First block text"), html.index("Second block text"))
+
+    def test_a_production_without_blocks_is_unchanged_and_a_contact_block_is_not_offered(self):
+        self.assertEqual(self.client.get(self.public).status_code, 200)
+        self.add("Contact", block_type="contact")
+        self.assertNotIn("contact-", self.client.get(self.public).content.decode())
+
+    def test_the_productions_page_is_not_one_of_the_sites_pages(self):
+        from home.models import WebPage
+
+        page = WebPage.for_production(self.production)
+        self.assertNotIn(page, self.client.get(reverse("page-list")).context["pages"])
+        self.assertEqual(self.client.get(reverse("webpage", args=[page.slug])).status_code, 404)
+        from home.sitemaps import WebPageSitemap
+
+        self.assertNotIn(page, list(WebPageSitemap().items()))
+
+    def test_deleting_the_production_deletes_its_page(self):
+        from home.models import WebPage
+
+        WebPage.for_production(self.production)
+        self.production.delete()
+        self.assertFalse(WebPage.objects.filter(slug__startswith="production-").exists())

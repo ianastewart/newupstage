@@ -46,8 +46,8 @@
         const clear = document.createElement('button');
         clear.type = 'button';
         clear.title = clear.ariaLabel = "Clear: use the theme's colour";
-        clear.className = 'btn btn-ghost btn-sm btn-square';
-        clear.textContent = '✕';
+        clear.className = 'btn btn-ghost btn-sm';
+        clear.textContent = '✕ None';
         clear.addEventListener('click', () => change(''));
         line.appendChild(clear);
       }

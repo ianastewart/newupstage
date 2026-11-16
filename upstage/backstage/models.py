@@ -1,10 +1,13 @@
+import os
 import re
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, RegexValidator, URLValidator
 from django.db import models, transaction
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.utils import timezone
-from django.db.models import Exists, F, Min, OuterRef, Q
+from django.db.models import Case, Exists, F, Min, OuterRef, Q, Value, When
 from django_enum import EnumField
 
 from backstage.fields import HeadshotImageField
@@ -200,6 +203,21 @@ class ProductionQuerySet(models.QuerySet):
         """Each production has `broadcast_at`: its broadcast date, or None (see Production.broadcast_datetime)."""
         return self.annotate(broadcast_at=broadcast_date())
 
+    def with_event_date(self):
+        """
+        Each production has `event_at`: the first date of its performances and broadcasts, or None; and `upcoming`:
+        whether any of those dates is still to come.
+        """
+        kinds = [Event.EventType.PERFORMANCE, Event.EventType.BROADCAST]
+        return self.annotate(
+            event_at=Min("events__datetimes__datetime", filter=Q(events__event_type__in=kinds)),
+            upcoming=Exists(
+                EventDateTime.objects.filter(
+                    event__productions=OuterRef("pk"), event__event_type__in=kinds, datetime__gte=timezone.now()
+                )
+            ),
+        )
+
     def published(self):
         """The productions with a published event (see Production.published)."""
         return self.filter(Exists(Event.objects.published().filter(productions=OuterRef("pk"))))
@@ -237,8 +255,8 @@ class Production(models.Model):
         max_length=7, blank=True, validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$", "Enter a colour as #rrggbb.")],
     )
     DEFAULT_PUBLIC_COLOUR = "#2e1065"  # deep purple
-    # A sound file for the production (uploaded on its Media tab), kept in MEDIA_ROOT/sounds/.
-    sound = models.FileField(upload_to="sounds/", blank=True)
+    # The parts of the public page that are switched off (see home.views.PUBLIC_VIEW_PARTS); none: all are shown.
+    public_hidden_parts = models.JSONField(default=list, blank=True)
 
     objects = ProductionQuerySet.as_manager()
 
@@ -437,6 +455,30 @@ class Role(models.Model):
         return self.name
 
 
+# Team members are always listed in this order of role; any other roles follow, alphabetically.
+TEAM_ROLE_ORDER = ["Writer", "Director", "Producer", "Editor"]
+
+
+def team_role_rank(role_name):
+    """Where a role comes in a team listing: its place in TEAM_ROLE_ORDER, or after all of those."""
+    return TEAM_ROLE_ORDER.index(role_name) if role_name in TEAM_ROLE_ORDER else len(TEAM_ROLE_ORDER)
+
+
+def team_order_by(prefix=""):
+    """order_by terms for a query of team members (ProductionTeam, or `prefix` away from one): see TEAM_ROLE_ORDER."""
+    rank = Case(
+        *[When(**{f"{prefix}role__name": name}, then=Value(i)) for i, name in enumerate(TEAM_ROLE_ORDER)],
+        default=Value(len(TEAM_ROLE_ORDER)),
+        output_field=models.IntegerField(),
+    )
+    return [rank, f"{prefix}role__name", f"{prefix}person__last_name", f"{prefix}person__first_name"]
+
+
+def team_sort_key(member):
+    """The same order for team members already in a list."""
+    return (team_role_rank(member.role.name), member.role.name, member.person.last_name, member.person.first_name)
+
+
 class ProductionTeam(models.Model):
     person = models.ForeignKey(Person, on_delete=models.CASCADE)
     role = models.ForeignKey(Role, on_delete=models.PROTECT)
@@ -491,6 +533,31 @@ class ProductionImage(models.Model):
         images = production.images.select_related("image")
         if not images.filter(is_default=True).exists() and (best := min(images, key=cls.preference, default=None)):
             best.make_default()
+
+
+class Sound(models.Model):
+    """A sound file of a production (uploaded on its Media tab), kept in MEDIA_ROOT/sounds/. It always belongs to one."""
+
+    production = models.ForeignKey(Production, on_delete=models.CASCADE, related_name="sounds")
+    file = models.FileField(upload_to="sounds/")
+    uploaded = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded", "id"]
+
+    @property
+    def name(self):
+        return os.path.basename(self.file.name)
+
+    def __str__(self):
+        return f"{self.name} ({self.production})"
+
+
+@receiver(post_delete, sender=Sound)
+def delete_sound_file(sender, instance, **kwargs):
+    """The file goes with its sound (also when the production is deleted)."""
+    if instance.file:
+        instance.file.storage.delete(instance.file.name)
 
 
 class Palette(models.Model):

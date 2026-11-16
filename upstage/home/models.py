@@ -47,6 +47,12 @@ class WebPage(models.Model):
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="copies"
     )
 
+    # Set for the page of blocks that belongs to a production's public page: it is edited from the production, is not
+    # one of the site's pages (no address of its own, not in the list of pages) and goes when the production does.
+    production = models.OneToOneField(
+        "backstage.Production", null=True, blank=True, on_delete=models.CASCADE, related_name="page"
+    )
+
     class Meta:
         ordering = ["title"]
 
@@ -54,7 +60,19 @@ class WebPage(models.Model):
         return self.title
 
     def get_absolute_url(self):
+        if self.production_id:
+            return reverse("public-production", args=[self.production_id])
         return reverse("webpage", args=[self.slug])
+
+    @classmethod
+    def for_production(cls, production):
+        """The production's page of blocks (shown on its public page), made the first time it is asked for."""
+        page = cls.objects.filter(production=production).first()
+        if page is None:
+            page = cls.objects.create(
+                production=production, title=f"{production.title} (public page)"[:255], slug=f"production-{production.pk}"
+            )
+        return page
 
     def page_blocks(self):
         """The page's blocks in order, as PageBlocks (each has .block and .position)."""
