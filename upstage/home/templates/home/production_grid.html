@@ -11,9 +11,10 @@
       <p>{{ empty }}</p>
     </div>
   {% else %}
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+    {# Cards about 20% wider than the old five-across grid: fewer to a row on a big screen, still two on a phone. #}
+    <div class="flex flex-wrap justify-center gap-3">
       {% for production in productions %}
-        <a href="{% url 'public-production' production.pk %}" class="card bg-base-200 shadow-sm transition hover:shadow-md">
+        <a href="{% url 'public-production' production.pk %}" class="card w-[calc(50%-0.375rem)] bg-base-200 shadow-sm transition hover:shadow-md sm:w-[227px] md:w-[240px] lg:w-[253px]">
           <figure class="aspect-square w-full items-center justify-center bg-base-300">
             {% with cover=production.default_image %}
               {% if cover %}
@@ -21,7 +22,8 @@
               {% endif %}
             {% endwith %}
           </figure>
-          <div class="card-body p-3">
+          <div class="card-body gap-1 p-3">
+            {% if production.show_date %}<p class="text-center text-sm opacity-70">{{ production.show_date|date:"F Y" }}</p>{% endif %}
             <p class="text-center font-semibold">{{ production.title }}</p>
           </div>
         </a>

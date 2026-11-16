@@ -1,5 +1,5 @@
 from django.contrib.auth.decorators import login_not_required
-from django.db.models import F, Min, Q, Value
+from django.db.models import Exists, F, Min, OuterRef, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
 from django.http import Http404, HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from backstage.forms import ContactForm
-from backstage.models import Event, EventDateTime, Person, Production, Role, team_sort_key
+from backstage.models import Event, EventDateTime, ParentProduction, Person, Production, Role, team_sort_key
 from backstage.views import person_productions
 
 from .auditions import audition_view, upcoming_auditions
@@ -180,9 +180,28 @@ def crew_list(request):
     return public_people_page(request, crew, "Crew", "The crew of Upstage Surrey.", "No crew to show yet.")
 
 
-def production_type_list(request, production_type, title, empty):
-    """The public page for one type of production: each one's image and title, linked to its page."""
-    productions = Production.objects.filter(type=production_type).prefetch_related("images__image").order_by("title")
+def production_type_list(request, production_type, title, empty, dated=False):
+    """
+    The public page for one type of production: each one's image and title, linked to its page (a parent production, the
+    evening that groups several plays, is left out: its plays are listed). With `dated`, newest
+    first by the date of the first published performance or broadcast (shown under the image as month and year);
+    productions with no date come last. Otherwise alphabetical.
+    """
+    productions = (
+        Production.objects.filter(type=production_type)
+        .filter(~Exists(ParentProduction.objects.filter(pk=OuterRef("pk"))))  # the plays of an evening, not the evening
+        .prefetch_related("images__image")
+    )
+    if dated:
+        shown = [Event.EventType.PERFORMANCE, Event.EventType.BROADCAST]
+        productions = productions.annotate(
+            show_date=Min(
+                "events__datetimes__datetime",
+                filter=Q(events__event_type__in=shown, events__publish__in=Event.SHOWN),
+            )
+        ).order_by(F("show_date").desc(nulls_last=True), F("parent_id").asc(nulls_first=True), "title")
+    else:
+        productions = productions.order_by("title")
     return render(request, "home/production_grid.html", {
         "productions": productions, "title": title, "empty": empty,
         "seo": seo(request, title=title, description=f"{title} from Upstage Surrey."),
@@ -191,7 +210,9 @@ def production_type_list(request, production_type, title, empty):
 
 @login_not_required
 def stage_shows(request):
-    return production_type_list(request, Production.ProductionType.STAGE, "Stage shows", "No stage shows to show yet.")
+    return production_type_list(
+        request, Production.ProductionType.STAGE, "Stage shows", "No stage shows to show yet.", dated=True
+    )
 
 
 @login_not_required

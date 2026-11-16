@@ -2284,3 +2284,68 @@ class ProductionPageBlocksTests(TestCase):
         WebPage.for_production(self.production)
         self.production.delete()
         self.assertFalse(WebPage.objects.filter(slug__startswith="production-").exists())
+
+
+class StageShowsListTests(TestCase):
+    def production(self, title, when=None, publish="published", kind="performance", type="stage"):
+        from backstage.models import Event, EventDateTime
+
+        production = Production.objects.create(title=title, type=type)
+        if when:
+            event = Event.objects.create(event_type=kind, publish=publish)
+            event.productions.add(production)
+            EventDateTime.objects.create(event=event, datetime=when)
+        return production
+
+    def titles(self):
+        return [p.title for p in self.client.get(reverse("stage-shows")).context["productions"]]
+
+    def test_newest_first_by_the_date_of_the_first_published_performance(self):
+        now = timezone.now()
+        self.production("Old", now - timedelta(days=400))
+        self.production("Recent", now - timedelta(days=30))
+        self.production("Soon", now + timedelta(days=60))
+        self.production("Undated A")
+        self.production("Hidden date", now + timedelta(days=500), publish="not_published")  # not shown: no date
+        self.assertEqual(self.titles(), ["Soon", "Recent", "Old", "Hidden date", "Undated A"])
+
+    def test_a_run_counts_from_its_first_date(self):
+        from backstage.models import EventDateTime
+
+        now = timezone.now()
+        run = self.production("Run", now - timedelta(days=100))
+        self.production("Single", now - timedelta(days=50))
+        EventDateTime.objects.create(event=run.events.first(), datetime=now + timedelta(days=20))  # a later night
+        self.assertEqual(self.titles(), ["Single", "Run"])
+
+    def test_the_month_and_year_are_shown_under_the_image(self):
+        import datetime
+
+        self.production("Dated", timezone.make_aware(datetime.datetime(2026, 10, 17, 19, 30)))
+        self.production("Undated")
+        html = self.client.get(reverse("stage-shows")).content.decode()
+        self.assertIn("October 2026", html)
+        self.assertNotIn("17 October", html)  # just the month and year
+        self.assertLess(html.index("</figure>"), html.index("October 2026"))
+        self.assertLess(html.index("October 2026"), html.index("Dated</p>"))
+
+    def test_a_parent_production_is_left_out_but_its_plays_are_listed(self):
+        from backstage.models import ParentProduction
+
+        now = timezone.now()
+        evening = ParentProduction.objects.create(title="Evening of plays", type="stage")
+        for title in ("Play A", "Play B"):
+            Production.objects.create(title=title, type="stage", parent=evening)
+        self.production("Alone", now)
+        titles = self.titles()
+        self.assertNotIn("Evening of plays", titles)
+        self.assertEqual(sorted(titles), ["Alone", "Play A", "Play B"])
+        film_parent = ParentProduction.objects.create(title="Film night", type="film")
+        self.assertNotIn(film_parent, self.client.get(reverse("films")).context["productions"])
+
+    def test_films_stay_alphabetical_and_undated(self):
+        self.production("Zed", timezone.now(), type="film")
+        self.production("Alpha", timezone.now() - timedelta(days=9), type="film")
+        response = self.client.get(reverse("films"))
+        self.assertEqual([p.title for p in response.context["productions"]], ["Alpha", "Zed"])
+        self.assertNotContains(response, "show_date")
