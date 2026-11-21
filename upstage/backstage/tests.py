@@ -3957,3 +3957,38 @@ class PeopleDefaultSortTests(TestCase):
     def test_the_all_people_list_is_in_first_name_order(self):
         response = self.client.get(reverse("person-list"))
         self.assertEqual([p.first_name for p in response.context["object_list"]], ["Alice", "Bea", "Zack"])
+
+
+class ProductionTypeMenuTests(TestCase):
+    def setUp(self):
+        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        Production.objects.create(title="A Radio Play", type="radio")
+        Production.objects.create(title="A Stage Play", type="stage")
+        Production.objects.create(title="A Film", type="film")
+        self.list = reverse("production-list")
+
+    def test_the_menu_has_a_productions_drop_down_with_every_type(self):
+        html = self.client.get(self.list).content.decode()
+        for query, title in (("?type=radio", "Radio plays"), ("?type=stage", "Stage plays"),
+                             ("?type=film", "Films"), ("?type=other", "Other productions")):
+            self.assertIn(f'<li><a href="{self.list}{query}">{title}</a></li>', html)
+        self.assertNotIn("All productions", html)
+        self.assertIn("<summary>Productions</summary>", html)
+
+    def test_the_title_says_which_kind_of_production_is_shown(self):
+        for query, title in (("", "Productions"), ("?type=radio", "Radio plays"), ("?type=stage", "Stage plays"),
+                             ("?type=film", "Films"), ("?type=other", "Other productions"), ("?type=nonsense", "Productions")):
+            response = self.client.get(self.list + query)
+            self.assertEqual(response.context["page_title"], title, query)
+            self.assertContains(response, f'<h1 class="text-3xl font-bold">{title}</h1>')
+            self.assertContains(response, f"<title>{title} · Upstage Theatre</title>")
+
+    def test_the_type_choice_is_gone_but_the_type_survives_a_search(self):
+        response = self.client.get(self.list + "?type=stage")
+        self.assertNotContains(response, "All types")
+        self.assertNotContains(response, '<select name="type"')
+        self.assertContains(response, '<input type="hidden" name="type" value="stage" />')
+        self.assertEqual([p.title for p in response.context["object_list"]], ["A Stage Play"])
+
+    def test_an_empty_type_says_so(self):
+        self.assertContains(self.client.get(self.list + "?type=other"), "No other productions yet.")

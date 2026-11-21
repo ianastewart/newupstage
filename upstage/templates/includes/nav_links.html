@@ -1,4 +1,13 @@
-<li><a href="{% url 'production-list' %}">Productions</a></li>
+<li>
+  <details>
+    <summary>Productions</summary>
+    <ul class="z-10 w-48 rounded-box bg-base-200 p-2 shadow-lg">
+      {% for value, title in production_types %}
+        <li><a href="{% url 'production-list' %}?type={{ value }}">{{ title }}</a></li>
+      {% endfor %}
+    </ul>
+  </details>
+</li>
 <li><a href="{% url 'backstage-auditions' %}">Auditions</a></li>
 <li>
   <details>

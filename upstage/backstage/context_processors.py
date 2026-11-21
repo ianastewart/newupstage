@@ -3,7 +3,7 @@ import os
 from django.contrib.staticfiles import finders
 from django.utils.functional import SimpleLazyObject
 
-from backstage.models import Image, Palette, SiteSettings
+from backstage.models import Image, Palette, Production, SiteSettings
 from backstage.themes import PUBLIC_PALETTE, THEMES, is_theme
 
 # The palette (in the admin) whose colours are the colour picker's fixed row.
@@ -69,3 +69,8 @@ def colour_palette(request):
         return palette.slots() if palette else [None] * Palette.SIZE
 
     return {"colour_palette": PUBLIC_PALETTE, "colour_saved": SimpleLazyObject(find_saved)}
+
+
+def production_types(request):
+    """`production_types`: the types of production as (value, title in the plural), for the backstage menu."""
+    return {"production_types": [(value, Production.TYPE_TITLES[value]) for value, _ in Production.ProductionType.choices]}

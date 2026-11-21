@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Productions · Upstage Theatre{% endblock %}
+{% block title %}{{ page_title }} · Upstage Theatre{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-6xl p-6">
   <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-    <h1 class="text-3xl font-bold">Productions</h1>
+    <h1 class="text-3xl font-bold">{{ page_title }}</h1>
     <div class="flex gap-2">
       <a href="{% url 'parentproduction-create' %}" class="btn">New parent production</a>
       <a href="{{ create_view_url }}" class="btn btn-primary">New production</a>
@@ -17,12 +17,7 @@
       <svg class="h-4 w-4 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
       <input type="search" name="q" value="{{ search }}" placeholder="Search titles" aria-label="Search titles" />
     </label>
-    <select name="type" class="select w-full sm:w-48" aria-label="Production type" onchange="this.form.submit()">
-      <option value="">All types</option>
-      {% for value, label in types %}
-        <option value="{{ value }}"{% if current_type == value %} selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
+    {% if current_type %}<input type="hidden" name="type" value="{{ current_type }}" />{% endif %}
     <select name="published" class="select w-full sm:w-44" aria-label="Published" onchange="this.form.submit()">
       <option value="">Any status</option>
       {% for value, label in published_filters %}
@@ -35,8 +30,8 @@
       {% endfor %}
     </select>
     <button type="submit" class="btn">Search</button>
-    {% if search or current_type or current_published %}
-      <a href="{% querystring q=None type=None published=None page=None %}" class="btn btn-ghost">Clear</a>
+    {% if search or current_published %}
+      <a href="{% querystring q=None published=None page=None %}" class="btn btn-ghost">Clear</a>
     {% endif %}
   </form>
 
@@ -83,11 +78,11 @@
     {% endif %}
   {% else %}
     <div class="rounded-box bg-base-200 p-12 text-center">
-      {% if search or current_type %}
+      {% if search or current_published %}
         <p class="mb-4">No productions match these filters.</p>
-        <a href="?" class="btn">Show all productions</a>
+        <a href="{% querystring q=None published=None page=None %}" class="btn">Show all {{ page_title|lower }}</a>
       {% else %}
-        <p class="mb-4">No productions yet.</p>
+        <p class="mb-4">No {{ page_title|lower }} yet.</p>
         <a href="{{ create_view_url }}" class="btn btn-primary">Create the first one</a>
       {% endif %}
     </div>

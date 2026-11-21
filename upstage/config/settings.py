@@ -100,6 +100,7 @@ TEMPLATES = [
                 'backstage.context_processors.css_version',
                 'backstage.context_processors.themes',
                 'backstage.context_processors.colour_palette',
+                'backstage.context_processors.production_types',
                 'home.seo.default_seo',
             ],
         },

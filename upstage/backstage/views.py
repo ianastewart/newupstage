@@ -802,8 +802,8 @@ class ProductionView(CRUDView):
         return queryset
 
     def get_context_data(self, **kwargs):
-        kwargs["types"] = models.Production.ProductionType.choices
         kwargs["current_type"] = self.get_type()
+        kwargs["page_title"] = models.Production.TYPE_TITLES.get(kwargs["current_type"], "Productions")
         kwargs["published_filters"] = self.PUBLISHED_FILTERS
         kwargs["current_published"] = self.get_published()
         kwargs["search"] = self.get_search()

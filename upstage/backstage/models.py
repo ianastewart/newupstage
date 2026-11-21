@@ -234,6 +234,9 @@ class Production(models.Model):
         FILM = "film", "Film"
         OTHER = "other", "Other"
 
+    # What the backstage menu and the list of productions call each type, in the plural.
+    TYPE_TITLES = {"radio": "Radio plays", "stage": "Stage plays", "film": "Films", "other": "Other productions"}
+
     title = models.CharField(max_length=255)
     strap_line = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)
