@@ -216,6 +216,13 @@ def stage_shows(request):
 
 
 @login_not_required
+def musicals(request):
+    return production_type_list(
+        request, Production.ProductionType.MUSICAL, "Musicals", "No musicals to show yet.", dated=True
+    )
+
+
+@login_not_required
 def films(request):
     return production_type_list(request, Production.ProductionType.FILM, "Films", "No films to show yet.")
 

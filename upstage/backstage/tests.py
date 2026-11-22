@@ -3970,14 +3970,16 @@ class ProductionTypeMenuTests(TestCase):
     def test_the_menu_has_a_productions_drop_down_with_every_type(self):
         html = self.client.get(self.list).content.decode()
         for query, title in (("?type=radio", "Radio plays"), ("?type=stage", "Stage plays"),
-                             ("?type=film", "Films"), ("?type=other", "Other productions")):
+                             ("?type=film", "Films"), ("?type=musical", "Musicals"),
+                             ("?type=other", "Other productions")):
             self.assertIn(f'<li><a href="{self.list}{query}">{title}</a></li>', html)
         self.assertNotIn("All productions", html)
         self.assertIn("<summary>Productions</summary>", html)
 
     def test_the_title_says_which_kind_of_production_is_shown(self):
         for query, title in (("", "Productions"), ("?type=radio", "Radio plays"), ("?type=stage", "Stage plays"),
-                             ("?type=film", "Films"), ("?type=other", "Other productions"), ("?type=nonsense", "Productions")):
+                             ("?type=film", "Films"), ("?type=musical", "Musicals"),
+                             ("?type=other", "Other productions"), ("?type=nonsense", "Productions")):
             response = self.client.get(self.list + query)
             self.assertEqual(response.context["page_title"], title, query)
             self.assertContains(response, f'<h1 class="text-3xl font-bold">{title}</h1>')

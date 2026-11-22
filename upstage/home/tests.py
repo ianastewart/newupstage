@@ -2343,6 +2343,14 @@ class StageShowsListTests(TestCase):
         film_parent = ParentProduction.objects.create(title="Film night", type="film")
         self.assertNotIn(film_parent, self.client.get(reverse("films")).context["productions"])
 
+    def test_musicals_are_in_the_menu_and_listed_newest_first(self):
+        self.production("Old", timezone.now() - timedelta(days=9), type="musical")
+        self.production("New", timezone.now(), type="musical")
+        self.production("A Film", timezone.now(), type="film")
+        response = self.client.get(reverse("musicals"))
+        self.assertEqual([p.title for p in response.context["productions"]], ["New", "Old"])
+        self.assertContains(response, f'<a href="{reverse("musicals")}" class="menu-active">Musicals</a>')
+
     def test_films_stay_alphabetical_and_undated(self):
         self.production("Zed", timezone.now(), type="film")
         self.production("Alpha", timezone.now() - timedelta(days=9), type="film")

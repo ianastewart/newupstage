@@ -15,6 +15,7 @@ urlpatterns = [
     # Radio plays used to have their own page: the production page replaces it.
     path("radio-archive/<int:pk>/", login_not_required(RedirectView.as_view(pattern_name="public-production", permanent=True))),
     path("stage-shows/", views.stage_shows, name="stage-shows"),
+    path("musicals/", views.musicals, name="musicals"),
     path("films/", views.films, name="films"),
     path("writers/", views.writer_list, name="public-writers"),
     path("crew/", views.crew_list, name="public-crew"),
