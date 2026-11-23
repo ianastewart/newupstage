@@ -1,32 +1,26 @@
 #!/usr/bin/env bash
-# REPLACE the database and/or media on the Coolify server with the local ones.  This overwrites production data.
+# REPLACE the database and/or media of the live site or the sandbox with the local ones.  This overwrites that site's data.
 #
-# Usage:  scripts/push_to_server.sh [--dry-run] [--yes] [db|media|all]      (default: all)
+# Usage:  scripts/push_to_server.sh [--dry-run] [--yes] <live|sandbox> [db|media|all]      (default: all)
 #   --dry-run   make the local dump/archive and check the server containers, but change nothing on the server
-#   --yes       skip the typed confirmation (for when there is no keyboard to answer it); the server is still backed up first
+#   --yes       skip the typed confirmation (for when there is no keyboard to answer it); the site is still backed up first
 #
 # What it does:
 #   1. makes the local dump (USE_COMPOSE_DB=1: the docker compose db; otherwise PGHOST/PGPORT/PGUSER/PGDATABASE) and media archive
-#   2. saves the server's current database and media to backups/server-before-push/ (using pull_from_server.sh)
-#   3. asks you to type the server name to confirm
+#   2. saves the site's current database and media to backups/server-before-push/ (using pull_from_server.sh)
+#   3. asks you to type the site's name (live or sandbox) to confirm
 #   4. database: stops the web container, restores in ONE transaction (a failure leaves the old data in place), starts it again
 #   5. media: uploads the archive, checks it, then empties /data/media and unpacks it
+#   6. sandbox only: logs everyone out and puts SANDBOX_USERS into the sandbox group
 #
-# Settings are the same as pull_from_server.sh and restore_local.sh (environment, or scripts/.server.env).
+# Settings are the same as pull_from_server.sh and restore_local.sh (see scripts/lib.sh).
 # The local schema must match the code deployed on the server (or be older: the app's start-up runs migrations).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-[ -f scripts/.server.env ] && . scripts/.server.env
+. scripts/lib.sh
 
-SERVER=${SERVER:-root@coolify.iskt.co.uk}
-OUT_DIR=${OUT_DIR:-backups}
-MEDIA_DIR=${MEDIA_DIR:-upstage/media}
-MEDIA_PATH=${MEDIA_PATH:-/data/media}
-export PGHOST=${PGHOST:-localhost} PGPORT=${PGPORT:-5433}
-export PGUSER=${PGUSER:-postgres} PGDATABASE=${PGDATABASE:-upstage}
-: "${WEB_FILTER:?Set WEB_FILTER (docker name filter for the web container)}"
-: "${DB_FILTER:?Set DB_FILTER (docker name filter for the database container)}"
+usage() { echo "Usage: $0 [--dry-run] [--yes] <live|sandbox> [db|media|all]" >&2; exit 1; }
 
 dry=0
 yes=0
@@ -35,22 +29,21 @@ while [ "${1:-}" = "--dry-run" ] || [ "${1:-}" = "--yes" ]; do
   [ "$1" = "--yes" ] && yes=1
   shift
 done
-what=${1:-all}
-case "$what" in db|media|all) ;; *) echo "Usage: $0 [--dry-run] [--yes] [db|media|all]" >&2; exit 1 ;; esac
-[ $# -le 1 ] || { echo "Usage: $0 [--dry-run] [--yes] [db|media|all]" >&2; exit 1; }
+[ $# -ge 1 ] && [ $# -le 2 ] || usage
+load_target "$1"
+what=${2:-all}
+case "$what" in db | media | all) ;; *) usage ;; esac
+case "$what" in db) what_text=database ;; all) what_text="database and media" ;; *) what_text=$what ;; esac
+
+MEDIA_DIR=${MEDIA_DIR:-upstage/media}
+export PGHOST=${PGHOST:-localhost} PGPORT=${PGPORT:-5433}
+export PGUSER=${PGUSER:-postgres} PGDATABASE=${PGDATABASE:-upstage}
 
 stamp=$(date +%Y%m%d-%H%M%S)
 local_dir="$OUT_DIR/local"
 mkdir -p "$local_dir"
 dump="$local_dir/push-$stamp.dump"
 tgz="$local_dir/push-$stamp.tgz"
-
-find_container() {
-  local c
-  c=$(ssh "$SERVER" "docker ps --filter 'name=$1' --format '{{.Names}}' | head -1")
-  [ -n "$c" ] || { echo "No running container matches '$1'" >&2; exit 1; }
-  echo "$c"
-}
 
 # 1. Local data
 if [ "$what" != media ]; then
@@ -72,26 +65,19 @@ fi
 
 web=$(find_container "$WEB_FILTER")
 db=$(find_container "$DB_FILTER")
-echo "Server $SERVER: web container $web, database container $db"
+echo "The $TARGET site on $SERVER: web container $web, database container $db"
 
 if [ "$dry" = 1 ]; then
   echo "Dry run: nothing changed on the server."
   exit 0
 fi
 
-# 2. Back up the server
-echo "Backing up the server first ..."
-OUT_DIR="$OUT_DIR/server-before-push" "$(dirname "$0")/pull_from_server.sh" "$what"
+# 2. Back up the site
+echo "Backing up the $TARGET site first ..."
+OUT_DIR="$OUT_DIR/server-before-push" "$(dirname "$0")/pull_from_server.sh" "$TARGET" "$what"
 
 # 3. Confirm
-echo
-echo "This will REPLACE the $what on $SERVER with the local version."
-if [ "$yes" = 1 ]; then
-  echo "--yes given: continuing without the typed confirmation."
-else
-  read -r -p "Type the server name (${SERVER#*@}) to continue: " answer
-  [ "$answer" = "${SERVER#*@}" ] || { echo "Cancelled."; exit 1; }
-fi
+confirm_typed "This will REPLACE the $what_text of the $(echo "$TARGET" | tr a-z A-Z) site on $SERVER with the local version." "$TARGET" "$yes"
 
 # 4. Database
 if [ "$what" != media ]; then
@@ -105,6 +91,8 @@ if [ "$what" != media ]; then
   trap - EXIT
   echo "Starting $web ..."
   ssh "$SERVER" "docker start $web" >/dev/null
+  # 6. The sandbox: new sessions and the sandbox group
+  [ "$TARGET" != sandbox ] || sandbox_after_db_restore "$web"
 fi
 
 # 5. Media
@@ -118,4 +106,4 @@ if [ "$what" != db ]; then
   echo "Media replaced."
 fi
 
-echo "Done. The previous server data is in $OUT_DIR/server-before-push/"
+echo "Done. The previous $TARGET data is in $OUT_DIR/server-before-push/"

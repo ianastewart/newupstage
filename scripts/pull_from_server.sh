@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Download the database (pg_dump, custom format) and the media files from the Coolify server.
+# Download the database (pg_dump, custom format) and the media files of the live site or the sandbox.
 #
-# Usage:  scripts/pull_from_server.sh [db|media|all]      (default: all)
+# Usage:  scripts/pull_from_server.sh <live|sandbox> [db|media|all]      (default: all)
 #
-# Settings (environment variables, or put them in scripts/.server.env, which is git-ignored):
+# Files are saved in OUT_DIR as upstage-<site>-<time>.dump and media-<site>-<time>.tgz.
+#
+# Settings: see scripts/lib.sh (scripts/.server.env, scripts/.server.<live|sandbox>.env, or environment variables):
 #   SERVER       ssh target                         default root@coolify.iskt.co.uk
 #   SERVER_DB    the database the app uses on the server (Coolify's postgres container has POSTGRES_DB=postgres)  default $POSTGRES_DB
 #   WEB_FILTER   docker name filter for the web container (Coolify uuid, e.g. web-<uuid>)  REQUIRED
@@ -13,40 +15,33 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-[ -f scripts/.server.env ] && . scripts/.server.env
+. scripts/lib.sh
 
-SERVER=${SERVER:-root@coolify-server}
-OUT_DIR=${OUT_DIR:-backups}
-MEDIA_PATH=${MEDIA_PATH:-/data/media}
-: "${WEB_FILTER:?Set WEB_FILTER (docker name filter for the web container)}"
-: "${DB_FILTER:?Set DB_FILTER (docker name filter for the database container)}"
+usage() { echo "Usage: $0 <live|sandbox> [db|media|all]" >&2; exit 1; }
+[ $# -ge 1 ] && [ $# -le 2 ] || usage
+load_target "$1"
+what=${2:-all}
+case "$what" in db | media | all) ;; *) usage ;; esac
 
-what=${1:-all}
 stamp=$(date +%Y%m%d-%H%M%S)
 mkdir -p "$OUT_DIR"
 
-# Find a running container by name filter on the server
-find_container() {
-  local c
-  c=$(ssh "$SERVER" "docker ps --filter 'name=$1' --format '{{.Names}}' | head -1")
-  [ -n "$c" ] || { echo "No running container matches '$1'" >&2; exit 1; }
-  echo "$c"
-}
-
 pull_db() {
-  local c out="$OUT_DIR/upstage-$stamp.dump"
+  local c out="$OUT_DIR/upstage-$TARGET-$stamp.dump"
   c=$(find_container "$DB_FILTER")
-  echo "Dumping database from $c ..."
+  echo "Dumping the $TARGET database from $c ..."
   # Credentials come from the container's own environment, so nothing is stored here
   ssh "$SERVER" "docker exec $c sh -c 'pg_dump -Fc -U \"\$POSTGRES_USER\" -d \"${SERVER_DB:-\$POSTGRES_DB}\"'" > "$out"
+  [ -s "$out" ] || { rm -f "$out"; echo "The dump is empty; something went wrong" >&2; exit 1; }
   echo "Saved $out ($(du -h "$out" | cut -f1))"
 }
 
 pull_media() {
-  local c out="$OUT_DIR/media-$stamp.tgz"
+  local c out="$OUT_DIR/media-$TARGET-$stamp.tgz"
   c=$(find_container "$WEB_FILTER")
-  echo "Archiving media from $c:$MEDIA_PATH ..."
+  echo "Archiving the $TARGET media from $c:$MEDIA_PATH ..."
   ssh "$SERVER" "docker exec $c tar -czf - -C $MEDIA_PATH ." > "$out"
+  tar -tzf "$out" >/dev/null || { rm -f "$out"; echo "The archive is damaged; something went wrong" >&2; exit 1; }
   echo "Saved $out ($(du -h "$out" | cut -f1))"
 }
 
@@ -54,5 +49,4 @@ case "$what" in
   db) pull_db ;;
   media) pull_media ;;
   all) pull_db; pull_media ;;
-  *) echo "Usage: $0 [db|media|all]" >&2; exit 1 ;;
 esac
