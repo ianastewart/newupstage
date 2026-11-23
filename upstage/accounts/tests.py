@@ -247,6 +247,18 @@ class SandboxSiteTests(TestCase):
         self.assertRedirects(response, "/stage-shows/", fetch_redirect_response=False)
         self.assertEqual(self.client.get("/stage-shows/").status_code, 200)
 
+    def test_anonymous_visitors_can_fetch_a_logo_but_no_other_media(self):
+        from backstage.models import Image
+
+        Image.objects.create(image="images/logo_test.png", description="A logo", image_type=Image.ImageType.LOGO)
+        Image.objects.create(image="images/secret_test.png", description="Other", image_type=Image.ImageType.PRODUCTION)
+        # (the files do not exist, so a logo is let through to a 404; anything else is sent to the login form)
+        self.assertEqual(self.client.get("/media/images/logo_test.png").status_code, 404)
+        response = self.client.get("/media/images/secret_test.png")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/?next=%2Fmedia%2Fimages%2Fsecret_test.png")
+        self.assertEqual(self.client.get("/media/images/nothing.png").status_code, 302)
+
     def test_the_login_pages_are_open(self):
         for name in ("login", "password_reset"):
             self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)

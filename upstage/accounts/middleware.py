@@ -42,6 +42,8 @@ class SandboxGateMiddleware:
         if url_name in SANDBOX_OPEN_URL_NAMES and (url_name != "logout" or request.user.is_authenticated):
             return None
         if not request.user.is_authenticated:
+            if url_name == "media" and self.is_logo_file(request.path_info):
+                return None  # the login page shows the logo
             if request.path_info != "/":
                 return redirect(f"/?{urlencode({'next': request.get_full_path()})}")
             going_to = request.GET.get("next", "")
@@ -51,6 +53,16 @@ class SandboxGateMiddleware:
         if not can_sandbox(request.user):
             return render(request, "registration/sandbox_forbidden.html", status=403)
         return None
+
+
+    @staticmethod
+    def is_logo_file(path):
+        """Whether the path (under MEDIA_URL) is the file of an image in the library whose type is Logo."""
+        from backstage.models import Image
+
+        prefix = "/" + settings.MEDIA_URL.strip("/") + "/"
+        name = path[len(prefix):] if path.startswith(prefix) else ""
+        return bool(name) and Image.objects.filter(image_type=Image.ImageType.LOGO, image=name).exists()
 
 
 class BackstageAccessMiddleware:
