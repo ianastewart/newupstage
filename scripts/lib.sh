@@ -9,6 +9,9 @@
 #                                 Required for the sandbox. For live it replaces the ones in .server.env, if it exists.
 # The sandbox never inherits the live containers: if its settings name the live containers the script refuses to run.
 
+# An OUT_DIR given by the caller (e.g. OUT_DIR=backups/x pull_from_server.sh) beats the one in the settings files
+_OUT_DIR_FROM_CALLER=${OUT_DIR-}
+
 check_target() {
   case "${1:-}" in
     live | sandbox) ;;
@@ -28,6 +31,7 @@ _load_env() {
     exit 1
   fi
   SERVER=${SERVER:-root@coolify.iskt.co.uk}
+  [ -z "$_OUT_DIR_FROM_CALLER" ] || OUT_DIR=$_OUT_DIR_FROM_CALLER
   OUT_DIR=${OUT_DIR:-backups}
   MEDIA_PATH=${MEDIA_PATH:-/data/media}
   : "${WEB_FILTER:?Set WEB_FILTER for $t (docker name filter for the web container)}"
