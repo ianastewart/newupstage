@@ -25,6 +25,12 @@
 </li>
 {% endwith %}
 {# In the row on wide screens Backstage is at the right of the bar instead (see public_nav.html). #}
-{% if is_backstage and not in_row %}
+{% if not in_row %}
+  {% if is_backstage %}
 <li><a href="{% url 'production-list' %}">Backstage</a></li>
+  {% elif user.is_authenticated %}
+<li><form method="POST" action="{% url 'logout' %}" class="p-0">{% csrf_token %}<button type="submit" class="w-full px-3 py-1.5 text-left">Log out</button></form></li>
+  {% else %}
+<li><a href="{% url 'login' %}">Log in</a></li>
+  {% endif %}
 {% endif %}

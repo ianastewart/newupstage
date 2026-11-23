@@ -27,6 +27,8 @@ services:
   #     DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
   #     DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?Set DJANGO_ALLOWED_HOSTS in .env}
   #     DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
+  #     # "live", or "sandbox" (every page then needs a login by a member of the sandbox group)
+  #     SITE_MODE: ${SITE_MODE:-live}
   #     # The settings read the database from DATABASE_URL (a password with special characters must be URL-encoded)
   #     DATABASE_URL: postgres://${DB_USER:-upstage}:${DB_PASSWORD}@db:5432/${DB_NAME:-upstage}
   #     EMAIL_HOST: ${EMAIL_HOST:-}

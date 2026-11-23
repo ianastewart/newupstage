@@ -1,7 +1,8 @@
 from django.conf import settings
-from django.contrib.auth.views import redirect_to_login
-from django.shortcuts import render
+from django.contrib.auth.forms import AuthenticationForm
+from django.shortcuts import redirect, render
 from django.urls import Resolver404, resolve
+from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 
 from .access import can_backstage, can_sandbox
 
@@ -17,7 +18,9 @@ class SandboxGateMiddleware:
     """
     On the sandbox site (settings.SITE_MODE == "sandbox") nothing can be seen without logging in as a member of the
     sandbox group (or a superuser), not even the public pages. It runs before LoginRequiredMiddleware, so it also
-    covers the views marked @login_not_required. Search engines are told not to index the sandbox. On the live site it does nothing.
+    covers the views marked @login_not_required. A visitor who is not logged in sees the login form on the home page (any
+    other address sends them there, remembering where they were going). Search engines are told not to index the
+    sandbox. On the live site it does nothing.
     """
 
     def __init__(self, get_response):
@@ -39,7 +42,12 @@ class SandboxGateMiddleware:
         if url_name in SANDBOX_OPEN_URL_NAMES and (url_name != "logout" or request.user.is_authenticated):
             return None
         if not request.user.is_authenticated:
-            return redirect_to_login(request.get_full_path())
+            if request.path_info != "/":
+                return redirect(f"/?{urlencode({'next': request.get_full_path()})}")
+            going_to = request.GET.get("next", "")
+            if not url_has_allowed_host_and_scheme(going_to, allowed_hosts={request.get_host()}):
+                going_to = "/"
+            return render(request, "registration/login.html", {"form": AuthenticationForm(request), "next": going_to})
         if not can_sandbox(request.user):
             return render(request, "registration/sandbox_forbidden.html", status=403)
         return None

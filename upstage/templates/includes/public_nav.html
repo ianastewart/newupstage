@@ -17,8 +17,13 @@
       <ul class="menu menu-horizontal gap-1">{% include "includes/public_nav_links.html" with in_row=True %}</ul>
     </div>
     <div class="navbar-end">
+      {# Top right: Log in; or, once logged in, Backstage for those who may use it, else Log out. #}
       {% if is_backstage %}
         <a href="{% url 'production-list' %}" class="btn btn-ghost hidden sm:inline-flex">Backstage</a>
+      {% elif user.is_authenticated %}
+        <form method="POST" action="{% url 'logout' %}" class="hidden sm:block">{% csrf_token %}<button type="submit" class="btn btn-ghost">Log out</button></form>
+      {% else %}
+        <a href="{% url 'login' %}" class="btn btn-ghost hidden sm:inline-flex">Log in</a>
       {% endif %}
       <div class="dropdown dropdown-end sm:hidden">
         <div tabindex="0" role="button" class="btn btn-ghost" aria-label="Menu">

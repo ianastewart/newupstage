@@ -2,6 +2,9 @@
 {% block auth_title %}Log in{% endblock %}
 {% block auth_heading %}Log in{% endblock %}
 
+{# On the sandbox the login (on the home page) has a dark blue background. #}
+{% block auth_card_style %}{% if sandbox_site %} style="background-color: #1e40af; color: #fff;"{% endif %}{% endblock %}
+
 {% block auth_body %}
   {% if user.is_authenticated %}
     <div role="alert" class="alert alert-info alert-soft">You are already logged in as {{ user.get_username }}.</div>
@@ -16,5 +19,5 @@
 
 {% block auth_links %}
   <a href="{% url 'password_reset' %}" class="link link-primary">Forgotten your password?</a>
-  <a href="{% url 'signup' %}" class="link link-primary">Create an account</a>
+  {% if not sandbox_site %}<a href="{% url 'signup' %}" class="link link-primary">Create an account</a>{% endif %}
 {% endblock %}

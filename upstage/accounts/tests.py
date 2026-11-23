@@ -219,11 +219,33 @@ class BackstageGroupTests(TestCase):
 
 @override_settings(SITE_MODE="sandbox")
 class SandboxSiteTests(TestCase):
-    def test_anonymous_visitors_must_log_in_even_for_public_pages(self):
-        for name in ("stage-shows", "robots", "sitemap"):
+    def test_anonymous_visitors_see_the_login_form_on_the_home_page(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'<form method="POST" action="{reverse("login")}">')
+        self.assertContains(response, 'name="next" value="/"')
+        self.assertContains(response, "SANDBOX")
+        self.assertNotContains(response, "Create an account")
+        self.assertContains(response, 'style="background-color: #1e40af; color: #fff;"')  # the dark blue login box
+        self.assertNotContains(response, "tracking-widest text-primary")  # the backstage navbar's "Backstage" label
+        self.assertContains(response, 'href="/stage-shows/"')  # the public navbar
+        self.assertNotContains(self.client.get(reverse("login")), "tracking-widest text-primary")
+
+    def test_any_other_page_sends_them_to_the_home_page_remembering_where_they_were_going(self):
+        for name in ("stage-shows", "robots", "sitemap", "production-list"):
             response = self.client.get(reverse(name))
             self.assertEqual(response.status_code, 302, name)
-            self.assertTrue(response["Location"].startswith(reverse("login")), name)
+            self.assertEqual(response["Location"], f"/?next={reverse(name).replace('/', '%2F')}", name)
+        response = self.client.get("/?next=/stage-shows/")
+        self.assertContains(response, 'name="next" value="/stage-shows/"')
+        self.assertContains(self.client.get("/?next=https://evil.example/"), 'name="next" value="/"')
+
+    def test_logging_in_from_the_home_page_lets_a_sandbox_member_in(self):
+        user = CustomUser.objects.create_user("tester", "tester@example.com", PASSWORD)
+        user.groups.add(Group.objects.get(name=SANDBOX_GROUP))
+        response = self.client.post(reverse("login"), {"username": "tester", "password": PASSWORD, "next": "/stage-shows/"})
+        self.assertRedirects(response, "/stage-shows/", fetch_redirect_response=False)
+        self.assertEqual(self.client.get("/stage-shows/").status_code, 200)
 
     def test_the_login_pages_are_open(self):
         for name in ("login", "password_reset"):
@@ -287,3 +309,36 @@ class LiveSiteTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "SANDBOX")
         self.assertNotIn("X-Robots-Tag", response)
+
+
+class LoginPlaceTests(TestCase):
+    """The log in / backstage / log out control is at the top right of the public pages, not in the footer."""
+
+    def navbar_end(self):
+        html = self.client.get(reverse("stage-shows")).content.decode()
+        return html.split('<div class="navbar-end">')[1].split('<div class="dropdown dropdown-end sm:hidden">')[0]
+
+    def test_a_visitor_sees_log_in_top_right(self):
+        end = self.navbar_end()
+        self.assertIn(f'href="{reverse("login")}"', end)
+        self.assertNotIn("Log out", end)
+        self.assertNotIn("Backstage", end)
+
+    def test_a_user_without_backstage_access_sees_log_out(self):
+        self.client.force_login(CustomUser.objects.create_user("plain", "plain@example.com", PASSWORD))
+        end = self.navbar_end()
+        self.assertIn(f'action="{reverse("logout")}"', end)
+        self.assertIn("Log out", end)
+        self.assertNotIn("Backstage", end)
+
+    def test_a_user_with_backstage_access_sees_backstage(self):
+        self.client.force_login(backstage_user("member", "member@example.com", PASSWORD))
+        end = self.navbar_end()
+        self.assertIn(f'href="{reverse("production-list")}"', end)
+        self.assertNotIn("Log out", end)
+
+    def test_the_footer_no_longer_has_it(self):
+        html = self.client.get(reverse("stage-shows")).content.decode()
+        footer = html.split('<div id="footer">')[1]
+        self.assertNotIn("Log in", footer)
+        self.assertNotIn("Log out", footer)

@@ -2,11 +2,4 @@
     <aside>
       <p>Website built by <a href="{% url 'public-actor' 1 %}" class="link link-hover text-violet-400">Ian Stewart</a></p>
     </aside>
-    <div class="absolute bottom-4 right-4 text-sm">
-      {% if user.is_authenticated %}
-        <form method="POST" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="link link-hover">Log out</button></form>
-      {% else %}
-        <a href="{% url 'login' %}" class="link link-hover">Log in</a>
-      {% endif %}
-    </div>
   </footer>
