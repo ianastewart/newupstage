@@ -34,7 +34,7 @@
           {% include "includes/theme_options.html" %}
         </ul>
       </div>
-      {% if user.is_staff %}
+      {% if is_backstage %}
       <div class="dropdown dropdown-end">
         <div tabindex="0" role="button" class="btn btn-ghost" title="The theme visitors see on the public pages">
           Public<span class="hidden sm:inline"> theme</span>

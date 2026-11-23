@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.template.loader import render_to_string
+from accounts.testing import backstage_user
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -122,7 +123,7 @@ class PublicNavTests(TestCase):
     def test_backstage_pages_keep_the_backstage_navbar(self):
         from accounts.models import CustomUser
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         response = self.client.get(reverse("production-list"))
         self.assertContains(response, f'href="{reverse("page-list")}"')
 
@@ -130,7 +131,7 @@ class PublicNavTests(TestCase):
         from accounts.models import CustomUser
 
         self.assertNotContains(self.client.get(reverse("home")), ">Backstage<")
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         response = self.client.get(reverse("home"))
         # At the right of the bar on wide screens, and in the phone menu.
         self.assertContains(response, f'<a href="{reverse("production-list")}" class="btn btn-ghost hidden sm:inline-flex">Backstage</a>', count=1)
@@ -147,7 +148,7 @@ class ColourSwatchTests(TestCase):
         from accounts.models import CustomUser
         from home.models import WebPage
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         page = WebPage.objects.create(title="About", slug="about")
         for url, fields in (
             (reverse("page-create"), 1),
@@ -180,7 +181,7 @@ class ColumnsBlockTests(TestCase):
         from accounts.models import CustomUser
         from home.models import WebPage
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", cls.PASSWORD)
+        cls.user = backstage_user("member", "member@example.com", cls.PASSWORD)
         cls.page = WebPage.objects.create(title="About", slug="about")
         # Only the file names are stored: nothing is written to the media folder.
         cls.images = [Image.objects.create(description=f"Pic {n}", image=f"images/test-col-{n}.jpg") for n in range(1, 5)]
@@ -641,7 +642,7 @@ class AuditionsBlockTests(TestCase):
         from home.models import Block, WebPage
 
         now = timezone.now()
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         venue = Venue.objects.create(name="Esher Theatre")
 
         def audition(title, *days, event_type=Event.EventType.AUDITION, image=True):
@@ -984,7 +985,7 @@ class HeroFadeInTimeTests(TestCase):
         from accounts.models import CustomUser
         from home.models import WebPage
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.page = WebPage.objects.create(title="Home", slug="home")
         cls.image = Image.objects.create(description="x", image="images/x.jpg")
 
@@ -1053,7 +1054,7 @@ class PromotionBlockTests(TestCase):
         from accounts.models import CustomUser
         from home.models import Block, WebPage
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.page = WebPage.objects.create(title="Home", slug="home")
         cls.block = Block.objects.create(name="Promo", block_type="promotion")
 
@@ -1516,7 +1517,7 @@ class ContactListTests(TestCase):
         from accounts.models import CustomUser
         from backstage.models import Contact
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         Contact.objects.create(first_name="Ann", last_name="Actor", email="ann@example.com", acting=True)
         Contact.objects.create(first_name="Bob", last_name="Builder", email="bob@example.com", newsletter=True, backstage=True)
 
@@ -1546,7 +1547,7 @@ class PageCopyTests(TestCase):
         from accounts.models import CustomUser
         from home.models import Block, BlockColumn, WebPage
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.page = WebPage.objects.create(title="About", slug="about", background_colour="#112233")
         cls.first = Block.objects.create(name="Intro", block_type="columns_2")
         BlockColumn.objects.create(block=cls.first, position=0, title="One", text="<p>a</p>")
@@ -1615,7 +1616,7 @@ class ReplaceOriginalTests(TestCase):
     def setUpTestData(cls):
         from accounts.models import CustomUser
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
 
     def setUp(self):
         from home.models import Block, WebPage
@@ -1904,7 +1905,7 @@ class SeoTests(TestCase):
 
         from .models import Block, PageBlock, WebPage
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.photo = Image.objects.create(description="Ann", image="images/ann.jpg", image_type="headshot")
         cls.poster = Image.objects.create(description="Poster", image="images/poster.jpg", image_type="promotion")
         cls.actor = Person.objects.create(first_name="Ann", last_name="Actor", image=cls.photo, biography="<p>Ann loves <b>panto</b>.</p><p>And tea.</p>")
@@ -2089,7 +2090,7 @@ class BlockGradientTests(TestCase):
         from accounts.models import CustomUser
         from home.models import Block, WebPage
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         page = WebPage.objects.create(title="About", slug="about")
         data = {
             "name": "Fade", "block_type": "text", "title": "", "subtitle": "", "text": "<p>Hi</p>", "layout": "text_left",
@@ -2137,7 +2138,7 @@ class CentreHeadingFormTests(TestCase):
         from home.models import WebPage
 
         page = WebPage.objects.create(title="P", slug="p")
-        self.client.force_login(CustomUser.objects.create_user("m", "m@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("m", "m@example.com", "a-Long-pa55word!"))
         response = self.client.get(reverse("block-create", args=[page.pk]))
         self.assertContains(response, 'name="centre_heading"')
 
@@ -2218,7 +2219,7 @@ class ProductionPageBlocksTests(TestCase):
     def setUp(self):
         from accounts.models import CustomUser
 
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         self.production = Production.objects.create(title="The Play")
         self.public = reverse("public-production", args=[self.production.pk])
 

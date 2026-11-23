@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.decorators import login_not_required
 from django.db.models import Exists, F, Min, OuterRef, Q, Value
 from django.db.models.functions import Coalesce, Lower, NullIf
@@ -31,6 +32,8 @@ SEO_TEXT_BLOCKS = (Block.BlockType.TEXT, Block.BlockType.TEXT_IMAGE, Block.Block
 @login_not_required
 def robots_txt(request):
     """What search engines may crawl: the public pages, not the backstage ones; and where the sitemap is."""
+    if settings.SITE_MODE == "sandbox":
+        return HttpResponse("User-agent: *\nDisallow: /\n", content_type="text/plain")
     lines = [
         "User-agent: *",
         "Disallow: /backstage/",

@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from neapolitan.views import CRUDView, Role
 
+from accounts.access import can_backstage
 from backstage import forms, models
 from backstage.context_processors import PICKER_PALETTE_NAME
 from backstage.themes import is_theme
@@ -851,11 +852,11 @@ class ProductionImageView(CRUDView):
 
 
 def set_public_theme(request):
-    """Choose the theme the public pages use (POST public_theme: a theme name, or "" for automatic), then go back. Staff only."""
+    """Choose the theme the public pages use (POST public_theme: a theme name, or "" for automatic), then go back. Backstage group only."""
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    if not request.user.is_staff:
-        return HttpResponseForbidden("Only staff can change the public theme.")
+    if not can_backstage(request.user):
+        return HttpResponseForbidden("Only the backstage group can change the public theme.")
     chosen = request.POST.get("public_theme", "")
     if chosen == "" or is_theme(chosen):
         settings_row = models.SiteSettings.load()
@@ -871,12 +872,12 @@ def save_palette_colour(request):
     """
     The colour picker's Save to palette button (POST colour and position, 0 to 7): save the colour in that place of
     the picker's saved palette, replacing what was there. Answers with JSON: {"ok", "message", "slots"}, the 8 places
-    as they now are. Staff only.
+    as they now are. Backstage group only.
     """
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
-    if not request.user.is_staff:
-        return JsonResponse({"ok": False, "message": "Only staff can change the palette."}, status=403)
+    if not can_backstage(request.user):
+        return JsonResponse({"ok": False, "message": "Only the backstage group can change the palette."}, status=403)
     palette, _ = models.Palette.objects.get_or_create(name=PICKER_PALETTE_NAME)
     position = request.POST.get("position", "")
     try:

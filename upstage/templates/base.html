@@ -34,6 +34,7 @@
 </head>
 
 <body class="flex min-h-dvh flex-col">
+  {% if sandbox_site %}<div class="bg-warning py-1 text-center text-sm font-bold text-warning-content">SANDBOX: not the live site</div>{% endif %}
 <div id="nav">
   {% block nav %}{% include "includes/nav.html" %}{% endblock %}
 </div>

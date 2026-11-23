@@ -6,6 +6,8 @@ from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
 from accounts.models import CustomUser
+from accounts.testing import backstage_user
+from backstage.context_processors import NAVBAR_LOGO_DESCRIPTION
 from backstage.forms import ProductionTeamForm
 from backstage.models import Cast, Person, Production, ProductionTeam, Role
 
@@ -46,7 +48,7 @@ class ProductionTeamFormTests(TestCase):
         self.assertNotIn(self.actor_only, self.people())
 
     def test_team_page_dropdown(self):
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         response = self.client.get(reverse("production-team", args=[self.production.pk]))
         self.assertContains(response, "Zoe Zed")
         self.assertNotContains(response, "Al Actor")
@@ -152,7 +154,7 @@ class SeparateThemesTests(TestCase):
     def setUpTestData(cls):
         from home.models import WebPage
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", cls.PASSWORD, is_staff=True)
+        cls.user = backstage_user("member", "member@example.com", cls.PASSWORD, is_staff=True)
         WebPage.objects.create(title="Home", slug="home")  # the home view shows the page with this slug
 
     def choose(self, theme, **extra):
@@ -229,17 +231,15 @@ class SeparateThemesTests(TestCase):
         response = self.choose("abyss", next="https://evil.example/steal")
         self.assertEqual(response["Location"], reverse("production-list"))
 
-    def test_only_staff_can_change_the_public_theme(self):
+    def test_only_the_backstage_group_can_change_the_public_theme(self):
+        from accounts.models import CustomUser
         from backstage.models import SiteSettings
 
-        member = CustomUser.objects.create_user("plain", "plain@example.com", self.PASSWORD)
-        self.client.force_login(member)
+        outsider = CustomUser.objects.create_user("plain", "plain@example.com", self.PASSWORD)
+        self.client.force_login(outsider)
         response = self.client.post(reverse("public-theme"), {"public_theme": "abyss"})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(SiteSettings.load().public_theme, "")
-        html = self.client.get(reverse("production-list")).content.decode()
-        self.assertIn("The theme of these backstage pages", html)  # their own theme is still theirs to choose
-        self.assertNotIn("The theme visitors see on the public pages", html)  # but not the public one
 
     def test_the_backstage_navbar_offers_both_to_staff(self):
         self.choose("dracula")
@@ -268,7 +268,7 @@ class ActorListTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", cls.PASSWORD)
+        cls.user = backstage_user("member", "member@example.com", cls.PASSWORD)
         cls.actor = Role.objects.get_or_create(name="Actor")[0]
         # Surname order: Abbott, Brown, Divya (one name), Zane. First name order: Alice, Bea, Divya, Zack.
         for first, last in (("Zack", "Abbott"), ("Alice", "Zane"), ("Bea", "Brown"), ("Divya", "")):
@@ -381,7 +381,7 @@ class WriterListTests(TestCase):
     def setUpTestData(cls):
         from backstage.models import Production, ProductionTeam
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", cls.PASSWORD)
+        cls.user = backstage_user("member", "member@example.com", cls.PASSWORD)
         cls.writer = Role.objects.get_or_create(name="Writer")[0]
         # Surname order: Abbott, Brown, Divya (one name), Zane. First name order: Alice, Bea, Divya, Zack.
         for first, last in (("Zack", "Abbott"), ("Alice", "Zane"), ("Bea", "Brown"), ("Divya", "")):
@@ -449,7 +449,7 @@ class ImageLibraryOrderTests(TestCase):
     def setUpTestData(cls):
         from backstage.models import Image
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         make = lambda description, name, kind="production": Image.objects.create(description=description, image=f"images/{name}", image_type=kind)
         # Created in an order that is neither alphabetical nor reverse alphabetical.
         cls.mango = make("mango", "1.jpg")
@@ -546,7 +546,7 @@ class HeadshotUploadTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.person = Person.objects.create(first_name="Ann", last_name="Actor")
 
     def setUp(self):
@@ -606,7 +606,7 @@ class UploadFromPersonFormTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.person = Person.objects.create(first_name="Ann", last_name="Actor")
 
     def setUp(self):
@@ -721,7 +721,7 @@ class ImageSearchTests(TestCase):
     def setUpTestData(cls):
         from backstage.models import Image
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         make = lambda description, name, kind="production": Image.objects.create(description=description, image=f"images/{name}", image_type=kind)
         cls.ann = make("Ann Actor", "ann.jpg", "headshot")
         cls.annie = make("Annie Smith", "annie-smith.jpg", "headshot")
@@ -953,7 +953,7 @@ class HeadshotResizeTests(TestCase):
     def test_uploading_a_headshot_through_the_uploader_resizes_it(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         response = self.client.post(reverse("image-create"), {
             "image": SimpleUploadedFile("face.jpg", self.bands(1200, 800, fmt="JPEG"), content_type="image/jpeg"),
@@ -967,7 +967,7 @@ class HeadshotResizeTests(TestCase):
     def test_uploading_another_type_through_the_uploader_does_not(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         self.client.post(reverse("image-create"), {
             "image": SimpleUploadedFile("poster.png", self.bands(1200, 800), content_type="image/png"),
@@ -980,7 +980,7 @@ class HeadshotResizeTests(TestCase):
     def test_a_file_that_is_not_an_image_is_still_refused(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         response = self.client.post(reverse("image-create"), {
             "image": SimpleUploadedFile("notes.txt", b"not an image", content_type="text/plain"),
@@ -1090,7 +1090,7 @@ class HeadshotResizeTests(TestCase):
 
         from backstage.models import Image
 
-        user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         response = self.client.post(reverse("image-create"), {
             "image": SimpleUploadedFile("face.jpg", self.bands(1200, 800, fmt="JPEG"), content_type="image/jpeg"),
@@ -1105,7 +1105,7 @@ class HeadshotResizeTests(TestCase):
 
         from backstage.models import Image
 
-        user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         self.client.post(reverse("image-create"), {
             "image": SimpleUploadedFile("poster.png", self.bands(600, 400), content_type="image/png"),
@@ -1458,7 +1458,7 @@ class FocalPointTests(TestCase):
     def upload(self, data, **fields):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        user = CustomUser.objects.filter(username="member").first() or CustomUser.objects.create_user(
+        user = CustomUser.objects.filter(username="member").first() or backstage_user(
             "member", "member@example.com", "a-Long-pa55word!"
         )
         self.client.force_login(user)
@@ -1490,7 +1490,7 @@ class FocalPointTests(TestCase):
         self.assertEqual(self.grey_at(self.stored(), (200, 250)), HeadshotResizeTests.BLUE)  # 5 means the far right
 
     def test_the_uploader_form_has_the_focus_fields(self):
-        user = CustomUser.objects.create_user("member2", "member2@example.com", "a-Long-pa55word!")
+        user = backstage_user("member2", "member2@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         html = self.client.get(reverse("image-create")).content.decode()
         self.assertIn('name="focal_x"', html)
@@ -1505,7 +1505,7 @@ class FocalPointTests(TestCase):
         self.assertNotIn("focal_x", [f.name for f in Image._meta.get_fields()])
 
     def test_the_upload_page_has_the_focus_tool_and_the_preview(self):
-        user = CustomUser.objects.create_user("member3", "member3@example.com", "a-Long-pa55word!")
+        user = backstage_user("member3", "member3@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         for url in (reverse("image-create"), reverse("image-create") + "?type=headshot&for_person=new"):
             html = self.client.get(url).content.decode()
@@ -1521,14 +1521,14 @@ class FocalPointTests(TestCase):
     def test_the_page_and_the_server_agree_on_the_shape(self):
         from backstage.fields import HEADSHOT_SIZE
 
-        user = CustomUser.objects.create_user("member4", "member4@example.com", "a-Long-pa55word!")
+        user = backstage_user("member4", "member4@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         html = self.client.get(reverse("image-create")).content.decode()
         self.assertIn(f"const WIDTH = {HEADSHOT_SIZE[0]}, HEIGHT = {HEADSHOT_SIZE[1]}", html)
         self.assertIn(f'width="{HEADSHOT_SIZE[0]}" height="{HEADSHOT_SIZE[1]}"', html)
 
     def test_the_uploader_accepts_dropped_pictures(self):
-        user = CustomUser.objects.create_user("member5", "member5@example.com", "a-Long-pa55word!")
+        user = backstage_user("member5", "member5@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         html = self.client.get(reverse("image-create")).content.decode()
         for needle in ('id="drop-zone"', 'id="drop-message"', "Drop an image here", "or click to choose a file",
@@ -1542,7 +1542,7 @@ class FocalPointTests(TestCase):
     def test_replacing_an_images_file_offers_a_drop_box_too(self):
         from backstage.models import Image
 
-        user = CustomUser.objects.create_user("member6", "member6@example.com", "a-Long-pa55word!")
+        user = backstage_user("member6", "member6@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         image = Image.objects.create(description="x", image="images/x.jpg")
         html = self.client.get(reverse("image-update", args=[image.pk])).content.decode()
@@ -1556,7 +1556,7 @@ class PersonPhotoUploadOnlyTests(TestCase):
     def setUpTestData(cls):
         from backstage.models import Image
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.photo = Image.objects.create(description="Ann", image="images/ann.jpg", image_type="headshot")
         cls.other = Image.objects.create(description="Bob", image="images/bob.jpg", image_type="headshot")
         cls.person = Person.objects.create(first_name="Ann", last_name="Actor", image=cls.photo)
@@ -1827,7 +1827,7 @@ class BrightnessContrastTests(TestCase):
     def upload(self, data, **fields):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        user = CustomUser.objects.filter(username="member").first() or CustomUser.objects.create_user(
+        user = CustomUser.objects.filter(username="member").first() or backstage_user(
             "member", "member@example.com", "a-Long-pa55word!"
         )
         self.client.force_login(user)
@@ -1883,14 +1883,14 @@ class BrightnessContrastTests(TestCase):
         self.assertFalse(hasattr(Image.objects.get(description="A face"), "tone"))
 
     def test_the_form_has_the_hidden_setting_fields(self):
-        user = CustomUser.objects.create_user("member7", "member7@example.com", "a-Long-pa55word!")
+        user = backstage_user("member7", "member7@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         html = self.client.get(reverse("image-create")).content.decode()
         self.assertRegex(html, r'<input type="hidden" name="brightness" value="0"[^>]*id="id_brightness"')
         self.assertRegex(html, r'<input type="hidden" name="contrast" value="0"[^>]*id="id_contrast"')
 
     def test_the_page_has_the_sliders_and_the_matching_preview_filter(self):
-        user = CustomUser.objects.create_user("member8", "member8@example.com", "a-Long-pa55word!")
+        user = backstage_user("member8", "member8@example.com", "a-Long-pa55word!")
         self.client.force_login(user)
         html = self.client.get(reverse("image-create")).content.decode()
         for needle in ('id="brightness-slider"', 'id="contrast-slider"', 'type="range" min="-100" max="100" step="1" value="0"',
@@ -1915,7 +1915,7 @@ class NewActorWizardTests(TestCase):
         override = override_settings(MEDIA_ROOT=self.media.name)
         override.enable()
         self.addCleanup(override.disable)
-        self.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        self.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         self.client.force_login(self.user)
         self.actor = Role.objects.get_or_create(name="Actor")[0]
         self.director = Role.objects.get_or_create(name="Director")[0]
@@ -2040,7 +2040,7 @@ class OtherRolesListTests(TestCase):
     def setUpTestData(cls):
         from backstage.models import Production, ProductionTeam
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.actor, cls.writer, cls.director = (Role.objects.get_or_create(name=n)[0] for n in ("Actor", "Writer", "Director"))
         make = lambda first, last, *roles: Person.objects.create(first_name=first, last_name=last).roles.add(*roles)
         make("Only", "Actor", cls.actor)
@@ -2113,7 +2113,7 @@ class RolePagesTests(TestCase):
     def setUpTestData(cls):
         from backstage.models import Production, ProductionTeam
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.writer = Role.objects.create(name="writer")  # lower case: sorts with the others, ignoring case
         cls.actor = Role.objects.create(name="Actor")
         cls.unused = Role.objects.create(name="Unused")
@@ -2176,7 +2176,7 @@ class RolePagesTests(TestCase):
 
 class BackstageMenuTests(TestCase):
     def test_people_dropdown_replaces_the_actors_and_writers_links(self):
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         html = self.client.get(reverse("actor-list")).content.decode()
         self.assertIn("<summary>People</summary>", html)
         menu = html.split("<summary>People</summary>")[1].split("</details>")[0]
@@ -2201,7 +2201,7 @@ class NewWriterWizardTests(TestCase):
         override = override_settings(MEDIA_ROOT=self.media.name)
         override.enable()
         self.addCleanup(override.disable)
-        self.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        self.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         self.client.force_login(self.user)
         self.writer = Role.objects.get_or_create(name="Writer")[0]
         self.actor = Role.objects.get_or_create(name="Actor")[0]
@@ -2291,7 +2291,7 @@ class DeletePersonPhotoTests(TestCase):
     def setUp(self):
         from backstage.models import Image
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         self.photo = Image.objects.create(description="Ann", image="images/ann.jpg", image_type="headshot")
         self.person = Person.objects.create(first_name="Ann", last_name="Actor", image=self.photo)
 
@@ -2349,7 +2349,7 @@ class ImageDetailPeopleTests(TestCase):
         override = override_settings(MEDIA_ROOT=self.media.name)
         override.enable()
         self.addCleanup(override.disable)
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         self.photo = self.make_image("Ann", "headshot")
 
     def make_image(self, description, image_type):
@@ -2396,7 +2396,7 @@ class UnusedHeadshotBadgeTests(TestCase):
     def setUp(self):
         from backstage.models import Image
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         self.used = Image.objects.create(description="Used", image="images/used.jpg", image_type="headshot")
         self.unused = Image.objects.create(description="Spare", image="images/spare.jpg", image_type="headshot")
         self.poster = Image.objects.create(description="Poster", image="images/poster.jpg", image_type="promotion")
@@ -2442,7 +2442,7 @@ class MissingImageFileTests(TestCase):
     def setUp(self):
         from backstage.models import Image
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         self.image = Image.objects.create(description="Jan", image="images/not-there.jpg", image_type="headshot")
 
     def test_the_detail_page_says_the_file_is_missing(self):
@@ -2469,7 +2469,7 @@ class EventsTabEditButtonTests(TestCase):
     def setUp(self):
         from backstage.models import Event
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         self.production = Production.objects.create(title="Panto")
         self.other = Production.objects.create(title="Other")
         self.event = Event.objects.create(event_type="performance")
@@ -2529,7 +2529,7 @@ class EventTicketWebsiteTests(TestCase):
     def setUp(self):
         from backstage.models import Event
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         self.production = Production.objects.create(title="Panto")
         self.event = Event.objects.create(event_type="performance")
         self.event.productions.add(self.production)
@@ -2634,7 +2634,7 @@ class BroadcastEventTests(TestCase):
         from datetime import datetime, timezone as dt_timezone
 
         self.when = datetime(2026, 5, 22, 0, 0, tzinfo=dt_timezone.utc)
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
 
     def test_broadcast_is_an_event_type(self):
         from backstage.models import Event
@@ -2807,7 +2807,7 @@ class EventPublishTests(TestCase):
     def setUp(self):
         from backstage.models import Event
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         self.production = Production.objects.create(title="Panto")
         self.event = Event.objects.create(event_type="performance")
         self.event.productions.add(self.production)
@@ -2883,7 +2883,7 @@ class EventWithoutTitleTests(TestCase):
 
         from backstage.models import Event, EventDateTime
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         self.production = Production.objects.create(title="Panto")
         self.other = Production.objects.create(title="Other")
         self.event = Event.objects.create(event_type="audition")
@@ -3013,7 +3013,7 @@ class EventTypeFieldsTests(TestCase):
     def test_the_forms_have_the_script_that_shows_the_right_field(self):
         from accounts.models import CustomUser
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         production = Production.objects.create(title="A Play")
         self.assertContains(self.client.get(reverse("production-events", args=[production.pk])), "id_listen_url")
         self.assertContains(self.client.get(reverse("event-create")), "update()")
@@ -3064,7 +3064,7 @@ class ProductionPublishedFilterTests(TestCase):
         from accounts.models import CustomUser
         from backstage.models import Event
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
 
         def make(title, *publishes):
             production = Production.objects.create(title=title)
@@ -3102,7 +3102,7 @@ class ProductionDetailEventBadgesTests(TestCase):
         from backstage.models import Event, EventDateTime
         from datetime import datetime, timezone as tz
 
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         production = Production.objects.create(title="A Play")
         self.assertContains(self.client.get(reverse("production-detail", args=[production.pk])), "<dd class=\"flex flex-wrap gap-1\">—</dd>")
         for event_type in ("performance", "performance", "broadcast", "audition"):
@@ -3121,7 +3121,7 @@ class ProductionDetailEventBadgesTests(TestCase):
 
 class ParentProductionTests(TestCase):
     def setUp(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p"))
+        self.client.force_login(backstage_user(username="u", password="p"))
         from backstage.models import ParentProduction
 
         self.parent = ParentProduction.objects.create(title="Evening of Plays", type=Production.ProductionType.STAGE)
@@ -3202,7 +3202,7 @@ class VenueCrudTests(TestCase):
         from accounts.models import CustomUser
         from backstage.models import Event, Venue
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.hall = Venue.objects.create(name="village Hall", address="1 High St\nEsher")
         cls.barn = Venue.objects.create(name="Barn")
         cls.event = Event.objects.create(event_type="performance", venue=cls.hall)
@@ -3245,7 +3245,7 @@ class BackstageAuditionsTests(TestCase):
         from accounts.models import CustomUser
         from backstage.models import Event, EventDateTime
 
-        cls.user = CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!")
+        cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
 
         def production(title, days):
             play = Production.objects.create(title=title)
@@ -3278,9 +3278,9 @@ class NavbarLightLogoTests(TestCase):
         from accounts.models import CustomUser
         from backstage.models import Image
 
-        Image.objects.create(description="Upstage Surrey Logo", image="images/dark-logo.png", image_type="logo")
+        Image.objects.create(description=NAVBAR_LOGO_DESCRIPTION, image="images/dark-logo.png", image_type="logo")
         Image.objects.create(description="Upstage big bw", image="images/big-bw.png")
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         html = self.client.get(reverse("production-list")).content.decode()
         self.assertIn('src="/media/images/dark-logo.png" alt="Upstage Surrey" class="h-14 w-auto" data-logo="default"', html)
         self.assertIn('src="/media/images/big-bw.png" alt="Upstage Surrey" class="hidden h-14 w-auto" data-logo="light"', html)
@@ -3289,8 +3289,8 @@ class NavbarLightLogoTests(TestCase):
         from accounts.models import CustomUser
         from backstage.models import Image
 
-        Image.objects.create(description="Upstage Surrey Logo", image="images/dark-logo.png", image_type="logo")
-        self.client.force_login(CustomUser.objects.create_user("member", "member@example.com", "a-Long-pa55word!"))
+        Image.objects.create(description=NAVBAR_LOGO_DESCRIPTION, image="images/dark-logo.png", image_type="logo")
+        self.client.force_login(backstage_user("member", "member@example.com", "a-Long-pa55word!"))
         self.assertNotContains(self.client.get(reverse("production-list")), 'data-logo="light"')
 
 
@@ -3365,7 +3365,7 @@ class FindListenUrlTests(TestCase):
 
 class ProductionPublicViewTabTests(TestCase):
     def setUp(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         self.production = Production.objects.create(title="The Play")
 
     def test_the_tab_offers_the_image_choices_and_the_checkboxes(self):
@@ -3525,7 +3525,7 @@ class SavePaletteColourTests(TestCase):
         from backstage.models import Palette
 
         self.url = reverse("save-palette-colour")
-        self.client.force_login(CustomUser.objects.create_user(username="staff", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="staff", password="p", is_staff=True))
         self.palette = Palette.objects.get(name="Background 1")  # made by a migration, with no colours
         for position in range(8):
             self.palette.set_colour(position, f"#00000{position}")
@@ -3551,7 +3551,9 @@ class SavePaletteColourTests(TestCase):
             self.assertEqual(self.client.post(self.url, data).status_code, 400, data)
         self.assertEqual(self.palette.slots(), before)
 
-    def test_only_staff_can_save_and_only_by_post(self):
+    def test_only_the_backstage_group_can_save_and_only_by_post(self):
+        from accounts.models import CustomUser
+
         self.assertEqual(self.client.get(self.url).status_code, 405)
         self.client.force_login(CustomUser.objects.create_user(username="member", password="p"))
         self.assertEqual(self.client.post(self.url, {"colour": "#aabbcc", "position": "0"}).status_code, 403)
@@ -3569,7 +3571,7 @@ class ProductionSoundTests(TestCase):
         override.enable()
         self.addCleanup(override.disable)
         self.addCleanup(shutil.rmtree, self.media, True)
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         self.production = Production.objects.create(title="The Play")
         self.url = reverse("production-images", args=[self.production.pk])
 
@@ -3643,7 +3645,7 @@ class ListenUrlTests(TestCase):
 
 class ProductionListEventDateTests(TestCase):
     def setUp(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
 
     def test_each_production_shows_the_full_date_of_its_first_event_and_no_strap_line(self):
         import datetime
@@ -3764,7 +3766,7 @@ class ProductionListEventDateTests(TestCase):
 
 class PublicColourTypedTests(TestCase):
     def test_a_colour_typed_without_the_hash_is_saved(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         production = Production.objects.create(title="The Play")
         self.client.post(reverse("production-public", args=[production.pk]), {"image": "", "colour": "FF8800"})
         production.refresh_from_db()
@@ -3773,7 +3775,7 @@ class PublicColourTypedTests(TestCase):
 
 class PublicPartsSavedTests(TestCase):
     def setUp(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         self.production = Production.objects.create(title="The Play", strap_line="A strap line", description="About it")
         self.tab = reverse("production-public", args=[self.production.pk])
         self.page = reverse("public-production", args=[self.production.pk])
@@ -3823,7 +3825,7 @@ class CastFormActorOrderTests(TestCase):
 
 class AddPersonFromCastTests(TestCase):
     def setUp(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         self.production = Production.objects.create(title="The Play")
         self.cast = reverse("production-cast", args=[self.production.pk])
         self.create = reverse("person-create")
@@ -3864,7 +3866,7 @@ class AddPersonFromCastTests(TestCase):
 
 class TeamOrderTests(TestCase):
     def setUp(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         self.production = Production.objects.create(title="The Play", type="stage")
         # Added in the wrong order on purpose, with people whose names sort the other way round.
         for role, first, last in (
@@ -3898,7 +3900,7 @@ class TeamOrderTests(TestCase):
 
 class PeopleSearchTests(TestCase):
     def setUp(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         actor, writer, crew = (Role.objects.get_or_create(name=n)[0] for n in ("Actor", "Writer", "Costumer"))
         for first, last, role in (
             ("Wanda", "Wright", writer), ("Walter", "Plum", writer), ("Cora", "Costa", crew), ("Colin", "Kay", None),
@@ -3941,7 +3943,7 @@ class PeopleSearchTests(TestCase):
 
 class PeopleDefaultSortTests(TestCase):
     def setUp(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         for first, last in (("Zack", "Abbott"), ("Alice", "Zane"), ("Bea", "Brown")):
             Person.objects.create(first_name=first, last_name=last)
 
@@ -3961,7 +3963,7 @@ class PeopleDefaultSortTests(TestCase):
 
 class ProductionTypeMenuTests(TestCase):
     def setUp(self):
-        self.client.force_login(CustomUser.objects.create_user(username="u", password="p", is_staff=True))
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
         Production.objects.create(title="A Radio Play", type="radio")
         Production.objects.create(title="A Stage Play", type="stage")
         Production.objects.create(title="A Film", type="film")

@@ -40,6 +40,11 @@ def env_list(name):
 
 
 ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS')
+
+# "live" (the default) or "sandbox": a copy of the site that only logged in members of the sandbox group can see.
+SITE_MODE = os.environ.get('SITE_MODE', 'live')
+if SITE_MODE not in ('live', 'sandbox'):
+    raise ImproperlyConfigured("SITE_MODE must be 'live' or 'sandbox'.")
 # Full origins, e.g. https://upstage.example.com, for form posts to work behind the proxy.
 CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
 
@@ -77,8 +82,12 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # On the sandbox site (SITE_MODE=sandbox) everything needs a login by a member of the sandbox group.
+    'accounts.middleware.SandboxGateMiddleware',
     # Every view needs a login unless it is marked @login_not_required.
     'django.contrib.auth.middleware.LoginRequiredMiddleware',
+    # ...and, unless marked, membership of the backstage group.
+    'accounts.middleware.BackstageAccessMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     "django_browser_reload.middleware.BrowserReloadMiddleware",
@@ -101,6 +110,7 @@ TEMPLATES = [
                 'backstage.context_processors.themes',
                 'backstage.context_processors.colour_palette',
                 'backstage.context_processors.production_types',
+                'accounts.context_processors.access',
                 'home.seo.default_seo',
             ],
         },

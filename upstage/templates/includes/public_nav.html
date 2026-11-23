@@ -17,7 +17,7 @@
       <ul class="menu menu-horizontal gap-1">{% include "includes/public_nav_links.html" with in_row=True %}</ul>
     </div>
     <div class="navbar-end">
-      {% if user.is_authenticated %}
+      {% if is_backstage %}
         <a href="{% url 'production-list' %}" class="btn btn-ghost hidden sm:inline-flex">Backstage</a>
       {% endif %}
       <div class="dropdown dropdown-end sm:hidden">

@@ -25,6 +25,6 @@
 </li>
 {% endwith %}
 {# In the row on wide screens Backstage is at the right of the bar instead (see public_nav.html). #}
-{% if user.is_authenticated and not in_row %}
+{% if is_backstage and not in_row %}
 <li><a href="{% url 'production-list' %}">Backstage</a></li>
 {% endif %}

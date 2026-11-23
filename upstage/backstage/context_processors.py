@@ -10,7 +10,7 @@ from backstage.themes import PUBLIC_PALETTE, THEMES, is_theme
 PICKER_PALETTE_NAME = "Background 1"
 
 # The image library entry shown on the left of the navbar.
-NAVBAR_LOGO_DESCRIPTION = "Upstage Surrey Logo"
+NAVBAR_LOGO_DESCRIPTION = "Christmas logo" #"Upstage Surrey Logo"
 # The backstage navbar shows this one instead on light themes.
 NAVBAR_LOGO_LIGHT_DESCRIPTION = "Upstage big bw"
 

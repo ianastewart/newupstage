@@ -1,0 +1,9 @@
+{% extends "registration/auth_base.html" %}
+
+{% block auth_title %}No access{% endblock %}
+{% block auth_heading %}No access{% endblock %}
+
+{% block auth_body %}
+<p>This is the sandbox site. You need to be in the sandbox group to see it. Ask an administrator to add you.</p>
+<form method="POST" action="{% url 'logout' %}">{% csrf_token %}<button type="submit" class="btn btn-primary">Log out</button></form>
+{% endblock %}
