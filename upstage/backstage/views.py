@@ -442,7 +442,7 @@ class PersonView(CRUDView):
     model = models.Person
     form_class = forms.PersonForm
     # Columns shown in the list. Create/update use PersonForm and detail has its own template.
-    fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "image"]
+    fields = ["first_name", "last_name", "email", "mobile", "image"]
 
     # Pages that link to a person with ?from=..., and the "back" link the person page shows.
     BACK_LINKS = {
@@ -452,6 +452,7 @@ class PersonView(CRUDView):
         "writers-details": ("writer-list", "?view=details", "Writers"),
         "others": ("other-list", "", "Other roles"),
         "others-details": ("other-list", "?view=details", "Other roles"),
+        "contacts": ("contact-list", "", "Contacts"),
     }
 
     def get_queryset(self):
@@ -590,23 +591,39 @@ def other_roles(request, pk):
 
 def contact_list(request):
     """
-    People who asked for the newsletter or said they are interested in acting or backstage, newest first.
-    ?interest=newsletter|acting|backstage narrows it, ?q= searches.
+    People who asked for the newsletter or said they are interested in acting or backstage, by first name.
+    ?interest=newsletter|acting|backstage narrows it, ?email=with|without by whether they have an email,
+    ?q= searches, ?sort=date puts the newest first (the default is by name).
     """
     interests = {"newsletter": "Newsletter", "acting": "Acting", "backstage": "Backstage"}
     fields = {"newsletter": "email_consent", "acting": "acting_interest", "backstage": "backstage_interest"}
     contacts = models.Person.objects.filter(
         Q(email_consent=True) | Q(acting_interest=True) | Q(backstage_interest=True)
-    ).order_by(F("consent_date").desc(nulls_last=True), "-pk")
+    )
+    sort = "date" if request.GET.get("sort") == "date" else "name"
+    if sort == "date":
+        contacts = contacts.order_by(F("consent_date").desc(nulls_last=True), Lower("first_name"), Lower("last_name"))
+    else:
+        contacts = contacts.order_by(Lower("first_name"), Lower("last_name"))
     interest = request.GET.get("interest")
     if interest in interests:
         contacts = contacts.filter(**{fields[interest]: True})
+    email = request.GET.get("email")
+    if email == "with":
+        contacts = contacts.exclude(email="")
+    elif email == "without":
+        contacts = contacts.filter(email="")
+    else:
+        email = ""
     search = request.GET.get("q", "").strip()
     for word in search.split():
         contacts = contacts.filter(Q(first_name__icontains=word) | Q(last_name__icontains=word) | Q(email__icontains=word))
     return render(
         request, "backstage/contact_list.html",
-        {"contacts": contacts, "interests": interests, "interest": interest if interest in interests else "", "search": search},
+        {
+            "contacts": contacts, "interests": interests, "interest": interest if interest in interests else "",
+            "email": email, "search": search, "sort": sort,
+        },
     )
 
 
@@ -651,18 +668,17 @@ def writer_list(request):
 
 def other_list(request):
     """
-    Everyone except those whose only roles are Actor and/or Writer (they have their own lists), so people with other roles
-    and people with no role at all: photos and names, or with details. Alphabetical by first name, or by surname (?sort=last).
+    Everyone with a role other than Actor or Writer (those have their own lists; people with no role are left out):
+    photos and names, or with details. Alphabetical by first name, or by surname (?sort=last).
     """
     details = request.GET.get("view") == "details"
     sort = "last" if request.GET.get("sort") == "last" else "first"
     search = request.GET.get("q", "").strip()
     roles = models.Person.roles.through.objects.filter(person=OuterRef("pk"))
     has_other_role = Exists(roles.exclude(role__name__in=["Actor", "Writer"]))
-    has_any_role = Exists(roles)
     people = (
-        models.Person.objects.annotate(has_other_role=has_other_role, has_any_role=has_any_role)
-        .filter(Q(has_other_role=True) | Q(has_any_role=False))
+        models.Person.objects.annotate(has_other_role=has_other_role)
+        .filter(has_other_role=True)
         .select_related("image")
         .order_by(*people_ordering(sort))
     )

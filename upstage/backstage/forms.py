@@ -1,4 +1,3 @@
-import datetime
 from urllib.parse import urlparse
 
 from django import forms
@@ -13,14 +12,13 @@ from rmeditor.widgets import RichTextWidget
 class PersonForm(forms.ModelForm):
     class Meta:
         model = models.Person
-        fields = ["first_name", "last_name", "email", "mobile", "biography", "gender", "dob", "image", "roles"]
-        labels = {"dob": "Date of birth", "image": "Photo"}
+        fields = ["first_name", "last_name", "email", "mobile", "biography", "notes", "email_consent", "publish_consent", "image", "roles"]
+        labels = {"image": "Photo", "email_consent": "Email", "publish_consent": "Publish"}
         widgets = {
             # Not a list to choose from: the photo comes from the Upload photo button, which returns here with it chosen.
             "image": forms.HiddenInput(),
             "biography": RichTextWidget(attrs={"rows": 8, "data-tools": "bold underline italic link"}),
-            # Date pickers need ISO dates regardless of the site's locale.
-            "dob": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
             "roles": forms.CheckboxSelectMultiple,
         }
 
@@ -38,11 +36,10 @@ class PersonDetailsForm(forms.ModelForm):
 
     class Meta:
         model = models.Person
-        fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "biography"]
-        labels = {"dob": "Date of birth"}
+        fields = ["first_name", "last_name", "email", "mobile", "biography", "notes"]
         widgets = {
             "biography": RichTextWidget(attrs={"rows": 8, "data-tools": "bold underline italic link"}),
-            "dob": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
         }
 
 
@@ -241,7 +238,6 @@ class ContactForm(forms.ModelForm):
         return cleaned
 
     def save(self, commit=True):
-        self.instance.consent_date = datetime.date.today()  # when they asked to hear from us
         return super().save(commit)
 
     @property

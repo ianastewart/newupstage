@@ -33,8 +33,7 @@
           <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
             <dt class="font-semibold">Email</dt><dd class="break-all">{% if person.email %}<a href="mailto:{{ person.email }}" class="link">{{ person.email }}</a>{% else %}—{% endif %}</dd>
             <dt class="font-semibold">Mobile</dt><dd>{{ person.mobile|default:"—" }}</dd>
-            <dt class="font-semibold">Gender</dt><dd>{{ person.get_gender_display|default:"—" }}</dd>
-            <dt class="font-semibold">Date of birth</dt><dd>{{ person.dob|date:"j F Y"|default:"—" }}</dd>
+            {% if person.notes %}<dt class="font-semibold">Notes</dt><dd class="whitespace-pre-line">{{ person.notes }}</dd>{% endif %}
           </dl>
         </div>
       </div>
@@ -64,6 +63,13 @@
           </div>
         </div>
       {% endif %}
+
+      <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <h2 class="font-semibold">Consent</h2>
+        <span class="flex items-center gap-2">Email {% if person.email_consent %}<span class="badge badge-success badge-sm" aria-label="Yes">✓</span>{% else %}<span class="badge badge-error badge-sm" aria-label="No">✗</span>{% endif %}</span>
+        <span class="flex items-center gap-2">Publish {% if person.publish_consent %}<span class="badge badge-success badge-sm" aria-label="Yes">✓</span>{% else %}<span class="badge badge-error badge-sm" aria-label="No">✗</span>{% endif %}</span>
+        <span class="opacity-70">Date: {{ person.consent_date|date:"j F Y"|default:"—" }}</span>
+      </div>
 
       <div class="card-actions mt-4 justify-end">
         <a href="{% url 'person-delete' person.pk %}" class="btn btn-ghost text-error">Delete</a>

@@ -1518,22 +1518,43 @@ class ContactListTests(TestCase):
         Person.objects.create(first_name="Bob", last_name="Builder", email="bob@example.com", email_consent=True,
                               backstage_interest=True, consent_date=datetime.date(2026, 3, 1))
         Person.objects.create(first_name="Cy", last_name="Uninterested", email="cy@example.com")
+        Person.objects.create(first_name="Di", last_name="Noemail", acting_interest=True)
 
     def setUp(self):
         self.client.force_login(self.user)
 
-    def test_it_lists_people_who_ticked_something_newest_first(self):
+    def test_it_lists_people_who_ticked_something_by_first_name(self):
         response = self.client.get(reverse("contact-list"))
-        self.assertEqual([str(c) for c in response.context["contacts"]], ["Bob Builder", "Ann Actor"])
+        self.assertEqual([str(c) for c in response.context["contacts"]], ["Ann Actor", "Bob Builder", "Di Noemail"])
         self.assertContains(response, "bob@example.com")
 
     def test_it_can_be_filtered_and_searched(self):
         names = lambda query: [str(c) for c in self.client.get(reverse("contact-list") + query).context["contacts"]]
-        self.assertEqual(names("?interest=acting"), ["Ann Actor"])
+        self.assertEqual(names("?interest=acting"), ["Ann Actor", "Di Noemail"])
+        self.assertEqual(names("?email=with"), ["Ann Actor", "Bob Builder"])
+        self.assertEqual(names("?email=without"), ["Di Noemail"])
+        self.assertEqual(names("?email=without&interest=backstage"), [])
+        self.assertEqual(names("?email=nonsense"), ["Ann Actor", "Bob Builder", "Di Noemail"])
         self.assertEqual(names("?interest=newsletter"), ["Bob Builder"])
         self.assertEqual(names("?interest=backstage"), ["Bob Builder"])
         self.assertEqual(names("?q=builder"), ["Bob Builder"])
         self.assertEqual(names("?q=example.com&interest=backstage"), ["Bob Builder"])
+
+    def test_it_can_be_sorted_by_date_newest_first_or_by_name(self):
+        names = lambda query: [str(c) for c in self.client.get(reverse("contact-list") + query).context["contacts"]]
+        self.assertEqual(names("?sort=date"), ["Bob Builder", "Ann Actor", "Di Noemail"])  # no date last
+        self.assertEqual(names("?sort=name"), ["Ann Actor", "Bob Builder", "Di Noemail"])
+        self.assertEqual(names("?sort=nonsense"), ["Ann Actor", "Bob Builder", "Di Noemail"])
+        self.assertEqual(names("?sort=date&interest=acting"), ["Ann Actor", "Di Noemail"])
+
+    def test_each_person_has_view_edit_and_delete_links(self):
+        ann = Person.objects.get(first_name="Ann")
+        response = self.client.get(reverse("contact-list"))
+        self.assertContains(response, f'href="{reverse("person-detail", args=[ann.pk])}?from=contacts"')
+        self.assertContains(response, f'href="{reverse("person-update", args=[ann.pk])}"')
+        self.assertContains(response, f'href="{reverse("person-delete", args=[ann.pk])}"')
+        page = self.client.get(f"{reverse('person-detail', args=[ann.pk])}?from=contacts")
+        self.assertEqual((page.context["back_url"], page.context["back_label"]), (reverse("contact-list"), "Contacts"))
 
     def test_it_needs_a_login(self):
         self.client.logout()
@@ -1692,8 +1713,8 @@ class PublicProductionTests(TestCase):
         event.productions.add(cls.production)
         EventDateTime.objects.create(event=event, datetime=timezone.now() + timedelta(days=5))
         director = Role.objects.create(name="Director")
-        ProductionTeam.objects.create(production=cls.production, person=Person.objects.create(first_name="Dee", last_name="Rector"), role=director)
-        Cast.objects.create(production=cls.production, character_name="Hamlet", actor=Person.objects.create(first_name="Ann", last_name="Actor"))
+        ProductionTeam.objects.create(production=cls.production, person=Person.objects.create(first_name="Dee", last_name="Rector", publish_consent=True), role=director)
+        Cast.objects.create(production=cls.production, character_name="Hamlet", actor=Person.objects.create(first_name="Ann", last_name="Actor", publish_consent=True))
         cls.cover = Image.objects.create(description="Cover", image="images/cover.jpg", image_type="production")
         ProductionImage.objects.create(production=cls.production, image=cls.cover, is_default=True)
         cls.url = reverse("public-production", args=[cls.production.pk])
@@ -1873,6 +1894,36 @@ class PublicProductionTests(TestCase):
             self.assertContains(page, "← The Play")
         self.assertContains(self.client.get(reverse("public-actor", args=[ann.pk])), "← Actors")  # no production: as before
 
+    def test_nobody_is_listed_or_given_a_page_without_publish_consent(self):
+        from backstage.models import Person, ProductionTeam, Role
+
+        photo = Image.objects.create(description="Face", image="images/face.jpg", image_type="headshot")
+        actor_role, writer_role = Role.objects.create(name="Actor"), Role.objects.create(name="Writer")
+        ann = Person.objects.get(first_name="Ann")
+        ann.roles.add(actor_role)
+        ann.image = photo
+        ann.save()
+        dee = Person.objects.get(first_name="Dee")
+        dee.roles.add(writer_role, Role.objects.get(name="Director"))
+        dee.biography = "<p>Directs things.</p>"
+        dee.save()
+        pages = [
+            (reverse("public-actor", args=[ann.pk]), reverse("public-actors")),
+            (reverse("public-team-member", args=[dee.pk]), reverse("public-writers")),
+        ]
+        for person in (ann, dee):
+            Person.objects.filter(pk=person.pk).update(publish_consent=True)
+        for page, listing in pages:
+            self.assertEqual(self.client.get(page).status_code, 200)
+            self.assertIn(page, self.client.get(listing).content.decode())
+        self.assertIn("Dee Rector", self.client.get(reverse("public-crew")).content.decode())
+        Person.objects.update(publish_consent=False)
+        for page, listing in pages:
+            self.assertEqual(self.client.get(page).status_code, 404)
+            self.assertNotIn(page, self.client.get(listing).content.decode())
+        self.assertNotIn("Dee Rector", self.client.get(reverse("public-crew")).content.decode())
+        self.assertNotIn(reverse("public-actor", args=[ann.pk]) + "?production=", self.client.get(self.url).content.decode())
+
     def test_it_shows_the_venue_logo_of_the_next_event(self):
         from backstage.models import Event, EventDateTime, Venue
 
@@ -1907,7 +1958,7 @@ class SeoTests(TestCase):
         cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
         cls.photo = Image.objects.create(description="Ann", image="images/ann.jpg", image_type="headshot")
         cls.poster = Image.objects.create(description="Poster", image="images/poster.jpg", image_type="promotion")
-        cls.actor = Person.objects.create(first_name="Ann", last_name="Actor", image=cls.photo, biography="<p>Ann loves <b>panto</b>.</p><p>And tea.</p>")
+        cls.actor = Person.objects.create(first_name="Ann", last_name="Actor", publish_consent=True, image=cls.photo, biography="<p>Ann loves <b>panto</b>.</p><p>And tea.</p>")
         cls.actor.roles.add(Role.objects.get_or_create(name="Actor")[0])
         cls.nobody = Person.objects.create(first_name="No", last_name="Photo")  # an actor with no photo: no public page
         cls.nobody.roles.add(Role.objects.get(name="Actor"))

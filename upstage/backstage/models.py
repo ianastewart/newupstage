@@ -81,8 +81,6 @@ class Person(models.Model):
     email = models.EmailField(blank=True)
     mobile = models.CharField(max_length=30, blank=True)
     biography = models.TextField(blank=True)
-    gender = models.CharField(max_length=10, choices=[('male', 'Male'), ('female', 'Female'), ('other', 'Other')], blank=True)
-    dob = models.DateField(null=True, blank=True)
     image = models.ForeignKey(
         Image, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -92,10 +90,44 @@ class Person(models.Model):
     consent_date = models.DateField(null=True, blank=True)
     backstage_interest = models.BooleanField(default=False)
     acting_interest = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
 
     class Meta:
         verbose_name_plural = "people"
         ordering = ["last_name", "first_name"]
+
+    CONSENT_FLAGS = ("email_consent", "publish_consent")
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        person = super().from_db(db, field_names, values)
+        person.remember_consent()
+        return person
+
+    def remember_consent(self):
+        """Note the consent as it is stored, to see later whether it has been changed."""
+        self._stored_consent = (self.email_consent, self.publish_consent, self.consent_date)
+
+    def save(self, *args, **kwargs):
+        """
+        Saving a change to the email or publish consent dates the consent today (so does a new person who has given
+        either). A date set by hand in the same save is kept.
+        """
+        update_fields = kwargs.get("update_fields")
+        stored = getattr(self, "_stored_consent", None)
+        flags = (self.email_consent, self.publish_consent)
+        if update_fields is not None and not set(self.CONSENT_FLAGS) & set(update_fields):
+            changed = False
+        elif stored is None:
+            changed = any(flags)
+        else:
+            changed = flags != stored[:2]
+        if changed and self.consent_date == (stored[2] if stored else None):
+            self.consent_date = timezone.localdate()
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "consent_date"}
+        super().save(*args, **kwargs)
+        self.remember_consent()
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"

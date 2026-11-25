@@ -95,7 +95,7 @@ class PublicActorTests(TestCase):
 
         actor = Role.objects.get_or_create(name="Actor")[0]
         cls.with_image = Person.objects.create(first_name="Ann", last_name="Pictured", biography="<p>Likes acting.</p>",
-                                               email="ann@example.com", mobile="07000 000000")
+                                               email="ann@example.com", mobile="07000 000000", publish_consent=True)
         # Only the file's name is stored: nothing is written to the media folder.
         image = Image.objects.create(description="Ann", image="images/test-ann.jpg")
         cls.with_image.image = image

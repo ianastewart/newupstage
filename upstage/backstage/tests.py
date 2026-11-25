@@ -283,6 +283,12 @@ class ActorListTests(TestCase):
         self.assertEqual(response.status_code, 200)
         return [person.first_name for person in response.context["actors"]]
 
+    def test_an_actor_without_publish_consent_has_a_red_icon_in_both_views(self):
+        Person.objects.filter(first_name="Alice").update(publish_consent=True)
+        for query in ("", "?view=details"):
+            html = self.client.get(reverse("actor-list") + query).content.decode()
+            self.assertEqual(html.count('aria-label="No publish consent"'), 3, query)  # all but Alice
+
     def test_sorted_by_first_name_by_default(self):
         self.assertEqual(self.names(), ["Alice", "Bea", "Divya", "Zack"])
 
@@ -361,7 +367,7 @@ class ActorListTests(TestCase):
         cards = re.split(r'<a href="/backstage/person/\d+/', html)[1:]  # one piece for each actor's card
         self.assertEqual(len(cards), 4)
         for card in cards:
-            self.assertIn('<figure class="aspect-[4/5] w-full bg-base-300">', card)  # 4:5, as wide as the card
+            self.assertIn('<figure class="relative aspect-[4/5] w-full bg-base-300">', card)  # 4:5, as wide as the card
         with_photo = [card for card in cards if "<img" in card]
         self.assertEqual(len(with_photo), 1)
         self.assertIn('class="h-full w-full object-cover"', with_photo[0])  # fills the card, no bars round it
@@ -1938,7 +1944,7 @@ class NewActorWizardTests(TestCase):
     def test_step_one_shows_the_steps_and_the_detail_fields(self):
         html = self.client.get(reverse("actor-new")).content.decode()
         self.assertIn("step 1 of 3", html)
-        for name in ("first_name", "last_name", "email", "mobile", "gender", "dob", "biography"):
+        for name in ("first_name", "last_name", "email", "mobile", "biography", "notes"):
             self.assertIn(f'name="{name}"', html)
         self.assertNotIn('name="roles"', html)
         self.assertNotIn('name="image"', html)
@@ -2034,7 +2040,7 @@ class NewActorWizardTests(TestCase):
 
 
 class OtherRolesListTests(TestCase):
-    """The Other roles list: everyone except those whose only roles are Actor and/or Writer."""
+    """The Other roles list: everyone with a role besides Actor and Writer (no role at all: left out)."""
 
     @classmethod
     def setUpTestData(cls):
@@ -2048,7 +2054,7 @@ class OtherRolesListTests(TestCase):
         make("Both", "Actorwriter", cls.actor, cls.writer)  # in both of the other lists, so not here
         make("Dee", "Director", cls.director)
         make("Ann", "Actordirector", cls.actor, cls.director)  # has a role besides actor/writer
-        make("No", "Role")  # no role at all: not in the actors or writers lists, so here
+        make("No", "Role")  # no role at all: in none of the lists by role, and not here either
         play = Production.objects.create(title="Wordplay", type="stage")
         ProductionTeam.objects.create(production=play, person=Person.objects.get(first_name="Dee"), role=cls.director)
 
@@ -2060,13 +2066,13 @@ class OtherRolesListTests(TestCase):
         self.assertEqual(response.status_code, 200)
         return [f"{p.first_name} {p.last_name}" for p in response.context["people"]]
 
-    def test_lists_everyone_except_those_with_only_actor_and_or_writer_roles(self):
-        self.assertEqual(self.names(), ["Ann Actordirector", "Dee Director", "No Role"])
+    def test_lists_only_people_with_a_role_besides_actor_and_writer(self):
+        self.assertEqual(self.names(), ["Ann Actordirector", "Dee Director"])
 
     def test_sorted_by_first_name(self):
-        self.assertEqual(self.names("?sort=first"), ["Ann Actordirector", "Dee Director", "No Role"])
-        Person.objects.filter(first_name="No").update(first_name="Aaron")
-        self.assertEqual(self.names("?sort=first")[0], "Aaron Role")
+        self.assertEqual(self.names("?sort=first"), ["Ann Actordirector", "Dee Director"])
+        Person.objects.filter(first_name="Dee").update(first_name="Aaron")
+        self.assertEqual(self.names("?sort=first")[0], "Aaron Director")
 
     def test_a_person_with_two_other_roles_is_listed_once(self):
         Person.objects.get(first_name="Dee").roles.add(Role.objects.get_or_create(name="Producer")[0])
@@ -2076,12 +2082,12 @@ class OtherRolesListTests(TestCase):
         html = self.client.get(reverse("other-list") + "?view=details").content.decode()
         self.assertIn("Wordplay", html)
         self.assertIn("Director", html)
-        self.assertEqual(html.count("?from=others-details"), 3)
-        self.assertIn("No productions credited yet.", html)
+        self.assertEqual(html.count("?from=others-details"), 2)
+        self.assertIn("No productions credited yet.", html)  # Ann
 
     def test_photos_view_links_back_to_the_photos_and_has_a_new_person_button(self):
         html = self.client.get(reverse("other-list")).content.decode()
-        self.assertEqual(html.count("?from=others\""), 3)
+        self.assertEqual(html.count("?from=others\""), 2)
         self.assertIn(f'href="{reverse("other-new")}"', html)
         self.assertIn("New person", html)
 
@@ -3926,9 +3932,9 @@ class PeopleSearchTests(TestCase):
         self.assertIn('name="sort" value="last"', html)
 
     def test_other_roles_can_be_searched_by_name(self):
-        self.assertEqual(self.names("other-list", "people", ""), ["Colin", "Cora"])
-        self.assertEqual(self.names("other-list", "people", "?q=co"), ["Colin", "Cora"])
-        self.assertEqual(self.names("other-list", "people", "?q=kay"), ["Colin"])
+        self.assertEqual(self.names("other-list", "people", ""), ["Cora"])  # Colin has no role: left out
+        self.assertEqual(self.names("other-list", "people", "?q=co"), ["Cora"])
+        self.assertEqual(self.names("other-list", "people", "?q=kay"), [])
         self.assertEqual(self.names("other-list", "people", "?q=wanda"), [])  # a writer
         self.assertIn('No one matches "zzz"', self.client.get(reverse("other-list") + "?q=zzz").content.decode())
 
@@ -3945,8 +3951,9 @@ class PeopleSearchTests(TestCase):
 class PeopleDefaultSortTests(TestCase):
     def setUp(self):
         self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
+        crew = Role.objects.get_or_create(name="Costumer")[0]
         for first, last in (("Zack", "Abbott"), ("Alice", "Zane"), ("Bea", "Brown")):
-            Person.objects.create(first_name=first, last_name=last)
+            Person.objects.create(first_name=first, last_name=last).roles.add(crew)
 
     def test_the_other_roles_list_sorts_by_first_name_and_offers_both_sorts_first_name_first(self):
         response = self.client.get(reverse("other-list"))
@@ -3997,3 +4004,86 @@ class ProductionTypeMenuTests(TestCase):
 
     def test_an_empty_type_says_so(self):
         self.assertContains(self.client.get(self.list + "?type=other"), "No other productions yet.")
+
+
+
+class PersonConsentDateTests(TestCase):
+    """Changing the email or publish consent dates the consent today, whatever saves the person."""
+
+    def setUp(self):
+        import datetime
+
+        self.old = datetime.date(2024, 1, 5)
+        self.person = Person.objects.create(first_name="Ann", last_name="Actor", email_consent=True, consent_date=self.old)
+        self.person = Person.objects.get(pk=self.person.pk)
+        self.today = __import__("django.utils.timezone", fromlist=["x"]).localdate()
+
+    def test_a_change_to_either_flag_dates_it_today(self):
+        self.person.publish_consent = True
+        self.person.save()
+        self.assertEqual(Person.objects.get(pk=self.person.pk).consent_date, self.today)
+        other = Person.objects.get(pk=self.person.pk)
+        other.consent_date = self.old
+        other.save()
+        other.email_consent = False  # unticking counts too
+        other.save()
+        self.assertEqual(Person.objects.get(pk=self.person.pk).consent_date, self.today)
+
+    def test_other_changes_leave_the_date_alone(self):
+        self.person.first_name = "Anne"
+        self.person.save()
+        self.assertEqual(Person.objects.get(pk=self.person.pk).consent_date, self.old)
+
+    def test_it_is_dated_once_per_change_not_every_save(self):
+        self.person.publish_consent = True
+        self.person.save()
+        Person.objects.filter(pk=self.person.pk).update(consent_date=self.old)
+        person = Person.objects.get(pk=self.person.pk)
+        person.first_name = "Anne"
+        person.save()  # the flags are as stored: nothing to date
+        self.assertEqual(Person.objects.get(pk=self.person.pk).consent_date, self.old)
+        self.person.first_name = "Annie"
+        self.person.save()  # the same instance saved again: still no new change
+        self.assertEqual(self.person.consent_date, self.today)
+
+    def test_a_date_set_in_the_same_save_is_kept(self):
+        import datetime
+
+        chosen = datetime.date(2025, 3, 1)
+        self.person.publish_consent = True
+        self.person.consent_date = chosen
+        self.person.save()
+        self.assertEqual(Person.objects.get(pk=self.person.pk).consent_date, chosen)
+
+    def test_save_with_update_fields_includes_the_date_when_a_flag_is_saved(self):
+        self.person.email_consent = False
+        self.person.save(update_fields=["email_consent"])
+        self.assertEqual(Person.objects.get(pk=self.person.pk).consent_date, self.today)
+        self.person.first_name = "Zed"
+        self.person.save(update_fields=["first_name"])  # no consent saved: no date change
+
+    def test_a_new_person_who_gives_consent_is_dated_today_and_one_who_does_not_is_not(self):
+        yes = Person.objects.create(first_name="Bob", last_name="Yes", publish_consent=True)
+        no = Person.objects.create(first_name="Cy", last_name="No")
+        self.assertEqual(yes.consent_date, self.today)
+        self.assertIsNone(no.consent_date)
+
+    def test_the_edit_form_changes_the_flags_and_shows_the_date_read_only(self):
+        user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
+        self.client.force_login(user)
+        url = reverse("person-update", args=[self.person.pk])
+        html = self.client.get(url).content.decode()
+        self.assertIn('name="email_consent"', html)
+        self.assertIn('name="publish_consent"', html)
+        self.assertNotIn('name="consent_date"', html)
+        self.client.post(url, {"first_name": "Ann", "last_name": "Actor", "email_consent": "on", "publish_consent": "on"})
+        person = Person.objects.get(pk=self.person.pk)
+        self.assertEqual((person.email_consent, person.publish_consent, person.consent_date), (True, True, self.today))
+
+    def test_the_detail_page_shows_the_consent_with_icons_and_no_form(self):
+        user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
+        self.client.force_login(user)
+        html = self.client.get(reverse("person-detail", args=[self.person.pk])).content.decode()
+        self.assertIn("badge-success", html)  # email: yes
+        self.assertIn("badge-error", html)  # publish: no
+        self.assertNotIn('name="email_consent"', html)

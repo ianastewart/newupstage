@@ -120,14 +120,17 @@ def webpage(request, slug):
 
 
 def public_actors():
-    """The actors shown on the public site: people with the Actor role who have a photo."""
-    return Person.objects.filter(roles__name="Actor", image__isnull=False).select_related("image").distinct()
+    """The actors shown on the public site: people with the Actor role who have a photo and agreed to be published."""
+    return Person.objects.filter(roles__name="Actor", image__isnull=False, publish_consent=True).select_related("image").distinct()
 
 
 def public_team_members():
-    """The non-actors shown on the public site: people credited on a production team who have a photo or a biography."""
+    """
+    The non-actors shown on the public site: people credited on a production team who have a photo or a biography
+    and agreed to be published.
+    """
     return (
-        Person.objects.filter(productionteam__isnull=False)
+        Person.objects.filter(productionteam__isnull=False, publish_consent=True)
         .exclude(pk__in=public_actors().values("pk"))
         .filter(Q(image__isnull=False) | ~Q(biography=""))
         .select_related("image")
@@ -187,9 +190,9 @@ def public_people_page(request, people, title, description, empty):
 
 @login_not_required
 def writer_list(request):
-    """The public writers page: everyone with the Writer role who has a public page (a photo or a biography)."""
+    """The public writers page: everyone with the Writer role who has agreed to be published and has a photo or a biography."""
     writers = (
-        Person.objects.filter(roles__name="Writer").filter(Q(image__isnull=False) | ~Q(biography=""))
+        Person.objects.filter(roles__name="Writer", publish_consent=True).filter(Q(image__isnull=False) | ~Q(biography=""))
         .select_related("image").distinct().order_by(*public_people_ordering())
     )
     return public_people_page(request, writers, "Writers", "The writers of Upstage Surrey.", "No writers to show yet.")
@@ -197,9 +200,9 @@ def writer_list(request):
 
 @login_not_required
 def crew_list(request):
-    """The public crew page: everyone with a role other than Actor or Writer (linked to their page where they have one)."""
+    """The public crew page: everyone with a role other than Actor or Writer who has agreed to be published."""
     crew = (
-        Person.objects.filter(roles__in=Role.objects.exclude(name__in=["Actor", "Writer"]))
+        Person.objects.filter(publish_consent=True, roles__in=Role.objects.exclude(name__in=["Actor", "Writer"]))
         .select_related("image").distinct().order_by(*public_people_ordering())
     )
     return public_people_page(request, crew, "Crew", "The crew of Upstage Surrey.", "No crew to show yet.")
