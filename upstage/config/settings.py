@@ -194,6 +194,9 @@ DJANGORESIZED_DEFAULT_FORMAT_EXTENSIONS = {'JPEG': '.jpg'}
 # Uploaded files (images)
 MEDIA_URL = 'media/'
 MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
+# How long browsers may keep an uploaded file without asking again (seconds). The live site lets shared caches keep
+# it too; the sandbox's files are for its members only, so they are private and kept for an hour at most.
+MEDIA_CACHE_SECONDS = int(os.environ.get('MEDIA_CACHE_SECONDS', 7 * 24 * 3600))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

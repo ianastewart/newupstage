@@ -2158,6 +2158,56 @@ class SeoTests(TestCase):
         self.assertIn("<priority>0.7</priority>", entry(f"/productions/{self.stage.pk}/"))
         self.assertIn("<priority>0.5</priority>", entry(f"/productions/{self.radio.pk}/"))
 
+class MediaCacheTests(TestCase):
+    """Uploaded files tell browsers how long they may be kept."""
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+
+        from django.test import override_settings
+
+        self.media = tempfile.TemporaryDirectory()
+        self.addCleanup(self.media.cleanup)
+        (Path(self.media.name) / "images").mkdir()
+        (Path(self.media.name) / "images" / "poster.txt").write_text("poster")
+        override = override_settings(MEDIA_ROOT=self.media.name, MEDIA_CACHE_SECONDS=604800)
+        override.enable()
+        self.addCleanup(override.disable)
+
+    def get(self, path, **extra):
+        """The file's response, closed at the end of the test (Windows cannot delete a file that is still open)."""
+        response = self.client.get(path, **extra)
+        self.addCleanup(response.close)
+        return response
+
+    def test_the_live_site_lets_browsers_and_shared_caches_keep_a_file_for_a_week(self):
+        response = self.get("/media/images/poster.txt")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(set(response["Cache-Control"].split(", ")), {"public", "max-age=604800"})
+        self.assertIn("Last-Modified", response.headers)
+
+    def test_a_browser_asking_whether_it_changed_is_told_it_has_not(self):
+        first = self.get("/media/images/poster.txt")
+        again = self.get("/media/images/poster.txt", headers={"If-Modified-Since": first["Last-Modified"]})
+        self.assertEqual(again.status_code, 304)
+        self.assertIn("max-age=604800", again["Cache-Control"])
+
+    def test_a_missing_file_is_not_cached(self):
+        response = self.get("/media/images/nothing.txt")
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn("max-age", response.headers.get("Cache-Control", ""))
+
+    def test_the_sandbox_keeps_files_private_and_for_an_hour_at_most(self):
+        from django.test import RequestFactory, override_settings
+
+        from config.urls import media_file
+
+        with override_settings(SITE_MODE="sandbox"):
+            response = media_file(RequestFactory().get("/media/images/poster.txt"), "images/poster.txt")
+        self.addCleanup(response.close)
+        self.assertEqual(set(response["Cache-Control"].split(", ")), {"private", "max-age=3600"})
+
 class FooterTests(TestCase):
     def test_the_footer_credits_ian_stewart_with_a_link_to_his_page(self):
         ian = Person.objects.create(pk=1, first_name="Ian", last_name="Stewart")
