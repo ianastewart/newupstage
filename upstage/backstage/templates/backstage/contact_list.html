@@ -23,19 +23,20 @@
     <div class="overflow-x-auto rounded-box bg-base-200 shadow-sm">
       <table class="table">
         <thead>
-          <tr><th>Name</th><th>Email</th><th>Interested in</th><th>Date</th></tr>
+          <tr><th>Name</th><th>Email</th><th>Mobile</th><th>Interested in</th><th>Date</th></tr>
         </thead>
         <tbody>
           {% for contact in contacts %}
             <tr>
               <td class="font-semibold">{{ contact }}</td>
               <td><a href="mailto:{{ contact.email }}" class="link">{{ contact.email }}</a></td>
+              <td class="whitespace-nowrap">{{ contact.mobile }}</td>
               <td>
-                {% if contact.newsletter %}<span class="badge badge-sm badge-secondary">Newsletter</span>{% endif %}
-                {% if contact.acting %}<span class="badge badge-sm badge-secondary">Acting</span>{% endif %}
-                {% if contact.backstage %}<span class="badge badge-sm badge-secondary">Backstage</span>{% endif %}
+                {% if contact.email_consent %}<span class="badge badge-sm badge-secondary">Newsletter</span>{% endif %}
+                {% if contact.acting_interest %}<span class="badge badge-sm badge-secondary">Acting</span>{% endif %}
+                {% if contact.backstage_interest %}<span class="badge badge-sm badge-secondary">Backstage</span>{% endif %}
               </td>
-              <td class="whitespace-nowrap">{{ contact.created|date:"j M Y" }}</td>
+              <td class="whitespace-nowrap">{{ contact.consent_date|date:"j M Y" }}</td>
             </tr>
           {% endfor %}
         </tbody>

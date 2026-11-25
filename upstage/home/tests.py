@@ -1448,7 +1448,7 @@ class DiaryBlockTests(TestCase):
 
 
 class ContactBlockTests(TestCase):
-    """A contact block shows a form; sending it saves a Contact."""
+    """A contact block shows a form; sending it saves a Person."""
 
     @classmethod
     def setUpTestData(cls):
@@ -1460,52 +1460,48 @@ class ContactBlockTests(TestCase):
         cls.url = cls.page.get_absolute_url()
         cls.data = {
             "contact_block": cls.block.pk, "first_name": "Ann", "last_name": "Actor", "email": "ann@example.com",
-            "acting": "on", "newsletter": "on",
+            "acting_interest": "on", "email_consent": "on", "mobile": "07700 900123",
         }
 
     def test_the_page_shows_the_form(self):
         html = self.client.get(self.url).content.decode()
         self.assertIn("Get in touch", html)
-        self.assertIn("I am interested in", html)
-        for label in ("Mails about new productions", "Acting", "Backstage roles"):
-            self.assertIn(label, html)
-        for name in ("first_name", "last_name", "email"):
+        self.assertIn("Sign me up for the newsletter", html)
+        self.assertIn("I am also interested in", html)
+        self.assertIn("Mobile number (optional)", html)
+        for name in ("first_name", "last_name", "email", "email_consent", "acting_interest", "backstage_interest", "mobile"):
             self.assertIn(f'name="{name}"', html)
 
-    def test_the_model_has_its_labels(self):
-        from backstage.models import Contact
-
-        labels = {f.name: str(f.verbose_name) for f in Contact._meta.get_fields()}
-        self.assertEqual(labels["created"], "Creation date")
-        self.assertEqual(labels["newsletter"], "Mails about new productions")
-        self.assertEqual(labels["acting"], "Acting")
-        self.assertEqual(labels["backstage"], "Backstage roles")
-
-    def test_sending_it_saves_a_contact_and_says_thanks(self):
-        from backstage.models import Contact
+    def test_sending_it_saves_a_person_and_says_thanks(self):
+        import datetime
 
         response = self.client.post(self.url, self.data)
         self.assertRedirects(response, f"{self.url}?sent={self.block.pk}#contact-{self.block.pk}", fetch_redirect_response=False)
-        contact = Contact.objects.get()
-        self.assertEqual((contact.first_name, contact.last_name, contact.email), ("Ann", "Actor", "ann@example.com"))
-        self.assertEqual((contact.newsletter, contact.acting, contact.backstage), (True, True, False))
-        self.assertIsNotNone(contact.created)
+        person = Person.objects.get(email="ann@example.com")
+        self.assertEqual((person.first_name, person.last_name, person.mobile), ("Ann", "Actor", "07700 900123"))
+        self.assertEqual((person.email_consent, person.acting_interest, person.backstage_interest), (True, True, False))
+        self.assertEqual(person.consent_date, datetime.date.today())
         self.assertIn("Thank you", self.client.get(f"{self.url}?sent={self.block.pk}").content.decode())
 
     def test_a_bad_form_is_shown_again_with_what_was_typed(self):
-        from backstage.models import Contact
-
         response = self.client.post(self.url, {**self.data, "email": "nonsense"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(Contact.objects.count(), 0)
+        self.assertEqual(Person.objects.count(), 0)
         self.assertContains(response, 'value="Ann"')
 
-    def test_the_bot_trap_saves_nothing(self):
-        from backstage.models import Contact
+    def test_name_and_email_are_needed_and_so_is_one_tick(self):
+        for missing in ("first_name", "last_name", "email"):
+            response = self.client.post(self.url, {**self.data, missing: ""})
+            self.assertEqual(response.status_code, 200, missing)
+        ticks = {k: v for k, v in self.data.items() if k not in ("email_consent", "acting_interest", "backstage_interest")}
+        response = self.client.post(self.url, ticks)
+        self.assertContains(response, "Please tick at least one box")
+        self.assertEqual(Person.objects.count(), 0)
 
+    def test_the_bot_trap_saves_nothing(self):
         response = self.client.post(self.url, {**self.data, "website": "http://spam"})
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(Contact.objects.count(), 0)
+        self.assertEqual(Person.objects.count(), 0)
 
     def test_a_post_for_a_block_not_on_the_page_is_refused(self):
         self.assertEqual(self.client.post(self.url, {**self.data, "contact_block": 9999}).status_code, 404)
@@ -1514,17 +1510,19 @@ class ContactBlockTests(TestCase):
 class ContactListTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        from accounts.models import CustomUser
-        from backstage.models import Contact
+        import datetime
 
         cls.user = backstage_user("member", "member@example.com", "a-Long-pa55word!")
-        Contact.objects.create(first_name="Ann", last_name="Actor", email="ann@example.com", acting=True)
-        Contact.objects.create(first_name="Bob", last_name="Builder", email="bob@example.com", newsletter=True, backstage=True)
+        Person.objects.create(first_name="Ann", last_name="Actor", email="ann@example.com", acting_interest=True,
+                              consent_date=datetime.date(2026, 1, 5))
+        Person.objects.create(first_name="Bob", last_name="Builder", email="bob@example.com", email_consent=True,
+                              backstage_interest=True, consent_date=datetime.date(2026, 3, 1))
+        Person.objects.create(first_name="Cy", last_name="Uninterested", email="cy@example.com")
 
     def setUp(self):
         self.client.force_login(self.user)
 
-    def test_it_lists_everyone_newest_first(self):
+    def test_it_lists_people_who_ticked_something_newest_first(self):
         response = self.client.get(reverse("contact-list"))
         self.assertEqual([str(c) for c in response.context["contacts"]], ["Bob Builder", "Ann Actor"])
         self.assertContains(response, "bob@example.com")
@@ -1533,6 +1531,7 @@ class ContactListTests(TestCase):
         names = lambda query: [str(c) for c in self.client.get(reverse("contact-list") + query).context["contacts"]]
         self.assertEqual(names("?interest=acting"), ["Ann Actor"])
         self.assertEqual(names("?interest=newsletter"), ["Bob Builder"])
+        self.assertEqual(names("?interest=backstage"), ["Bob Builder"])
         self.assertEqual(names("?q=builder"), ["Bob Builder"])
         self.assertEqual(names("?q=example.com&interest=backstage"), ["Bob Builder"])
 
@@ -2398,8 +2397,12 @@ class FooterTests(TestCase):
     def test_the_footer_credits_ian_stewart_with_a_link_to_his_page(self):
         ian = Person.objects.create(pk=1, first_name="Ian", last_name="Stewart")
         response = self.client.get(reverse("auditions"))
-        self.assertContains(response, f'Website built by <a href="{reverse("public-actor", args=[ian.pk])}"')
+        self.assertContains(response, f'Website design</span> <a href="{reverse("public-actor", args=[ian.pk])}"')
         self.assertNotContains(response, "Created by Ian")
+
+    def test_the_footer_links_to_the_privacy_policy_page(self):
+        response = self.client.get(reverse("auditions"))
+        self.assertContains(response, '<a href="/page/privacy/" class="link link-hover text-violet-400">Privacy policy</a>')
 
 
 class FaviconTests(TestCase):

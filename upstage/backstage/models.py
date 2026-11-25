@@ -87,6 +87,11 @@ class Person(models.Model):
         Image, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
     roles = models.ManyToManyField("Role", blank=True, related_name="people")
+    email_consent = models.BooleanField(default=False)
+    publish_consent = models.BooleanField(default=False)
+    consent_date = models.DateField(null=True, blank=True)
+    backstage_interest = models.BooleanField(default=False)
+    acting_interest = models.BooleanField(default=False)
 
     class Meta:
         verbose_name_plural = "people"
@@ -646,20 +651,3 @@ class PaletteColour(models.Model):
         self.colour = self.colour.lower()
         super().save(*args, **kwargs)
 
-
-class Contact(models.Model):
-    """Someone who has filled in a contact block's form on the public site."""
-
-    created = models.DateTimeField("Creation date", auto_now_add=True)
-    first_name = models.CharField(max_length=255)
-    last_name = models.CharField(max_length=255)
-    email = models.EmailField()
-    newsletter = models.BooleanField("Mails about new productions", default=False)
-    acting = models.BooleanField("Acting", default=False)
-    backstage = models.BooleanField("Backstage roles", default=False)
-
-    class Meta:
-        ordering = ["-created"]
-
-    def __str__(self):
-        return f"{self.first_name} {self.last_name}".strip()

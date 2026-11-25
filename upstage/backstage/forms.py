@@ -1,3 +1,4 @@
+import datetime
 from urllib.parse import urlparse
 
 from django import forms
@@ -226,9 +227,29 @@ class ContactForm(forms.ModelForm):
     website = forms.CharField(required=False, widget=forms.TextInput(attrs={"tabindex": "-1", "autocomplete": "off"}))
 
     class Meta:
-        model = models.Contact
-        fields = ["first_name", "last_name", "email", "newsletter", "acting", "backstage"]
+        model = models.Person
+        fields = ["first_name", "last_name", "email", "email_consent", "acting_interest", "backstage_interest", "mobile"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["email"].required = True  # optional on a Person, but we need it to reply or send the newsletter
+
+    def clean(self):
+        cleaned = super().clean()
+        if not any(cleaned.get(name) for name in ("email_consent", "acting_interest", "backstage_interest")):
+            raise forms.ValidationError("Please tick at least one box: the newsletter, acting or backstage.")
+        return cleaned
+
+    def save(self, commit=True):
+        self.instance.consent_date = datetime.date.today()  # when they asked to hear from us
+        return super().save(commit)
 
     @property
     def is_spam(self):
         return bool(self.cleaned_data.get("website"))
+
+
+class PublishConsentForm(forms.Form):
+    """Form sent to new actors / backstage people"""
+    publish_consent = forms.BooleanField(label="Publishing consent")
+    email_consent = forms.BooleanField(label="Newsletter consent")

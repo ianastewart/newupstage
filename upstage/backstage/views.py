@@ -589,12 +589,18 @@ def other_roles(request, pk):
 
 
 def contact_list(request):
-    """The people who have filled in a contact form, newest first. ?interest=newsletter|acting|backstage narrows it, ?q= searches."""
-    interests = {"newsletter": "Mails about new productions", "acting": "Acting", "backstage": "Backstage roles"}
-    contacts = models.Contact.objects.all()
+    """
+    People who asked for the newsletter or said they are interested in acting or backstage, newest first.
+    ?interest=newsletter|acting|backstage narrows it, ?q= searches.
+    """
+    interests = {"newsletter": "Newsletter", "acting": "Acting", "backstage": "Backstage"}
+    fields = {"newsletter": "email_consent", "acting": "acting_interest", "backstage": "backstage_interest"}
+    contacts = models.Person.objects.filter(
+        Q(email_consent=True) | Q(acting_interest=True) | Q(backstage_interest=True)
+    ).order_by(F("consent_date").desc(nulls_last=True), "-pk")
     interest = request.GET.get("interest")
     if interest in interests:
-        contacts = contacts.filter(**{interest: True})
+        contacts = contacts.filter(**{fields[interest]: True})
     search = request.GET.get("q", "").strip()
     for word in search.split():
         contacts = contacts.filter(Q(first_name__icontains=word) | Q(last_name__icontains=word) | Q(email__icontains=word))

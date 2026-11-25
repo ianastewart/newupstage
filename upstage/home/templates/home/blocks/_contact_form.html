@@ -9,19 +9,38 @@
     {{ form.last_name.as_field_group }}
   </div>
   {{ form.email.as_field_group }}
-  <fieldset class="mt-4">
-    <legend class="mb-2 font-semibold">I am interested in</legend>
+  {% with b=block.pk %}
+  <div class="mt-4 space-y-3" data-contact-interests>
+    <label class="flex cursor-pointer items-center gap-3">
+      <input type="checkbox" name="{{ form.email_consent.html_name }}" id="{{ form.email_consent.auto_id }}_{{ b }}" class="checkbox"{% if form.email_consent.value %} checked{% endif %} />
+      <span>Sign me up for the newsletter</span>
+    </label>
+    <p class="font-semibold">I am also interested in</p>
     <div class="space-y-2">
-      {% for field in form.visible_fields %}
-        {% if field.name == "newsletter" or field.name == "acting" or field.name == "backstage" %}
-          <label class="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" name="{{ field.html_name }}" id="{{ field.auto_id }}_{{ block.pk }}" class="checkbox"{% if field.value %} checked{% endif %} />
-            <span>{{ field.label }}</span>
-          </label>
-        {% endif %}
-      {% endfor %}
+      <label class="flex cursor-pointer items-center gap-3">
+        <input type="checkbox" name="{{ form.acting_interest.html_name }}" id="{{ form.acting_interest.auto_id }}_{{ b }}" class="checkbox" data-interest{% if form.acting_interest.value %} checked{% endif %} />
+        <span>Acting</span>
+      </label>
+      <label class="flex cursor-pointer items-center gap-3">
+        <input type="checkbox" name="{{ form.backstage_interest.html_name }}" id="{{ form.backstage_interest.auto_id }}_{{ b }}" class="checkbox" data-interest{% if form.backstage_interest.value %} checked{% endif %} />
+        <span>Backstage</span>
+      </label>
     </div>
-  </fieldset>
+    {% for error in form.non_field_errors %}<p class="text-error text-sm" role="alert">{{ error }}</p>{% endfor %}
+    <div data-mobile{% if not form.acting_interest.value and not form.backstage_interest.value %} hidden{% endif %}>
+      <label class="label" for="{{ form.mobile.auto_id }}_{{ b }}">Mobile number (optional)</label>
+      <input type="tel" name="{{ form.mobile.html_name }}" id="{{ form.mobile.auto_id }}_{{ b }}" class="input w-full" value="{{ form.mobile.value|default:'' }}" autocomplete="tel" />
+      {% for error in form.mobile.errors %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+    </div>
+  </div>
+  {% endwith %}
+  <script>
+    (function (box) {
+      var mobile = box.querySelector("[data-mobile]"), ticks = box.querySelectorAll("[data-interest]");
+      function show() { mobile.hidden = !Array.prototype.some.call(ticks, function (t) { return t.checked; }); }
+      ticks.forEach(function (t) { t.addEventListener("change", show); });
+    })(document.currentScript.previousElementSibling);
+  </script>
   <div class="mt-6 flex justify-end">
     <button type="submit" class="btn btn-primary">Send</button>
   </div>

@@ -1,6 +1,6 @@
 {% comment %}
 A contact block: its title, subtitle and text, then a form for first name, last name and email, and "I am interested in" with
-a checkbox each for mails about new productions, acting and backstage roles. It posts to the page it is on (the view saves a Contact
+a checkbox each for mails about new productions, acting and backstage roles. It posts to the page it is on (the view saves a Person
 and comes back with ?sent=<block id>, which shows a thank-you instead of the form). The hidden "website" box is for bots.
 {% endcomment %}
 <section id="contact-{{ block.pk }}" class="rounded-box p-6 md:p-6" style="{{ block.background_css }}{% if block.text_colour %} color: {{ block.text_colour }};{% endif %}">
