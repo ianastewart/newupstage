@@ -1,6 +1,6 @@
 {% extends "public_base.html" %}
 
-{% block title %}{% for production in productions %}{{ production.title }}{% if not forloop.last %} and {% endif %}{% endfor %} {{ event.get_event_type_display|lower }} · Upstage Theatre{% endblock %}
+{% block title %}{% for production in productions %}{{ production.title }}{% if not forloop.last %} and {% endif %}{% endfor %} {{ event.get_event_type_display|lower }} · Upstage Surrey{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-6xl space-y-6 p-6">
@@ -37,7 +37,7 @@
           <p class="font-semibold">{{ event.venue.name }}</p>
           {% if event.venue.address %}<p class="text-sm opacity-80">{{ event.venue.address|linebreaksbr }}</p>{% endif %}
           {% if event.venue.logo.image %}
-            <img src="{{ event.venue.logo.image.url }}" alt="{{ event.venue.name }}" class="mt-2 h-auto max-h-20 w-auto max-w-full" />
+            <img src="{{ event.venue.logo.image.url }}" alt="{{ event.venue.name }}" loading="lazy" class="mt-2 h-auto max-h-20 w-auto max-w-full" />
           {% endif %}
         </div>
       {% endif %}

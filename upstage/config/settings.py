@@ -225,4 +225,4 @@ else:
 # The description search engines and link previews show for pages that don't have their own.
 SITE_DESCRIPTION = os.environ.get('SITE_DESCRIPTION', 'Upstage Surrey: stage plays and radio plays.')
 
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Upstage Theatre <noreply@upstage.example>')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Upstage Surrey <noreply@upstage.example>')

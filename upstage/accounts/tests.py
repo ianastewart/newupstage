@@ -232,7 +232,7 @@ class SandboxSiteTests(TestCase):
         self.assertNotContains(self.client.get(reverse("login")), "tracking-widest text-primary")
 
     def test_any_other_page_sends_them_to_the_home_page_remembering_where_they_were_going(self):
-        for name in ("stage-shows", "robots", "sitemap", "production-list"):
+        for name in ("stage-shows", "sitemap", "production-list"):
             response = self.client.get(reverse(name))
             self.assertEqual(response.status_code, 302, name)
             self.assertEqual(response["Location"], f"/?next={reverse(name).replace('/', '%2F')}", name)
@@ -258,6 +258,12 @@ class SandboxSiteTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/?next=%2Fmedia%2Fimages%2Fsecret_test.png")
         self.assertEqual(self.client.get("/media/images/nothing.png").status_code, 302)
+
+    def test_robots_txt_is_open_so_that_search_engines_are_told_to_keep_out(self):
+        response = self.client.get(reverse("robots"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.decode(), "User-agent: *\nDisallow: /\n")
+        self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow")
 
     def test_the_login_pages_are_open(self):
         for name in ("login", "password_reset"):

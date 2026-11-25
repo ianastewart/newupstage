@@ -23,12 +23,12 @@
   <link rel="icon" type="image/png" sizes="16x16" href="{% static 'favicon/favicon-16.png' %}">
   <link rel="apple-touch-icon" href="{% static 'favicon/apple-touch-icon.png' %}">
   <link rel="stylesheet" href="{% static 'css/src/output.css' %}?v={{ css_version }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;1,400;1,700&display=swap">
+  {# Lato is served from this site (no request to Google); the regular weight is fetched at once, the rest when a page uses it. #}
+  <link rel="preload" href="{% static 'fonts/lato-normal-400-latin.woff2' %}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
   {# Backstage and account pages are kept out of search results; the public base template replaces this with the page's search tags. #}
   {% block seo %}<meta name="robots" content="noindex, nofollow">{% endblock %}
-  <title>{% block title %}Upstage Theatre{% endblock %}</title>
+  <title>{% block title %}Upstage Surrey{% endblock %}</title>
   {% block head %}
   {% endblock %}
 </head>

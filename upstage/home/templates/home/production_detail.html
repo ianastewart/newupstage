@@ -1,6 +1,6 @@
 {% extends base_template %}
 
-{% block title %}{{ production.title }} · Upstage Theatre{% endblock %}
+{% block title %}{{ production.title }} · Upstage Surrey{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-5xl p-6">
@@ -12,7 +12,7 @@
   </header>
   <div class="mx-auto w-full max-w-2xl">
     {% if image %}
-      <img src="{{ image.image.url }}" alt="{{ image.description|default:production.title }}" class="{% if bare %}mx-auto max-h-[75vh] w-auto max-w-full{% else %}block h-auto w-full{% endif %} rounded-box" />
+      <img src="{{ image.image.url }}" alt="{{ image.description|default:production.title }}" fetchpriority="high" class="{% if bare %}mx-auto max-h-[75vh] w-auto max-w-full{% else %}block h-auto w-full{% endif %} rounded-box" />
     {% endif %}
     {# The button (or the archive message) centred under the image, with the venue logo beside it. #}
     <div class="mt-4 flex flex-wrap items-center justify-center gap-4 text-center">
@@ -23,7 +23,7 @@
       {% elif production.awaiting_archive %}
         <p class="italic text-primary">Not yet in the Brooklands Radio archive. Please try later.</p>
       {% endif %}
-      {% if show.venue_logo and venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}
+      {% if show.venue_logo and venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" loading="lazy" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}
     </div>
   </div>
   {% if awaiting_date %}<p class="text-center text-lg italic">Awaiting broadcast date</p>{% endif %}

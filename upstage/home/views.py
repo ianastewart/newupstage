@@ -15,7 +15,7 @@ from backstage.views import person_productions
 
 from .auditions import audition_view, upcoming_auditions
 from .promotions import production_ticket_url, production_venue, promotion_image
-from .seo import seo
+from .seo import event_ld, organization_ld, production_ld, script_json, seo
 from .forms import BlockColumnFormSet, BlockForm, WebPageForm
 from .models import Block, WebPage
 
@@ -44,6 +44,25 @@ def robots_txt(request):
         f"Sitemap: {request.build_absolute_uri(reverse('sitemap'))}",
     ]
     return HttpResponse("\n".join(lines) + "\n", content_type="text/plain")
+
+
+def production_seo(request, production):
+    """The tags for a production's page, with its structured data."""
+    tags = seo(request, title=production.title, description=production.description, image=production_image(production))
+    tags["json_ld"] = script_json(production_ld(request, production, tags["image"]))
+    return tags
+
+
+def event_seo(request, event, productions, dates):
+    """The tags for an event's page, with one structured Event for each date."""
+    first = productions[0] if productions else None
+    title = " and ".join(production.title for production in productions) or event.get_event_type_display()
+    description = event.description or (first.description if first else "")
+    tags = seo(request, title=title, description=description, image=production_image(first) if first else None)
+    if dates:
+        ticket_url = event.ticket_site.url if event.ticket_site_id and event.event_type == "performance" else ""
+        tags["json_ld"] = script_json(event_ld(request, event, title, dates, tags["image"], description, ticket_url))
+    return tags
 
 
 def person_seo(request, person):
@@ -80,6 +99,8 @@ def webpage(request, slug):
         noindex=page.copied_from_id is not None,  # a copy still being worked on
         canonical_path=reverse("home") if page.slug == "home" else None,  # the home page is the site's root
     )
+    if page.slug == "home":
+        context["seo"]["json_ld"] = script_json(organization_ld(request, context["seo"]["image"]))
     if request.method == "POST":
         # A contact block's form: the block it came from is posted with it.
         block_id = request.POST.get("contact_block", "")
@@ -205,9 +226,12 @@ def production_type_list(request, production_type, title, empty, dated=False):
         ).order_by(F("show_date").desc(nulls_last=True), F("parent_id").asc(nulls_first=True), "title")
     else:
         productions = productions.order_by("title")
+    productions = list(productions)
+    names = ", ".join(production.title for production in productions[:6])
+    description = f"{title} from Upstage Surrey" + (f": {names}{' and more' if len(productions) > 6 else ''}." if names else ".")
     return render(request, "home/production_grid.html", {
         "productions": productions, "title": title, "empty": empty,
-        "seo": seo(request, title=title, description=f"{title} from Upstage Surrey."),
+        "seo": seo(request, title=title, description=description),
     })
 
 
@@ -357,9 +381,7 @@ def public_production(request, pk):
         "venue": production_venue(production),
         "team": team,
         "cast": cast,
-        "seo": seo(
-            request, title=production.title, description=production.description, image=production_image(production),
-        ),
+        "seo": production_seo(request, production),
     })
 
 
@@ -390,12 +412,7 @@ def event_detail(request, pk):
         "dates": dates,
         "productions": productions,
         "upcoming": any(date.datetime >= now for date in dates),
-        "seo": seo(
-            request,
-            title=" and ".join(production.title for production in productions) or event.get_event_type_display(),
-            description=event.description or (first.description if first else ""),
-            image=production_image(first) if first else None,
-        ),
+        "seo": event_seo(request, event, productions, dates),
     })
 
 

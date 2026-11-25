@@ -3985,7 +3985,7 @@ class ProductionTypeMenuTests(TestCase):
             response = self.client.get(self.list + query)
             self.assertEqual(response.context["page_title"], title, query)
             self.assertContains(response, f'<h1 class="text-3xl font-bold">{title}</h1>')
-            self.assertContains(response, f"<title>{title} · Upstage Theatre</title>")
+            self.assertContains(response, f"<title>{title} · Upstage Surrey</title>")
 
     def test_the_type_choice_is_gone_but_the_type_survives_a_search(self):
         response = self.client.get(self.list + "?type=stage")

@@ -34,4 +34,5 @@
     <meta property="og:image" content="{{ seo.image }}">
     <meta name="twitter:image" content="{{ seo.image }}">
   {% endif %}
+  {% if seo.json_ld %}<script type="application/ld+json">{{ seo.json_ld|safe }}</script>{% endif %}
 {% endblock %}

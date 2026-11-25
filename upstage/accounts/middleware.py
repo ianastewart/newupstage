@@ -6,9 +6,10 @@ from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 
 from .access import can_backstage, can_sandbox
 
-# The account pages a visitor to the sandbox needs before they can be let in (or to leave).
+# The account pages a visitor to the sandbox needs before they can be let in (or to leave), and robots.txt, which tells
+# search engines to keep out.
 SANDBOX_OPEN_URL_NAMES = {
-    "login", "logout", "password_reset", "password_reset_done", "password_reset_confirm", "password_reset_complete",
+    "robots", "login", "logout", "password_reset", "password_reset_done", "password_reset_confirm", "password_reset_complete",
 }
 # Pages any logged in user may use, whether or not they are in the backstage group.
 BACKSTAGE_EXEMPT_URL_NAMES = {"logout", "password_change", "password_change_done"}

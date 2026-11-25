@@ -4,7 +4,7 @@
     {# The image and the text over it: the text centres on the image only, not on the panel below. #}
     <div class="relative isolate">
       {% if block.image %}
-        <img src="{{ block.image.image.url }}" alt="{{ block.image.description }}" class="hero-fade-in block h-auto w-full" />
+        <img src="{{ block.image.image.url }}" alt="{{ block.image.description }}" fetchpriority="high" class="hero-fade-in block h-auto w-full" />
       {% endif %}
       {% if block.title or block.subtitle or block.has_visible_text %}
         <header class="absolute inset-x-0 top-[50%] flex flex-col items-center p-3 text-center md:p-6">

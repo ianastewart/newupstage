@@ -1980,7 +1980,7 @@ class SeoTests(TestCase):
     def test_the_home_page_is_the_root_whichever_address_it_was_reached_by(self):
         self.assertEqual(self.tags("/")[1]["canonical"], "http://testserver/")
         self.assertEqual(self.tags(reverse("webpage", args=["home"]))[1]["canonical"], "http://testserver/")
-        self.assertEqual(self.tags("/")[1]["og_title"], "Upstage Theatre")
+        self.assertEqual(self.tags("/")[1]["og_title"], "Upstage Surrey")
 
     def test_pages_without_a_description_get_the_sites(self):
         from django.conf import settings
@@ -2041,6 +2041,122 @@ class SeoTests(TestCase):
         self.assertFalse([u for u in urls if "/backstage/" in u or "/admin/" in u])
         self.assertEqual(len(urls), len(re.findall(r"<loc>", response.content.decode())))  # none twice
 
+
+    # ---- structured data and the sitemap's extra pages
+    def json_ld(self, url):
+        import json
+        import re
+
+        html = self.client.get(url).content.decode()
+        found = re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)
+        return [json.loads(text) for text in found], html
+
+    def test_script_json_cannot_end_the_script_element(self):
+        import json
+
+        from .seo import script_json
+
+        text = script_json({"name": "</script><b>x & y"})
+        self.assertNotIn("<", text)
+        self.assertNotIn(">", text)
+        self.assertEqual(json.loads(text), {"name": "</script><b>x & y"})
+
+    def test_the_home_page_says_who_the_site_is(self):
+        (data,), _ = self.json_ld("/")
+        self.assertEqual(data["@type"], "PerformingGroup")
+        self.assertEqual(data["name"], "Upstage Surrey")
+        self.assertEqual(data["url"], "http://testserver/")
+
+    def test_a_production_page_has_structured_data(self):
+        (data,), html = self.json_ld(reverse("public-production", args=[self.stage.pk]))
+        self.assertEqual(data["@type"], "CreativeWork")
+        self.assertEqual(data["name"], "A Stage Play")
+        self.assertEqual(data["description"], 'A funny play, with "quotes" & more.')
+        self.assertEqual(data["image"], "http://testserver/media/images/poster.jpg")
+        self.assertEqual(data["url"], f"http://testserver/productions/{self.stage.pk}/")
+
+    def test_an_event_page_has_one_structured_event_for_each_date_with_its_venue(self):
+        from backstage.models import EventDateTime, Venue
+
+        self.published.venue = Venue.objects.create(name="The Barn", address="1 High Street\nEsher")
+        self.published.save()
+        EventDateTime.objects.create(event=self.published, datetime=timezone.now() + timedelta(days=11))
+        (events,), _ = self.json_ld(reverse("public-event", args=[self.published.pk]))  # one script holding a list
+        self.assertEqual(len(events), 2)
+        self.assertEqual({e["@type"] for e in events}, {"TheaterEvent"})
+        self.assertEqual({e["name"] for e in events}, {"A Stage Play"})
+        self.assertEqual(len({e["startDate"] for e in events}), 2)
+        self.assertEqual(events[0]["location"], {"@type": "Place", "name": "The Barn", "address": "1 High Street Esher"})
+
+    def test_pages_with_nothing_to_describe_have_no_structured_data(self):
+        self.assertEqual(self.json_ld(reverse("auditions"))[0], [])
+        self.assertEqual(self.json_ld(reverse("public-actor", args=[self.actor.pk]))[0], [])
+
+    def test_the_sitemap_has_the_category_pages_and_dates_for_events_and_productions(self):
+        import re
+
+        body = self.client.get("/sitemap.xml").content.decode()
+        urls = set(re.findall(r"<loc>([^<]*)</loc>", body))
+        for path in ("stage-shows", "musicals", "films", "writers", "crew"):
+            self.assertIn(f"http://testserver/{path}/", urls)
+        event_entry = re.search(rf"<url><loc>http://testserver/events/{self.published.pk}/</loc>(.*?)</url>", body)
+        self.assertIn("<lastmod>", event_entry.group(1))
+        production_entry = re.search(rf"<url><loc>http://testserver/productions/{self.stage.pk}/</loc>(.*?)</url>", body)
+        self.assertIn("<lastmod>", production_entry.group(1))
+        radio_entry = re.search(rf"<url><loc>http://testserver/productions/{self.radio.pk}/</loc>(.*?)</url>", body)
+        self.assertNotIn("<lastmod>", radio_entry.group(1))  # no dates, nothing to say
+
+    def test_the_site_is_called_upstage_surrey_in_titles_and_previews(self):
+        html = self.client.get(reverse("auditions")).content.decode()
+        self.assertIn("<title>Auditions · Upstage Surrey</title>", html)
+        self.assertIn('<meta property="og:site_name" content="Upstage Surrey">', html)
+        self.assertNotIn("Upstage Theatre", html)
+
+    def test_a_category_page_names_what_is_on_it_in_its_description(self):
+        _, tags = self.tags(reverse("stage-shows"))
+        self.assertEqual(tags["description"], "Stage shows from Upstage Surrey: A Stage Play.")
+        _, tags = self.tags(reverse("films"))
+        self.assertEqual(tags["description"], "Films from Upstage Surrey.")  # none yet
+
+    def test_the_fonts_come_from_this_site(self):
+        html = self.client.get(reverse("auditions")).content.decode()
+        self.assertIn("css/fonts.css", html)
+        self.assertIn("fonts/lato-normal-400-latin.woff2", html)
+        self.assertNotIn("googleapis", html)
+        self.assertNotIn("gstatic", html)
+
+    def test_a_performance_offers_tickets_for_dates_still_to_come(self):
+        from backstage.models import EventDateTime, TicketSite
+
+        self.published.ticket_site = TicketSite.objects.create(name="Tickets", url="https://tickets.example.com/show")
+        self.published.save()
+        EventDateTime.objects.create(event=self.published, datetime=timezone.now() - timedelta(days=5))
+        (events,), _ = self.json_ld(reverse("public-event", args=[self.published.pk]))
+        by_date = sorted(events, key=lambda e: e["startDate"])
+        self.assertNotIn("offers", by_date[0])  # the past one
+        self.assertEqual(by_date[1]["offers"]["url"], "https://tickets.example.com/show")
+        self.assertEqual(by_date[1]["offers"]["@type"], "Offer")
+
+    def test_the_sitemap_ranks_what_is_still_to_come_above_what_is_over(self):
+        import re
+
+        from backstage.models import Event, EventDateTime
+
+        over = Event.objects.create(event_type="performance", publish="published")
+        EventDateTime.objects.create(event=over, datetime=timezone.now() - timedelta(days=30))
+        body = self.client.get("/sitemap.xml").content.decode()
+
+        def entry(path):
+            return re.search(rf"<url><loc>http://testserver{path}</loc>(.*?)</url>", body).group(1)
+
+        upcoming = entry(f"/events/{self.published.pk}/")
+        self.assertIn("<priority>0.6</priority>", upcoming)
+        self.assertIn("<changefreq>weekly</changefreq>", upcoming)
+        past = entry(f"/events/{over.pk}/")
+        self.assertIn("<priority>0.3</priority>", past)
+        self.assertIn("<changefreq>yearly</changefreq>", past)
+        self.assertIn("<priority>0.7</priority>", entry(f"/productions/{self.stage.pk}/"))
+        self.assertIn("<priority>0.5</priority>", entry(f"/productions/{self.radio.pk}/"))
 
 class FooterTests(TestCase):
     def test_the_footer_credits_ian_stewart_with_a_link_to_his_page(self):
