@@ -1,0 +1,18 @@
+{% comment %}
+A production's gallery: its Gallery images as resized copies, each linked to the full picture. Six columns on a large
+screen: a portrait takes two (three side by side) and a landscape four (so one landscape and one portrait fit), and every
+row is the same height because 3:4 across two columns is as tall as 3:2 across four (the space between pictures is
+padding inside each cell, not a grid gap, so that stays exactly true). Four columns on a tablet: two
+portraits, or one landscape. One image across on a mobile, at its own shape. `dense` lets a later picture fill a gap.
+{% endcomment %}
+<section aria-label="Gallery">
+  <ul class="-m-2 grid grid-flow-dense grid-cols-1 md:grid-cols-4 lg:grid-cols-6">
+    {% for item in gallery %}
+      <li class="p-2 {% if item.orientation == "landscape" %}md:col-span-4 lg:col-span-4 md:aspect-[3/2]{% else %}md:col-span-2 lg:col-span-2 md:aspect-[3/4]{% endif %}">
+        <a href="{{ item.full_url }}" target="_blank" rel="noopener noreferrer" class="block h-full overflow-hidden rounded-box">
+          <img src="{{ item.url }}" alt="{{ item.alt }}" loading="lazy" decoding="async" class="block h-auto w-full transition hover:opacity-90 md:h-full md:object-cover" />
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+</section>

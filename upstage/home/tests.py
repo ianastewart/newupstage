@@ -2208,6 +2208,192 @@ class MediaCacheTests(TestCase):
         self.addCleanup(response.close)
         self.assertEqual(set(response["Cache-Control"].split(", ")), {"private", "max-age=3600"})
 
+
+class GalleryTests(TestCase):
+    """A production's gallery: resized copies of its Gallery images, laid out by shape."""
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+
+        from django.test import override_settings
+
+        self.media = tempfile.TemporaryDirectory()
+        self.addCleanup(self.media.cleanup)
+        self.root = Path(self.media.name)
+        (self.root / "images").mkdir()
+        override = override_settings(MEDIA_ROOT=self.media.name)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.production = Production.objects.create(title="The Play", type="stage")
+
+    def make(self, name, size, kind="gallery", mode="RGB", description="", exif=None):
+        """An image in the library with a real file of that size."""
+        from PIL import Image as PILImage
+
+        picture = PILImage.new(mode, size, (200, 30, 30, 0) if mode == "RGBA" else (200, 30, 30))
+        path = self.root / "images" / name
+        if exif is not None:
+            picture.save(path, exif=exif)
+        else:
+            picture.save(path)
+        return Image.objects.create(image=f"images/{name}", description=description, image_type=kind)
+
+    def link(self, image, default=False):
+        return ProductionImage.objects.create(production=self.production, image=image, is_default=default)
+
+    def size_of(self, name):
+        from PIL import Image as PILImage
+
+        with PILImage.open(self.root / name) as picture:
+            return picture.size
+
+    # ---- the resized copies
+    def test_a_portrait_is_shrunk_to_fit_600_by_800_and_a_landscape_to_1200_by_800(self):
+        from backstage.renditions import make_rendition
+
+        name, kind = make_rendition(self.make("tall.jpg", (900, 1200)))
+        self.assertEqual((kind, self.size_of(name)), ("portrait", (600, 800)))
+        self.assertTrue(name.startswith("renditions/gallery/") and name.endswith("-p.jpg"))
+        name, kind = make_rendition(self.make("wide.jpg", (3000, 2000)))
+        self.assertEqual((kind, self.size_of(name)), ("landscape", (1200, 800)))
+        self.assertTrue(name.endswith("-l.jpg"))
+
+    def test_a_small_photo_is_not_enlarged_and_the_original_is_left_alone(self):
+        from backstage.renditions import make_rendition
+
+        image = self.make("small.jpg", (200, 300))
+        name, _ = make_rendition(image)
+        self.assertEqual(self.size_of(name), (200, 300))
+        self.assertEqual(self.size_of("images/small.jpg"), (200, 300))
+
+    def test_squarish_photos_are_portraits_and_clearly_wide_ones_landscapes(self):
+        from backstage.renditions import make_rendition
+
+        self.assertEqual(make_rendition(self.make("square.jpg", (500, 500)))[1], "portrait")
+        self.assertEqual(make_rendition(self.make("almost.jpg", (1140, 1000)))[1], "portrait")
+        self.assertEqual(make_rendition(self.make("wideish.jpg", (1150, 1000)))[1], "landscape")
+
+    def test_a_phone_photo_turned_by_its_rotation_flag_is_judged_by_the_shape_people_see(self):
+        from PIL import Image as PILImage
+
+        from backstage.renditions import make_rendition
+
+        exif = PILImage.Exif()
+        exif[0x0112] = 6  # rotate 90 degrees: a 1200 x 900 file is an upright 900 x 1200 photo
+        name, kind = make_rendition(self.make("phone.jpg", (1200, 900), exif=exif))
+        self.assertEqual((kind, self.size_of(name)), ("portrait", (600, 800)))
+
+    def test_a_transparent_png_becomes_a_jpeg_with_a_white_background(self):
+        from PIL import Image as PILImage
+
+        from backstage.renditions import make_rendition
+
+        name, _ = make_rendition(self.make("logo.png", (400, 600), mode="RGBA"))
+        with PILImage.open(self.root / name) as copy:
+            self.assertEqual(copy.format, "JPEG")
+            self.assertTrue(all(value > 240 for value in copy.getpixel((10, 10))))
+
+    def test_the_copy_is_made_when_a_gallery_image_is_saved_and_only_once(self):
+        from backstage.renditions import existing_rendition, make_rendition
+
+        image = self.make("tall.jpg", (900, 1200))
+        found = existing_rendition(image)
+        self.assertIsNotNone(found)  # made by saving it
+        self.assertEqual(make_rendition(image), found)  # not made again
+        self.assertEqual(len(list((self.root / "renditions" / "gallery").iterdir())), 1)
+        other = self.make("other.jpg", (900, 1200), kind="production")
+        self.assertIsNone(existing_rendition(other))  # only gallery images get one when saved
+
+    def test_a_new_file_for_an_image_gets_a_new_copy(self):
+        from backstage.renditions import make_rendition
+
+        image = self.make("tall.jpg", (900, 1200))
+        first = make_rendition(image)[0]
+        self.make("tall2.jpg", (900, 1200))
+        image.image.name = "images/tall2.jpg"
+        self.assertNotEqual(make_rendition(image)[0], first)
+
+    def test_the_copy_goes_with_its_image(self):
+        from backstage.renditions import existing_rendition
+
+        image = self.make("tall.jpg", (900, 1200))
+        name = existing_rendition(image)[0]
+        self.assertTrue((self.root / name).exists())
+        image.delete()
+        self.assertFalse((self.root / name).exists())
+
+    def test_an_image_whose_file_is_missing_or_broken_is_left_out_without_an_error(self):
+        from backstage.renditions import gallery_items
+
+        missing = Image.objects.create(image="images/gone.jpg", image_type="gallery")
+        (self.root / "images" / "broken.jpg").write_text("not a picture")
+        broken = Image.objects.create(image="images/broken.jpg", image_type="gallery")
+        good = self.make("tall.jpg", (900, 1200))
+        self.assertEqual([item["image"] for item in gallery_items([missing, broken, good])], [good])
+
+    # ---- the public page
+    def page(self, url=None):
+        return self.client.get(url or reverse("public-production", args=[self.production.pk])).content.decode()
+
+    def test_the_page_lays_out_the_gallery_images_by_shape_in_the_order_they_were_added(self):
+        import re
+
+        cover = self.make("cover.jpg", (800, 600), kind="production", description="Cover")
+        self.link(cover, default=True)
+        self.link(self.make("a.jpg", (900, 1200), description="First"))
+        self.link(self.make("b.jpg", (3000, 2000), description="Second"))
+        self.link(self.make("c.jpg", (900, 1200), description="Third"))
+        self.link(self.make("d.jpg", (900, 1200), kind="other", description="Not gallery"))
+        html = self.page()
+        items = re.findall(r'<li class="([^"]*)">\s*<a href="([^"]*)"[^>]*>\s*<img src="([^"]*)" alt="([^"]*)"', html)
+        self.assertEqual([alt for _, _, _, alt in items], ["First", "Second", "Third"])
+        classes = [c for c, _, _, _ in items]
+        self.assertIn("lg:col-span-2", classes[0])
+        self.assertIn("md:col-span-2", classes[0])
+        self.assertIn("lg:col-span-4", classes[1])
+        self.assertIn("md:col-span-4", classes[1])
+        self.assertIn("lg:col-span-2", classes[2])
+        for _, full, small, _ in items:
+            self.assertTrue(full.startswith("/media/images/"))  # the picture itself is a click away
+            self.assertTrue(small.startswith("/media/renditions/gallery/"))  # the page shows the resized copy
+        self.assertNotIn("Not gallery", html)
+        self.assertIn("grid-cols-1", html)  # one across on a mobile
+
+    def test_the_image_shown_at_the_top_of_the_page_is_not_repeated_in_the_gallery(self):
+        top = self.make("top.jpg", (900, 1200), description="Top")
+        self.link(top, default=True)
+        self.link(self.make("a.jpg", (900, 1200), description="Other"))
+        html = self.page()
+        self.assertEqual(html.count('alt="Top"'), 1)  # only the top of the page
+        self.assertIn('alt="Other"', html)
+
+    def test_no_gallery_images_no_gallery(self):
+        self.link(self.make("cover.jpg", (800, 600), kind="production"), default=True)
+        self.assertNotIn('aria-label="Gallery"', self.page())
+
+    def test_the_gallery_can_be_switched_off_and_is_in_the_preview_when_ticked(self):
+        self.link(self.make("cover.jpg", (800, 600), kind="production"), default=True)
+        self.link(self.make("a.jpg", (900, 1200), description="First"))
+        self.assertIn('aria-label="Gallery"', self.page())
+        self.production.public_hidden_parts = ["gallery"]
+        self.production.save()
+        self.assertNotIn('aria-label="Gallery"', self.page())
+        url = reverse("public-production", args=[self.production.pk])
+        self.assertIn('aria-label="Gallery"', self.page(url + "?custom=1&show=gallery"))
+        self.assertNotIn('aria-label="Gallery"', self.page(url + "?custom=1&show=title"))
+
+    def test_the_gallery_copy_is_made_when_the_page_is_first_viewed_if_it_is_not_there_yet(self):
+        import shutil
+
+        self.link(self.make("cover.jpg", (800, 600), kind="production"), default=True)
+        image = self.make("a.jpg", (900, 1200), description="First")
+        self.link(image)
+        shutil.rmtree(self.root / "renditions")  # an image uploaded before copies were made
+        self.assertIn("/media/renditions/gallery/", self.page())
+        self.assertEqual(len(list((self.root / "renditions" / "gallery").iterdir())), 1)
+
+
 class FooterTests(TestCase):
     def test_the_footer_credits_ian_stewart_with_a_link_to_his_page(self):
         ian = Person.objects.create(pk=1, first_name="Ian", last_name="Stewart")

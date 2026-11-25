@@ -10,7 +10,8 @@ from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from backstage.forms import ContactForm
-from backstage.models import Event, EventDateTime, ParentProduction, Person, Production, Role, team_sort_key
+from backstage.models import Event, EventDateTime, Image, ParentProduction, Person, Production, Role, team_sort_key
+from backstage.renditions import gallery_items
 from backstage.views import person_productions
 
 from .auditions import audition_view, upcoming_auditions
@@ -323,7 +324,7 @@ def radio_archive(request):
 
 
 # The parts of a production's public page that the backstage Public view tab can switch off.
-PUBLIC_VIEW_PARTS = ("title", "strap_line", "description", "venue_logo", "cast", "team")
+PUBLIC_VIEW_PARTS = ("title", "strap_line", "description", "venue_logo", "cast", "team", "gallery")
 
 
 def public_view_options(request, production):
@@ -335,6 +336,17 @@ def public_view_options(request, production):
         return {part: part not in production.public_hidden_parts for part in PUBLIC_VIEW_PARTS}
     chosen = set(request.GET.getlist("show"))
     return {part: part in chosen for part in PUBLIC_VIEW_PARTS}
+
+
+def production_gallery(production, shown_image):
+    """The production's gallery images, in the order they were added, each with its resized copy. The image already
+    shown at the top of the page is left out."""
+    links = sorted(production.images.all(), key=lambda link: link.pk)
+    images = [
+        link.image for link in links
+        if link.image.image_type == Image.ImageType.GALLERY and (not shown_image or link.image_id != shown_image.pk)
+    ]
+    return gallery_items(images)
 
 
 @login_not_required
@@ -364,10 +376,12 @@ def public_production(request, pk):
         pb for pb in (page.page_blocks() if page else [])
         if pb.block.block_type != Block.BlockType.CONTACT
     ]
+    shown_image = production.public_view_image
     return render(request, "home/production_detail.html", {
         "production": production,
         "page_blocks": page_blocks,
-        "image": production.public_view_image,
+        "image": shown_image,
+        "gallery": production_gallery(production, shown_image) if show["gallery"] else [],
         "show": show,
         "awaiting_date": awaiting_date,
         # The Radio plays menu item is highlighted on a radio play's page.

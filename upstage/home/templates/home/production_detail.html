@@ -28,6 +28,9 @@
   </div>
   {% if awaiting_date %}<p class="text-center text-lg italic">Awaiting broadcast date</p>{% endif %}
   {% if show.cast or show.team %}{% include "home/_production_cast_team.html" %}{% endif %}
+  {% if show.gallery and gallery %}
+    {% include "home/_production_gallery.html" %}
+  {% endif %}
   {# The blocks added on the backstage Public view tab, in their order. #}
   {% for page_block in page_blocks %}
     <div{% if page_block.block.anchor %} id="{{ page_block.block.anchor }}"{% endif %}>{% include page_block.block.template with block=page_block.block public_page=True %}</div>

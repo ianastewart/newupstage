@@ -192,7 +192,7 @@ def _public_image_choices(production):
 # The parts of a production's public page that can be switched off on the Public view tab: (name, label).
 PUBLIC_PARTS = [
     ("title", "Title"), ("strap_line", "Strap line"), ("description", "Description"), ("venue_logo", "Venue logo"), ("cast", "Cast"),
-    ("team", "Team"),
+    ("team", "Team"), ("gallery", "Gallery"),
 ]
 
 

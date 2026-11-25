@@ -3784,7 +3784,7 @@ class PublicPartsSavedTests(TestCase):
         response = self.client.post(self.tab, {"action": "parts", "show": ["title", "description"]})
         self.assertRedirects(response, self.tab)
         self.production.refresh_from_db()
-        self.assertEqual(self.production.public_hidden_parts, ["strap_line", "venue_logo", "cast", "team"])
+        self.assertEqual(self.production.public_hidden_parts, ["strap_line", "venue_logo", "cast", "team", "gallery"])
         html = self.client.get(self.page).content.decode()
         self.assertIn("About it", html)
         self.assertNotIn("A strap line", html)
@@ -3793,8 +3793,9 @@ class PublicPartsSavedTests(TestCase):
         self.client.post(self.tab, {"action": "parts", "show": ["title"]})
         parts = self.client.get(self.tab).context["parts"]
         self.assertEqual({part: shown for part, _, shown in parts}, {
-            "title": True, "strap_line": False, "description": False, "venue_logo": False, "cast": False, "team": False})
-        self.assertEqual([part for part, _, _ in parts], ["title", "strap_line", "description", "venue_logo", "cast", "team"])
+            "title": True, "strap_line": False, "description": False, "venue_logo": False, "cast": False, "team": False,
+            "gallery": False})
+        self.assertEqual([part for part, _, _ in parts], ["title", "strap_line", "description", "venue_logo", "cast", "team", "gallery"])
 
     def test_saving_the_parts_leaves_the_image_and_colour_alone(self):
         self.client.post(self.tab, {"image": "", "colour": "#112233"})

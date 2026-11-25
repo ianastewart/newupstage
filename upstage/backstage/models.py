@@ -4,7 +4,7 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, RegexValidator, URLValidator
 from django.db import models, transaction
-from django.db.models.signals import post_delete
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 from django.db.models import Case, Exists, F, Min, OuterRef, Q, Value, When
@@ -565,6 +565,26 @@ def delete_sound_file(sender, instance, **kwargs):
     """The file goes with its sound (also when the production is deleted)."""
     if instance.file:
         instance.file.storage.delete(instance.file.name)
+
+
+@receiver(post_save, sender=Image)
+def make_gallery_copy(sender, instance, **kwargs):
+    """A gallery image gets its resized copy for the public gallery as soon as it is saved (it is also made on demand)."""
+    if instance.image and instance.image_type == Image.ImageType.GALLERY:
+        from backstage.renditions import gallery_items
+
+        gallery_items([instance])  # never raises: a fault here must not stop an upload
+
+
+@receiver(post_delete, sender=Image)
+def delete_gallery_copy(sender, instance, **kwargs):
+    """The resized copy goes with its image."""
+    if instance.image:
+        from backstage.renditions import existing_rendition
+
+        found = existing_rendition(instance)
+        if found:
+            instance.image.storage.delete(found[0])
 
 
 class Palette(models.Model):
