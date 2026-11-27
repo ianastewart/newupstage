@@ -208,12 +208,13 @@ def crew_list(request):
     return public_people_page(request, crew, "Crew", "The crew of Upstage Surrey.", "No crew to show yet.")
 
 
-def production_type_list(request, production_type, title, empty, dated=False):
+def production_type_list(request, production_type, title, empty, dated=False, newest_added_first=False):
     """
     The public page for one type of production: each one's image and title, linked to its page (a parent production, the
     evening that groups several plays, is left out: its plays are listed). With `dated`, newest
     first by the date of the first published performance or broadcast (shown under the image as month and year);
-    productions with no date come last. Otherwise alphabetical.
+    productions with no date come last (alphabetical, or with `newest_added_first` the most recently added first).
+    Otherwise alphabetical.
     """
     productions = (
         Production.objects.filter(type=production_type)
@@ -227,7 +228,9 @@ def production_type_list(request, production_type, title, empty, dated=False):
                 "events__datetimes__datetime",
                 filter=Q(events__event_type__in=shown, events__publish__in=Event.SHOWN),
             )
-        ).order_by(F("show_date").desc(nulls_last=True), F("parent_id").asc(nulls_first=True), "title")
+        ).order_by(
+            F("show_date").desc(nulls_last=True), F("parent_id").asc(nulls_first=True), "-id" if newest_added_first else "title"
+        )
     else:
         productions = productions.order_by("title")
     productions = list(productions)
@@ -248,7 +251,9 @@ def stage_shows(request):
 
 @login_not_required
 def films(request):
-    return production_type_list(request, Production.ProductionType.FILM, "Films", "No films to show yet.")
+    return production_type_list(
+        request, Production.ProductionType.FILM, "Films", "No films to show yet.", dated=True, newest_added_first=True
+    )
 
 
 @login_not_required

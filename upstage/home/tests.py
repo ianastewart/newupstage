@@ -2774,9 +2774,16 @@ class StageShowsListTests(TestCase):
         play.refresh_from_db()
         self.assertFalse(play.is_musical)  # only a stage play can be a musical
 
-    def test_films_stay_alphabetical_and_undated(self):
-        self.production("Zed", timezone.now(), type="film")
-        self.production("Alpha", timezone.now() - timedelta(days=9), type="film")
+    def test_films_are_listed_latest_first(self):
+        self.production("Old", timezone.now() - timedelta(days=9), type="film")
+        self.production("New", timezone.now(), type="film")
         response = self.client.get(reverse("films"))
-        self.assertEqual([p.title for p in response.context["productions"]], ["Alpha", "Zed"])
+        self.assertEqual([p.title for p in response.context["productions"]], ["New", "Old"])
+
+    def test_undated_films_come_after_dated_ones_newest_added_first(self):
+        self.production("Dated", timezone.now(), type="film")
+        Production.objects.create(title="Undated first", type="film")
+        Production.objects.create(title="Undated second", type="film")
+        response = self.client.get(reverse("films"))
+        self.assertEqual([p.title for p in response.context["productions"]], ["Dated", "Undated second", "Undated first"])
         self.assertNotContains(response, "show_date")
