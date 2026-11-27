@@ -1,0 +1,21 @@
+{% extends "neapolitan/object_form.html" %}
+
+{% block content %}
+{{ block.super }}
+<script>
+  // The Musical box only applies to a stage play.
+  (() => {
+    const type = document.getElementById('id_type');
+    const musical = document.getElementById('id_is_musical');
+    if (!type || !musical) return;
+    const box = musical.closest('div');
+    const sync = () => {
+      const stage = type.value === 'stage';
+      box.classList.toggle('hidden', !stage);
+      if (!stage) musical.checked = false;
+    };
+    type.addEventListener('change', sync);
+    sync();
+  })();
+</script>
+{% endblock %}

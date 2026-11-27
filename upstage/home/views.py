@@ -247,13 +247,6 @@ def stage_shows(request):
 
 
 @login_not_required
-def musicals(request):
-    return production_type_list(
-        request, Production.ProductionType.MUSICAL, "Musicals", "No musicals to show yet.", dated=True
-    )
-
-
-@login_not_required
 def films(request):
     return production_type_list(request, Production.ProductionType.FILM, "Films", "No films to show yet.")
 
@@ -395,6 +388,8 @@ def public_production(request, pk):
         "ticket_url": ticket_url,
         # The Listen now button is only offered when there is no Buy Tickets one.
         "listen_url": "" if ticket_url else production.public_listen_url,
+        # The Watch now button goes to the production's first video link, when it has one.
+        "video_url": next((v.url for v in production.video_links.all()), ""),
         "venue": production_venue(production),
         "team": team,
         "cast": cast,

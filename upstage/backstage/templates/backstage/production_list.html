@@ -58,6 +58,7 @@
               {% else %}
                 <span class="badge badge-sm badge-secondary">{{ production.get_type_display }}</span>
               {% endif %}
+              {% if production.is_musical %}<span class="badge badge-sm badge-accent">Musical</span>{% endif %}
             </div>
           </div>
         </a>

@@ -269,12 +269,11 @@ class Production(models.Model):
         RADIO = "radio", "Radio play"
         STAGE = "stage", "Stage play"
         FILM = "film", "Film"
-        MUSICAL = "musical", "Musical"
         OTHER = "other", "Other"
 
     # What the backstage menu and the list of productions call each type, in the plural.
     TYPE_TITLES = {
-        "radio": "Radio plays", "stage": "Stage plays", "film": "Films", "musical": "Musicals",
+        "radio": "Radio plays", "stage": "Stage plays", "film": "Films",
         "other": "Other productions",
     }
 
@@ -284,6 +283,8 @@ class Production(models.Model):
     type = models.CharField(
         max_length=20, choices=ProductionType.choices, default=ProductionType.RADIO
     )
+    # Only a stage play can be a musical (the box is shown when the type is Stage play; save() clears it otherwise).
+    is_musical = models.BooleanField("Musical", default=False)
     # Auditions, rehearsals, performances...; an event (e.g. an evening of plays) can include several productions.
     events = models.ManyToManyField(Event, blank=True, related_name="productions")
     # The parent production this one is part of (see ParentProduction), if any.
@@ -294,7 +295,7 @@ class Production(models.Model):
 
     # The image the public page shows (chosen on the backstage Public view tab); the default image if none is chosen.
     public_image = models.ForeignKey("Image", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
-    # The background colour of the box round the public page (#rrggbb); blank means DEFAULT_PUBLIC_COLOUR.
+    # The background colour of the box round the public page (#rrggbb); blank means transparent.
     public_colour = models.CharField(
         max_length=7, blank=True, validators=[RegexValidator(r"^#[0-9a-fA-F]{6}$", "Enter a colour as #rrggbb.")],
     )
@@ -306,6 +307,13 @@ class Production(models.Model):
 
     def __str__(self):
         return self.title
+
+    def save(self, *args, **kwargs):
+        if self.type != self.ProductionType.STAGE and self.is_musical:
+            self.is_musical = False
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "is_musical"}
+        super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()
@@ -446,12 +454,14 @@ class Production(models.Model):
 
     @property
     def public_background(self):
-        """The background colour of the box round the public page: the chosen one, else deep purple."""
-        return self.public_colour or self.DEFAULT_PUBLIC_COLOUR
+        """The background colour of the box round the public page: the chosen one, else transparent."""
+        return self.public_colour or "transparent"
 
     @property
     def public_text_colour(self):
-        """White or near-black, whichever reads better on the box's background colour."""
+        """White or near-black, whichever reads better on the box's background colour; none (the page's own) if transparent."""
+        if not self.public_colour:
+            return ""
         red, green, blue = (int(self.public_background[i:i + 2], 16) for i in (1, 3, 5))
         return "#ffffff" if (0.299 * red + 0.587 * green + 0.114 * blue) < 150 else "#1f1720"
 
@@ -595,6 +605,20 @@ class Sound(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.production})"
+
+
+class VideoLink(models.Model):
+    """A link to a video of a production (e.g. on YouTube), added on its Media tab."""
+
+    production = models.ForeignKey(Production, on_delete=models.CASCADE, related_name="video_links")
+    url = models.URLField(max_length=500)
+    added = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["added", "id"]
+
+    def __str__(self):
+        return f"{self.url} ({self.production})"
 
 
 @receiver(post_delete, sender=Sound)

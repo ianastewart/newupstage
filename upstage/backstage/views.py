@@ -129,8 +129,21 @@ def production_images(request, pk):
     """The Media tab: a production's images (add from the library or remove) and sounds (upload or delete)."""
     production = get_object_or_404(models.Production, pk=pk)
     sound_form = forms.SoundForm()
+    video_form = forms.VideoLinkForm()
 
-    if request.method == "POST" and request.POST.get("action") == "sound":
+    if request.method == "POST" and request.POST.get("action") == "video":
+        video_form = forms.VideoLinkForm(request.POST)
+        if video_form.is_valid():
+            video = video_form.save(commit=False)
+            video.production = production
+            video.save()
+            return redirect("production-images", pk=production.pk)
+    elif request.method == "POST" and request.POST.get("action") == "delete_video":
+        video_id = request.POST.get("video", "")
+        if video_id.isdigit():
+            production.video_links.filter(pk=video_id).delete()
+        return redirect("production-images", pk=production.pk)
+    elif request.method == "POST" and request.POST.get("action") == "sound":
         sound_form = forms.SoundForm(request.POST, request.FILES)
         if sound_form.is_valid():
             sound = sound_form.save(commit=False)
@@ -176,6 +189,10 @@ def production_images(request, pk):
             "available_images": available_images,
             "sound_form": sound_form,
             "sounds": production.sounds.all(),
+            "image_types": models.Image.ImageType.choices,
+            "video_form": video_form,
+            "video_links": production.video_links.all(),
+            "show_video_form": video_form.is_bound,  # reopen the dialog when the URL was invalid
         },
     )
 
@@ -217,8 +234,8 @@ def production_public(request, pk):
         colour = request.POST.get("colour", "").strip()
         if re.fullmatch(r"[0-9a-fA-F]{6}", colour):
             colour = "#" + colour  # typed without the #
-        valid = re.fullmatch(r"#[0-9a-fA-F]{6}", colour) and colour.lower() != production.DEFAULT_PUBLIC_COLOUR
-        production.public_colour = colour.lower() if valid else ""  # blank: deep purple
+        valid = re.fullmatch(r"#[0-9a-fA-F]{6}", colour)
+        production.public_colour = colour.lower() if valid else ""  # blank: transparent
         production.save(update_fields=["public_image", "public_colour"])
         return redirect("production-public", pk=production.pk)
     images = [link.image for link in _public_image_choices(production)]
@@ -772,7 +789,7 @@ class EventDateTimeView(CRUDView):
 
 class ProductionView(CRUDView):
     model = models.Production
-    fields = ["title", "strap_line", "description", "type", "parent"]
+    fields = ["title", "strap_line", "description", "type", "is_musical", "parent"]
     paginate_by = 24
 
     def get_type(self):

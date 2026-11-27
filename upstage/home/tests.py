@@ -78,6 +78,16 @@ class RadioArchiveTests(TestCase):
     def test_play_without_image_still_renders(self):
         self.assertEqual(self.client.get(reverse("public-production", args=[self.old.pk])).status_code, 200)
 
+    def test_watch_now_button_only_when_there_is_a_video_link(self):
+        from backstage.models import VideoLink
+
+        url = reverse("public-production", args=[self.new.pk])
+        self.assertNotContains(self.client.get(url), "Watch now")
+        VideoLink.objects.create(production=self.new, url="https://www.youtube.com/watch?v=abc")
+        response = self.client.get(url)
+        self.assertContains(response, "Watch now")
+        self.assertContains(response, 'href="https://www.youtube.com/watch?v=abc"')
+
     def test_listen_now_button_only_when_there_is_a_listen_url(self):
         url = reverse("public-production", args=[self.new.pk])
         self.assertNotContains(self.client.get(url), "Listen now")
@@ -1741,7 +1751,11 @@ class PublicProductionTests(TestCase):
         self.assertIn("images/chosen.jpg", html)
         self.assertNotIn("images/cover.jpg", html)
 
-    def test_everything_is_in_a_box_deep_purple_unless_another_colour_is_set(self):
+    def test_everything_is_in_a_box_transparent_unless_a_colour_is_set(self):
+        html = self.client.get(self.url).content.decode()
+        self.assertIn('style="background-color: transparent;"', html)  # no text colour: the page's own shows
+        self.production.public_colour = "#2e1065"
+        self.production.save()
         html = self.client.get(self.url).content.decode()
         self.assertIn("background-color: #2e1065; color: #ffffff;", html)
         self.production.public_colour = "#fdfaf4"
@@ -2147,7 +2161,7 @@ class SeoTests(TestCase):
 
         body = self.client.get("/sitemap.xml").content.decode()
         urls = set(re.findall(r"<loc>([^<]*)</loc>", body))
-        for path in ("stage-shows", "musicals", "films", "writers", "crew"):
+        for path in ("stage-shows", "films", "writers", "crew"):
             self.assertIn(f"http://testserver/{path}/", urls)
         event_entry = re.search(rf"<url><loc>http://testserver/events/{self.published.pk}/</loc>(.*?)</url>", body)
         self.assertIn("<lastmod>", event_entry.group(1))
@@ -2750,13 +2764,15 @@ class StageShowsListTests(TestCase):
         film_parent = ParentProduction.objects.create(title="Film night", type="film")
         self.assertNotIn(film_parent, self.client.get(reverse("films")).context["productions"])
 
-    def test_musicals_are_in_the_menu_and_listed_newest_first(self):
-        self.production("Old", timezone.now() - timedelta(days=9), type="musical")
-        self.production("New", timezone.now(), type="musical")
-        self.production("A Film", timezone.now(), type="film")
-        response = self.client.get(reverse("musicals"))
-        self.assertEqual([p.title for p in response.context["productions"]], ["New", "Old"])
-        self.assertContains(response, f'<a href="{reverse("musicals")}" class="menu-active">Musicals</a>')
+    def test_a_musical_is_a_stage_play_with_the_musical_box_ticked(self):
+        play = self.production("Cats", timezone.now(), type="stage")
+        play.is_musical = True
+        play.save()
+        self.assertIn(play, self.client.get(reverse("stage-shows")).context["productions"])
+        play.type = "film"
+        play.save()
+        play.refresh_from_db()
+        self.assertFalse(play.is_musical)  # only a stage play can be a musical
 
     def test_films_stay_alphabetical_and_undated(self):
         self.production("Zed", timezone.now(), type="film")

@@ -68,6 +68,16 @@ class SoundForm(forms.ModelForm):
         self.fields["file"].validators.append(FileExtensionValidator(SOUND_EXTENSIONS))
 
 
+class VideoLinkForm(forms.ModelForm):
+    """Add a link to a video of a production (the Media tab)."""
+
+    class Meta:
+        model = models.VideoLink
+        fields = ["url"]
+        labels = {"url": "Video URL"}
+        widgets = {"url": forms.URLInput(attrs={"class": "input w-full", "placeholder": "https://www.youtube.com/watch?v=…"})}
+
+
 class CastForm(forms.ModelForm):
     class Meta:
         model = models.Cast

@@ -83,17 +83,63 @@
     </form>
     {% for error in sound_form.file.errors %}<p class="mt-1 text-sm text-error">{{ error }}</p>{% endfor %}
   </section>
+
+  <section class="mt-8">
+    <h2 class="mb-2 text-lg font-semibold">Videos</h2>
+    {% if video_links %}
+      <ul class="mb-4 space-y-2">
+        {% for video in video_links %}
+          <li class="flex flex-wrap items-center gap-3 rounded-box bg-base-200 p-2">
+            <a href="{{ video.url }}" target="_blank" rel="noopener" class="link truncate text-sm">{{ video.url }}</a>
+            <form method="POST" class="ml-auto">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete_video" />
+              <input type="hidden" name="video" value="{{ video.pk }}" />
+              <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="mb-3 text-sm opacity-70">This production has no video links yet.</p>
+    {% endif %}
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('add-video').showModal()">Add video link</button>
+  </section>
 </div>
+
+<dialog id="add-video" class="modal">
+  <div class="modal-box">
+    <h2 class="mb-4 text-xl font-bold">Add video link</h2>
+    <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="video" />
+      {{ video_form.url.as_field_group }}
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add link</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% if show_video_form %}<script>document.getElementById('add-video').showModal();</script>{% endif %}
 
 <dialog id="add-images" class="modal">
   <div class="modal-box max-w-4xl">
     <h2 class="mb-4 text-xl font-bold">Add images to {{ production }}</h2>
+    <div class="mb-3 flex flex-wrap items-center gap-2">
+      <input type="search" id="library-search" class="input input-sm w-full sm:w-64" placeholder="Search by name" aria-label="Search by name" />
+      <select id="library-type" class="select select-sm w-auto" aria-label="Image type">
+        <option value="">All types</option>
+        {% for value, label in image_types %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+    </div>
     <form method="POST">
       {% csrf_token %}
       <input type="hidden" name="action" value="add" />
       <div class="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto p-1 sm:grid-cols-3 md:grid-cols-4">
         {% for image in available_images %}
-          <label class="relative cursor-pointer overflow-hidden rounded-box bg-base-200 ring-primary has-checked:ring-4">
+          <label data-library-image data-type="{{ image.image_type.value }}" data-name="{{ image|lower }}" class="relative cursor-pointer overflow-hidden rounded-box bg-base-200 ring-primary has-checked:ring-4">
             <img src="{{ image.image.url }}" alt="{{ image.description }}" loading="lazy" class="aspect-video w-full object-cover" />
             <input type="checkbox" name="images" value="{{ image.pk }}" class="absolute left-2 top-2 bg-base-100" />
             <span class="block truncate px-2 py-1 text-xs">{{ image }}</span>
@@ -108,4 +154,21 @@
   </div>
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
+<script>
+  // Filter the library by image type and by name as you type (ticked images stay ticked, even when hidden).
+  (() => {
+    const search = document.getElementById('library-search');
+    const type = document.getElementById('library-type');
+    if (!search || !type) return;
+    const filter = () => {
+      const text = search.value.trim().toLowerCase();
+      document.querySelectorAll('[data-library-image]').forEach((el) => {
+        const show = (!type.value || el.dataset.type === type.value) && (!text || el.dataset.name.includes(text));
+        el.classList.toggle('hidden', !show);
+      });
+    };
+    search.addEventListener('input', filter);
+    type.addEventListener('change', filter);
+  })();
+</script>
 {% endblock %}

@@ -3398,7 +3398,7 @@ class ProductionPublicViewTabTests(TestCase):
         self.assertEqual((self.production.public_colour, self.production.public_background), ("#112233", "#112233"))
         self.client.post(url, {"image": "", "colour": "purple"})
         self.production.refresh_from_db()
-        self.assertEqual((self.production.public_colour, self.production.public_background), ("", "#2e1065"))
+        self.assertEqual((self.production.public_colour, self.production.public_background), ("", "transparent"))
 
     def test_the_tab_uses_the_shared_colour_picker_with_the_fixed_palette(self):
         from backstage.themes import PUBLIC_PALETTE
@@ -3425,8 +3425,12 @@ class ProductionPublicViewTabTests(TestCase):
         self.assertEqual((saved[0], saved[2]), (None, ("", "#aaff00")))
         self.assertContains(response, 'null,null,["", "#aaff00"],null')
 
-    def test_the_default_colour_is_stored_as_blank(self):
-        self.client.post(reverse("production-public", args=[self.production.pk]), {"image": "", "colour": "#2E1065"})
+    def test_deep_purple_can_be_chosen_and_an_empty_colour_means_transparent(self):
+        url = reverse("production-public", args=[self.production.pk])
+        self.client.post(url, {"image": "", "colour": "#2E1065"})
+        self.production.refresh_from_db()
+        self.assertEqual(self.production.public_colour, "#2e1065")
+        self.client.post(url, {"image": "", "colour": ""})
         self.production.refresh_from_db()
         self.assertEqual(self.production.public_colour, "")
 
@@ -3634,6 +3638,36 @@ class ProductionSoundTests(TestCase):
         path = self.production.sounds.get().file.path
         self.production.delete()
         self.assertFalse(os.path.exists(path))
+
+
+class ProductionVideoLinkTests(TestCase):
+    def setUp(self):
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
+        self.production = Production.objects.create(title="The Play")
+        self.url = reverse("production-images", args=[self.production.pk])
+
+    def test_the_media_page_offers_add_video_link(self):
+        self.assertContains(self.client.get(self.url), "Add video link")
+
+    def test_a_video_url_is_saved_and_listed(self):
+        link = "https://www.youtube.com/watch?v=abc123"
+        self.assertRedirects(self.client.post(self.url, {"action": "video", "url": link}), self.url)
+        self.assertEqual(self.production.video_links.get().url, link)
+        self.assertContains(self.client.get(self.url), link)
+
+    def test_an_invalid_url_is_rejected(self):
+        response = self.client.post(self.url, {"action": "video", "url": "not a url"})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(self.production.video_links.exists())
+
+    def test_a_video_link_can_be_deleted_only_from_its_own_production(self):
+        other = Production.objects.create(title="Other")
+        self.client.post(self.url, {"action": "video", "url": "https://youtu.be/x"})
+        video = self.production.video_links.get()
+        self.client.post(reverse("production-images", args=[other.pk]), {"action": "delete_video", "video": video.pk})
+        self.assertTrue(self.production.video_links.exists())
+        self.client.post(self.url, {"action": "delete_video", "video": video.pk})
+        self.assertFalse(self.production.video_links.exists())
 
 
 class ListenUrlTests(TestCase):
@@ -3980,7 +4014,7 @@ class ProductionTypeMenuTests(TestCase):
     def test_the_menu_has_a_productions_drop_down_with_every_type(self):
         html = self.client.get(self.list).content.decode()
         for query, title in (("?type=radio", "Radio plays"), ("?type=stage", "Stage plays"),
-                             ("?type=film", "Films"), ("?type=musical", "Musicals"),
+                             ("?type=film", "Films"),
                              ("?type=other", "Other productions")):
             self.assertIn(f'<li><a href="{self.list}{query}">{title}</a></li>', html)
         self.assertNotIn("All productions", html)
@@ -3988,7 +4022,7 @@ class ProductionTypeMenuTests(TestCase):
 
     def test_the_title_says_which_kind_of_production_is_shown(self):
         for query, title in (("", "Productions"), ("?type=radio", "Radio plays"), ("?type=stage", "Stage plays"),
-                             ("?type=film", "Films"), ("?type=musical", "Musicals"),
+                             ("?type=film", "Films"),
                              ("?type=other", "Other productions"), ("?type=nonsense", "Productions")):
             response = self.client.get(self.list + query)
             self.assertEqual(response.context["page_title"], title, query)
@@ -4087,3 +4121,43 @@ class PersonConsentDateTests(TestCase):
         self.assertIn("badge-success", html)  # email: yes
         self.assertIn("badge-error", html)  # publish: no
         self.assertNotIn('name="email_consent"', html)
+
+
+class ProductionMusicalTests(TestCase):
+    def setUp(self):
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
+
+    def test_the_musical_box_is_on_the_edit_form_and_there_is_no_musical_type(self):
+        production = Production.objects.create(title="Cats", type="stage")
+        response = self.client.get(reverse("production-update", args=[production.pk]))
+        self.assertContains(response, 'name="is_musical"')
+        self.assertNotContains(response, 'value="musical"')
+        self.assertNotContains(self.client.get(reverse("production-list")), "Musicals")
+
+    def test_the_musical_flag_is_saved_for_a_stage_play_and_cleared_for_other_types(self):
+        production = Production.objects.create(title="Cats", type="stage", is_musical=True)
+        production.refresh_from_db()
+        self.assertTrue(production.is_musical)
+        production.type = "film"
+        production.save()
+        production.refresh_from_db()
+        self.assertFalse(production.is_musical)
+
+    def test_a_musical_has_an_extra_badge_in_the_list(self):
+        Production.objects.create(title="Cats", type="stage", is_musical=True)
+        Production.objects.create(title="Hamlet", type="stage")
+        html = self.client.get(reverse("production-list") + "?type=stage").content.decode()
+        self.assertEqual(html.count('<span class="badge badge-sm badge-accent">Musical</span>'), 1)
+
+
+class ProductionLibraryFilterTests(TestCase):
+    def test_the_add_from_library_dialog_can_be_filtered_by_type_and_name(self):
+        from backstage.models import Image
+
+        self.client.force_login(backstage_user(username="u", password="p", is_staff=True))
+        production = Production.objects.create(title="The Play")
+        Image.objects.create(description="Opening Night", image="images/a.jpg", image_type="gallery")
+        html = self.client.get(reverse("production-images", args=[production.pk])).content.decode()
+        self.assertIn('id="library-search"', html)
+        self.assertIn('<option value="gallery">', html)
+        self.assertIn('data-type="gallery" data-name="opening night"', html)

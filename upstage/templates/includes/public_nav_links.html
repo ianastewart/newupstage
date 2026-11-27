@@ -6,7 +6,6 @@
     <summary>Productions</summary>
     <ul class="z-10 w-48 rounded-box bg-base-200 p-2 shadow-lg">
       <li><a href="{% url 'stage-shows' %}"{% if current == 'stage-shows' %} class="menu-active"{% endif %}>Stage shows</a></li>
-      <li><a href="{% url 'musicals' %}"{% if current == 'musicals' %} class="menu-active"{% endif %}>Musicals</a></li>
       <li><a href="{% url 'radio-archive' %}"{% if current == 'radio-archive' or nav_section == 'radio-archive' %} class="menu-active"{% endif %}>Radio plays</a></li>
       <li><a href="{% url 'films' %}"{% if current == 'films' %} class="menu-active"{% endif %}>Films</a></li>
     </ul>

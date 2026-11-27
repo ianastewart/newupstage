@@ -305,7 +305,7 @@ class SandboxSiteTests(TestCase):
 
 class LiveSiteTests(TestCase):
     PUBLIC_PAGES = (
-        "home", "auditions", "radio-archive", "stage-shows", "musicals", "films", "public-writers", "public-crew",
+        "home", "auditions", "radio-archive", "stage-shows", "films", "public-writers", "public-crew",
         "public-actors", "robots", "sitemap", "login",
     )
 

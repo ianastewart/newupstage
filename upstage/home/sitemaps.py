@@ -24,7 +24,7 @@ class StaticSitemap(Sitemap):
 
     def items(self):
         return [
-            "home", "stage-shows", "musicals", "films", "auditions", "radio-archive", "public-actors", "public-writers",
+            "home", "stage-shows", "films", "auditions", "radio-archive", "public-actors", "public-writers",
             "public-crew",
         ]
 

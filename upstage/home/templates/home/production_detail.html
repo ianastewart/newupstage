@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-5xl p-6">
-<div class="space-y-6 rounded-box p-6 shadow-sm md:p-8" style="background-color: {{ production.public_background }}; color: {{ production.public_text_colour }};">
+<div class="space-y-6 rounded-box p-6 shadow-sm md:p-8" style="background-color: {{ production.public_background }};{% if production.public_text_colour %} color: {{ production.public_text_colour }};{% endif %}">
   <header class="text-center">
     {% if show.title %}<h1 class="text-3xl font-bold">{{ production.title }}</h1>{% endif %}
     {% if show.strap_line and production.strap_line %}<p class="mt-1 text-lg italic opacity-80">{{ production.strap_line }}</p>{% endif %}
@@ -22,6 +22,9 @@
         <a href="{{ listen_url }}" class="btn btn-primary btn-md shadow-lg" target="_blank" rel="noopener noreferrer">Listen now</a>
       {% elif production.awaiting_archive %}
         <p class="italic text-primary">Not yet in the Brooklands Radio archive. Please try later.</p>
+      {% endif %}
+      {% if video_url %}
+        <a href="{{ video_url }}" class="btn btn-primary btn-md shadow-lg" target="_blank" rel="noopener noreferrer">Watch now</a>
       {% endif %}
       {% if show.venue_logo and venue.logo.image %}<img src="{{ venue.logo.image.url }}" alt="{{ venue.name }}" loading="lazy" class="h-auto max-h-[72px] w-auto max-w-full" />{% endif %}
     </div>
